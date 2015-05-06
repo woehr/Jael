@@ -1,0 +1,40 @@
+Prog.      Prog  ::= [Func] ;
+
+Func.      Func  ::= Ident "(" [Arg] ")" ":" Type "{" [Let] Expr "}" ;
+terminator Func  "" ;
+
+ArgTy.     Arg   ::= Ident ":" Type ;
+ArgUnty.   Arg   ::= Ident ;
+separator  Arg   "," ;
+
+TyInt.     Type  ::= "int" ;
+TyFloat.   Type  ::= "float" ;
+TyChar.    Type  ::= "char" ;
+TyStr.     Type  ::= "str" ;
+
+Let.       Let   ::= Ident "=" Expr ;
+terminator Let   ";" ;
+
+ELt.       Expr0 ::= Expr1 "<" Expr1 ;
+ELtEq.     Expr0 ::= Expr1 "<=" Expr1 ;
+EGt.       Expr0 ::= Expr1 ">" Expr1 ;
+EGtEq.     Expr0 ::= Expr1 ">=" Expr1 ;
+
+EPlus.     Expr1 ::= Expr1 "+" Expr2 ;
+EMinus.    Expr1 ::= Expr1 "-" Expr2 ;
+
+ETimes.    Expr2 ::= Expr2 "*" Expr3 ;
+EDiv.      Expr2 ::= Expr2 "/" Expr3 ;
+
+EVar.      Expr3 ::= Ident ;
+EInt.      Expr3 ::= Integer ;
+EIntNeg.   Expr3 ::= "~" Integer;
+EFloat.    Expr3 ::= Double ;
+EFloatNeg. Expr3 ::= "~" Double ;
+EChar.     Expr3 ::= Char ;
+EStr.      Expr3 ::= String ;
+
+coercions Expr 3 ;
+
+comment "//" ;
+
