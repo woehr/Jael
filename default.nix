@@ -7,9 +7,10 @@ let
 
 in {
   jael = ghc.callPackage (
-    { mkDerivation, cabal-install
-    , alex, BNFC, happy
-    , base, classy-prelude, containers, either, mtl
+    { mkDerivation
+    , cabal-install, alex, BNFC, happy
+    , array, base, classy-prelude, containers, HUnit, QuickCheck
+    , test-framework, test-framework-hunit, test-framework-quickcheck2
     }:
     mkDerivation {
       pname = "Jael";
@@ -17,18 +18,15 @@ in {
       src = ./.;
       isLibrary = false;
       isExecutable = true;
-      buildDepends = [
+      buildDepends = [ array base classy-prelude containers
         cabal-install
-
         alex
         BNFC
         happy
-
-        base
-        classy-prelude
-        containers
-        either
-        mtl
+      ];
+      testDepends = [
+        array base classy-prelude containers HUnit QuickCheck
+        test-framework test-framework-hunit test-framework-quickcheck2
       ];
       description = "Jael: An Embedded Language";
       license = stdenv.lib.licenses.gpl2;

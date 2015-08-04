@@ -1,0 +1,25 @@
+GTyInt.     GType  ::= "int" ;
+GTyBool.    GType  ::= "bool" ;
+
+GLetIdent.  GLetIdent ::= Ident "=" GExpr ;
+terminator  nonempty GLetIdent ";" ;
+
+GLet.       GExpr1 ::= "let" [GLetIdent] "in" GExpr ;
+
+GEPlus.     GExpr2 ::= GExpr2 "+" GExpr3 ;
+GEMinus.    GExpr2 ::= GExpr2 "-" GExpr3 ;
+
+GETimes.    GExpr3 ::= GExpr3 "*" GExpr4 ;
+
+GEVar.      GExpr4 ::= Ident ;
+GEInt.      GExpr4 ::= Integer ;
+GEIntNeg.   GExpr4 ::= "~" Integer;
+GETrue.     GExpr4 ::= "true";
+GEFalse.    GExpr4 ::= "false";
+
+coercions   GExpr 4 ;
+
+comment "//" ;
+
+entrypoints GExpr ;
+
