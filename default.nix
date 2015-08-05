@@ -14,10 +14,10 @@ in {
     , test-framework-quickcheck2
     }:
     mkDerivation {
-      pname = "Jael";
+      pname = "jael";
       version = "0.1.0.0";
       src = ./.;
-      isLibrary = false;
+      isLibrary = true;
       isExecutable = true;
       buildDepends = [ array base classy-prelude containers
         cabal-install
