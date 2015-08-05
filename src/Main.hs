@@ -2,11 +2,11 @@
 
 import ClassyPrelude
 import qualified Data.Map as M
-import Jael.Seq.Grammar
+import Jael.Grammar
+import Jael.Parser
 import Jael.Seq.AST
 
 data Env = Env {}
-type ParseFun a = [Token] -> Err a
 
 main :: IO ()
 main = do
@@ -20,16 +20,8 @@ main = do
 compile :: Env -> Text -> Either Text (IO ())
 compile e p =  parseProgram p >>= pass1 >>= writeOutput e
 
-parseProgram :: Text -> Either Text GExpr
-parseProgram t = case runParser pGExpr t of
-                      Bad err  -> Left (pack err)
-                      Ok  tree -> Right tree
-
-runParser :: ParseFun a -> Text -> Err a
-runParser p t = p (myLexer . unpack $ t)
-
-pass1 :: GExpr -> Either Text Ex
-pass1 g = do
+pass1 :: GProg -> Either Text Ex
+pass1 g = undefined {-do
   let env = M.fromList
         [ ("+", PolyTy [] $ TFun TInt (TFun TInt TInt))
         , ("*", PolyTy [] $ TFun TInt (TFun TInt TInt))
@@ -46,6 +38,7 @@ pass1 g = do
                              ++ "env'   : " ++ tshow env ++ "\n\n"
                              ++ "result : " ++ tshow x
                              )
+                             -}
 
 writeOutput :: Env -> Ex -> Either Text (IO ())
 writeOutput env ex = Right $ hPutStrLn stdout $ tshow ex

@@ -10,7 +10,8 @@ in {
     { mkDerivation
     , cabal-install, alex, BNFC, happy
     , array, base, classy-prelude, containers, HUnit, QuickCheck
-    , test-framework, test-framework-hunit, test-framework-quickcheck2
+    , template-haskell, test-framework, test-framework-hunit
+    , test-framework-quickcheck2
     }:
     mkDerivation {
       pname = "Jael";
@@ -25,7 +26,7 @@ in {
         happy
       ];
       testDepends = [
-        array base classy-prelude containers HUnit QuickCheck
+        array base classy-prelude containers HUnit QuickCheck template-haskell
         test-framework test-framework-hunit test-framework-quickcheck2
       ];
       description = "Jael: An Embedded Language";

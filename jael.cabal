@@ -1,4 +1,4 @@
-name:                Jael
+name:                jael
 version:             0.1.0.0
 synopsis:            Jael: An Embedded Language
 description:         A language for embedded systems.
@@ -11,13 +11,17 @@ category:            Language
 build-type:          Custom
 cabal-version:       >=1.18
 
-executable jael
-  main-is:             Main.hs
-  other-modules:       Jael.Seq.Grammar,
+library
+  exposed-modules:     Jael.Grammar
+                       Jael.Grammar.ErrM
+                       Jael.Grammar.Lex
+                       Jael.Grammar.Abs
+                       Jael.Grammar.Par
+                       Jael.Grammar.Print
+                       Jael.Parser
                        Jael.Seq.AST
 
   default-extensions:  OverloadedStrings
-
   other-extensions:    NoImplicitPrelude
 
   build-depends:       base >=4.7 && <5,
@@ -25,21 +29,40 @@ executable jael
                        classy-prelude,
                        containers
 
+  hs-source-dirs:      lib
+  default-language:    Haskell2010
+
+executable jael
+  main-is:             Main.hs
+
+  build-depends:       base >=4.7 && <5,
+                       classy-prelude,
+                       containers,
+                       jael
+
+  default-extensions:  OverloadedStrings
+  other-extensions:    NoImplicitPrelude
+
   hs-source-dirs:      src
   default-language:    Haskell2010
 
 test-suite test-jael
   type:                exitcode-stdio-1.0
   main-is:             Test.hs
+
   build-depends:       base >=4.7 && <5,
                        array,
                        classy-prelude,
-                       containers
-  build-depends:       test-framework,
+                       containers,
+                       jael
+
+  build-depends:       HUnit,
+                       QuickCheck,
+                       template-haskell,
+                       test-framework,
                        test-framework-hunit,
-                       test-framework-quickcheck2,
-                       HUnit,
-                       QuickCheck
+                       test-framework-quickcheck2
+
   hs-source-dirs:      test
   default-language:    Haskell2010
 

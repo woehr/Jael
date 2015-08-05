@@ -7,7 +7,7 @@ module Jael.Seq.AST where
 import ClassyPrelude
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Jael.Seq.Grammar
+import Jael.Grammar
 
 data Lit  = LInt Integer
           | LBool Bool
