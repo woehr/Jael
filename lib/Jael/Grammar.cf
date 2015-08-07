@@ -8,26 +8,40 @@ token LIdent (lower (letter | digit | '_')*) ;
 
 -- Sequential language
 
-GTyInt.     GType  ::= "Int" ;
-GTyBool.    GType  ::= "Bool" ;
+GTInt.      GType  ::= "Int" ;
+GTBool.     GType  ::= "Bool" ;
 
-GLetIdent.  GLetIdent ::= Ident "=" GExpr ;
-terminator  nonempty GLetIdent ";" ;
+GELetIdent. GELetIdent ::= LIdent "=" GExpr ;
+terminator  GELetIdent ";" ;
 
-GLet.       GExpr1 ::= "let" [GLetIdent] "in" GExpr ;
+GELetExpr.  GELetExpr ::= [GELetIdent] GExpr ;
 
-GEPlus.     GExpr2 ::= GExpr2 "+" GExpr3 ;
-GEMinus.    GExpr2 ::= GExpr2 "-" GExpr3 ;
+GEAbsArg.   GEAbsArg ::= LIdent ;
+separator nonempty GEAbsArg "," ;
 
-GETimes.    GExpr3 ::= GExpr3 "*" GExpr4 ;
+GEAbs.      GExpr1 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
 
-GEVar.      GExpr4 ::= Ident ;
-GEInt.      GExpr4 ::= Integer ;
-GEIntNeg.   GExpr4 ::= "~" Integer;
-GETrue.     GExpr4 ::= "true";
-GEFalse.    GExpr4 ::= "false";
+GEIf.       GExpr2 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
 
-coercions   GExpr 4 ;
+GEPlus.     GExpr3 ::= GExpr3 "+" GExpr4 ;
+GEMinus.    GExpr3 ::= GExpr3 "-" GExpr4 ;
+
+GETimes.    GExpr4 ::= GExpr4 "*" GExpr5 ;
+
+GELogNot.   GExpr5 ::= "!" GExpr5 ;
+
+GEAppArg.   GEAppArg ::= GExpr ;
+separator GEAppArg "," ;
+
+GEApp.      GExpr6 ::= GExpr6 "(" [GEAppArg] ")" ;
+
+GEVar.      GExpr7 ::= LIdent ;
+GEInt.      GExpr7 ::= Integer ;
+GEIntNeg.   GExpr7 ::= "~" Integer;
+GETrue.     GExpr7 ::= "True";
+GEFalse.    GExpr7 ::= "False";
+
+coercions   GExpr 7 ;
 
 -- Hardware language
 
@@ -55,5 +69,6 @@ GProg.      GProg ::= [GTopDef] ;
 
 comment "//" ;
 
+-- Only export nessecary top level parsers
 entrypoints GProg, GFunc, GProc, GHwproc, GExpr ;
 

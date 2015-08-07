@@ -8,7 +8,7 @@ let
 in {
   jael = ghc.callPackage (
     { mkDerivation
-    , cabal-install, alex, BNFC, happy
+    , alex, BNFC, happy
     , array, base, classy-prelude, containers, HUnit, QuickCheck
     , template-haskell, test-framework, test-framework-hunit
     , test-framework-quickcheck2
@@ -20,7 +20,6 @@ in {
       isLibrary = true;
       isExecutable = true;
       buildDepends = [ array base classy-prelude containers
-        cabal-install
         alex
         BNFC
         happy

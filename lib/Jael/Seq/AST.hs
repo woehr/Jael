@@ -193,17 +193,26 @@ seqTypeInference env e = do
   (sub, ty) <- ti env e
   return $ apply sub ty
 
+-- The LetExpr grammar is only allowed in certain places so it isn't of the GExpr type
+letExprToEx :: GELetExpr -> Ex
+letExprToEx (GELetExpr [] e)    = toSeqEx e
+-- i[dentifier]; h[ead] e[xpression]; t[ail] l[et expression]s; e[xpression]
+letExprToEx (GELetExpr ((GELetIdent (LIdent i) he):tls) e) = ELet (pack i) (toSeqEx he) (letExprToEx $ GELetExpr tls e)
+
 -- Converts grammar to AST0 but does not verify its correctness
 toSeqEx :: GExpr -> Ex
-toSeqEx (GLet [] _)    = error "Should be forbidden by nonempty in grammar."
-toSeqEx (GLet ((GLetIdent (Ident s) a):[]) b) = ELet (pack s) (toSeqEx a) (toSeqEx b)
-toSeqEx (GLet ((GLetIdent (Ident s) a):ss) b) = ELet (pack s) (toSeqEx a) (toSeqEx $ GLet ss b)
+
+toSeqEx (GEAbs [] le) = error "This case should be forbidden by the grammar."
+toSeqEx (GEAbs ((GEAbsArg (LIdent i)):[]) le) = EAbs (pack i) (letExprToEx le)
+toSeqEx (GEAbs ((GEAbsArg (LIdent i)):xs) le) = EAbs (pack i) (toSeqEx $ GEAbs xs le)
+
+toSeqEx (GEIf b e1 e2) = EApp (EApp (EApp (EVar "if") (toSeqEx b)) (letExprToEx e1)) (letExprToEx e2)
 
 toSeqEx (GEPlus  e1 e2) = EApp (EApp (EVar "+") (toSeqEx e1)) (toSeqEx e2)
 toSeqEx (GEMinus e1 e2) = EApp (EApp (EVar "-") (toSeqEx e1)) (toSeqEx e2)
 toSeqEx (GETimes e1 e2) = EApp (EApp (EVar "*") (toSeqEx e1)) (toSeqEx e2)
 
-toSeqEx (GEVar (Ident i)) = EVar (pack i)
+toSeqEx (GEVar (LIdent i)) = EVar (pack i)
 
 toSeqEx (GEInt    i) = ELit (LInt  i)
 toSeqEx (GEIntNeg i) = ELit (LInt (-i))
