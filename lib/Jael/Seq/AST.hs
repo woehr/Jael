@@ -7,6 +7,7 @@ module Jael.Seq.AST where
 import ClassyPrelude
 import qualified Data.Map as M
 import qualified Data.Set as S
+import Text.Read (reads)
 import Jael.Grammar
 
 data Lit  = LInt Integer
@@ -199,7 +200,21 @@ letExprToEx (GELetExpr [] e)    = toSeqEx e
 -- i[dentifier]; h[ead] e[xpression]; t[ail] l[et expression]s; e[xpression]
 letExprToEx (GELetExpr ((GELetIdent (LIdent i) he):tls) e) = ELet (pack i) (toSeqEx he) (letExprToEx $ GELetExpr tls e)
 
--- Converts grammar to AST0 but does not verify its correctness
+myIntegerErrorMsg :: String
+myIntegerErrorMsg = "Lexer should not produce MyInteger that " ++
+                    "can't be parsed. See definition in Grammar.cf"
+
+parseInt :: IntTok -> Integer
+parseInt (IntTok []) = error myIntegerErrorMsg
+parseInt (IntTok s@(x:xs)) = let bNeg = x == '~'
+                                 readRes = if bNeg
+                                              then reads xs
+                                              else reads s
+                             in  case readRes of
+                                      [(i, [])] -> if bNeg then -i else i
+                                      _         -> error myIntegerErrorMsg
+
+-- Converts grammar to AST but does not verify its correctness
 toSeqEx :: GExpr -> Ex
 
 toSeqEx (GEAbs [] le) = error "This case should be forbidden by the grammar."
@@ -214,8 +229,7 @@ toSeqEx (GETimes e1 e2) = EApp (EApp (EVar "*") (toSeqEx e1)) (toSeqEx e2)
 
 toSeqEx (GEVar (LIdent i)) = EVar (pack i)
 
-toSeqEx (GEInt    i) = ELit (LInt  i)
-toSeqEx (GEIntNeg i) = ELit (LInt (-i))
+toSeqEx (GEInt i) = ELit (LInt $ parseInt i)
 
 toSeqEx (GETrue)  = ELit (LBool True)
 toSeqEx (GEFalse) = ELit (LBool False)

@@ -5,6 +5,7 @@
 
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;
+token IntTok (('~')? ('1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9') (digit)*) ;
 
 -- Sequential language
 
@@ -17,31 +18,27 @@ terminator  GELetIdent ";" ;
 GELetExpr.  GELetExpr ::= [GELetIdent] GExpr ;
 
 GEAbsArg.   GEAbsArg ::= LIdent ;
-separator nonempty GEAbsArg "," ;
+separator   nonempty GEAbsArg "" ;
 
-GEAbs.      GExpr1 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
+GEApp.      GExpr1 ::= GExpr1 GExpr2 ;
 
-GEIf.       GExpr2 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
+GEAbs.      GExpr2 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
 
-GEPlus.     GExpr3 ::= GExpr3 "+" GExpr4 ;
-GEMinus.    GExpr3 ::= GExpr3 "-" GExpr4 ;
+GEIf.       GExpr3 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
 
-GETimes.    GExpr4 ::= GExpr4 "*" GExpr5 ;
+GEPlus.     GExpr4 ::= GExpr4 "+" GExpr5 ;
+GEMinus.    GExpr4 ::= GExpr4 "-" GExpr5 ;
 
-GELogNot.   GExpr5 ::= "!" GExpr5 ;
+GETimes.    GExpr5 ::= GExpr5 "*" GExpr6 ;
 
-GEAppArg.   GEAppArg ::= GExpr ;
-separator GEAppArg "," ;
-
-GEApp.      GExpr6 ::= GExpr6 "(" [GEAppArg] ")" ;
+GELogNot.   GExpr6 ::= "!" GExpr6 ;
 
 GEVar.      GExpr7 ::= LIdent ;
-GEInt.      GExpr7 ::= Integer ;
-GEIntNeg.   GExpr7 ::= "~" Integer;
+GEInt.      GExpr7 ::= IntTok ;
 GETrue.     GExpr7 ::= "True";
 GEFalse.    GExpr7 ::= "False";
 
-coercions   GExpr 7 ;
+coercions   GExpr 8 ;
 
 -- Hardware language
 
