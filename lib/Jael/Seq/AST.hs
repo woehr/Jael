@@ -32,6 +32,36 @@ data PolyTy = PolyTy [Text] Ty
 
 type TyEnv = M.Map Text PolyTy
 
+builtinTypes :: TyEnv
+builtinTypes = M.fromList
+  [ ( "if" -- Bool -> a -> a -> a
+    , PolyTy ["a"] (TFun TBool (TFun (TVar "a") (TFun (TVar "a") (TVar "a"))))
+    )
+  , ( "+"
+    , PolyTy [] (TFun TInt (TFun TInt TInt))
+    )
+  , ( "-"
+    , PolyTy [] (TFun TInt (TFun TInt TInt))
+    )
+  , ( "*"
+    , PolyTy [] (TFun TInt (TFun TInt TInt))
+    )
+  , ( "!"
+    , PolyTy [] (TFun TBool TBool)
+    )
+  , ( ">>" -- a -> (a -> b) -> b
+    , PolyTy ["a", "b"] (TFun (TVar "a") (TFun (TFun (TVar "a") (TVar "b")) (TVar "b")))
+    )
+  , ( "<<" -- (a -> b) -> a -> b
+    , PolyTy ["a", "b"] (TFun (TFun (TVar "a") (TVar "b")) (TFun (TVar "a") (TVar "b")))
+    )
+  , ( "o>" -- (a -> b) -> (b -> c) -> (a -> c)
+    , PolyTy ["a", "b", "c"] (TFun (TFun (TVar "a") (TVar "b")) (TFun (TFun (TVar "b") (TVar "c")) (TFun (TVar "a") (TVar "c"))))
+    )
+  , ( "<o" -- (b -> c) -> (a -> b) -> (a -> c)
+    , PolyTy ["a", "b", "c"] (TFun (TFun (TVar "b") (TVar "c")) (TFun (TFun (TVar "a") (TVar "b")) (TFun (TVar "a") (TVar "c"))))
+    )
+  ]
 type TySub = M.Map Text Ty
 
 data SeqTIState = SeqTIState {
@@ -54,12 +84,20 @@ instance Applicative SeqTI where
 instance Functor SeqTI where
   fmap = liftM
 
+seqInfer :: Ex -> Either [Text] Ty
+seqInfer e = runSeqTI (seqTypeInference builtinTypes e)
+
 runSeqTI :: SeqTI a -> Either [Text] a
 runSeqTI t = let (SeqTI stateFunc) = t
                  initState = SeqTIState{ tvCount = 0, tiErrors = [] }
              in  case stateFunc initState of
                       (Just v,  s) -> Right v
                       (Nothing, s) -> Left $ tiErrors s
+
+seqTypeInference :: TyEnv -> Ex -> SeqTI Ty
+seqTypeInference env e = do
+  (sub, ty) <- ti env e
+  return $ apply sub ty
 
 getTvCount :: SeqTI Integer
 getTvCount = SeqTI $ \s -> (Just (tvCount s), s)
@@ -68,7 +106,7 @@ incTvCount :: SeqTI ()
 incTvCount = SeqTI $ \s -> (Just (), s{tvCount = (tvCount s) + 1})
 
 newTV :: SeqTI Ty
-newTV = incTvCount >> getTvCount >>= (\i -> return $ TVar ("a" ++ tshow i))
+newTV = getTvCount >>= (\i -> (>>) incTvCount $ return . TVar $ "a" ++ tshow i)
 
 getTiErrors :: SeqTI [Text]
 getTiErrors = SeqTI $ \s -> (Just $ tiErrors s, s)
@@ -76,6 +114,7 @@ getTiErrors = SeqTI $ \s -> (Just $ tiErrors s, s)
 putTiErrors :: [Text] -> SeqTI ()
 putTiErrors ts = SeqTI $ \s -> (Just (), s{tiErrors=ts})
 
+-- Halts inference and records the error
 tiError :: Text -> SeqTI a
 tiError t = getTiErrors >>= (\ts -> putTiErrors $ t:ts) >> (SeqTI $ \s -> (Nothing, s))
 
@@ -181,18 +220,25 @@ ti env (EApp e1 e2) = do
                                 ++ "Inference 2   : " ++ tshow (t2, sub2) ++ "\n"
                                 ++ "   for expr   : " ++ tshow e2 ++ "\n\n"
                            )
-       Right sub3 -> return (sub3, apply sub3 tv)
+       Right sub3 -> do
+         return (sub1 `compSub` sub2 `compSub` sub3, apply sub3 tv)
 
 -- Abstraction
+ti env (EAbs x e) = do
+  tv <- newTV
+  let env' = remove env x
+      env'' = env' `M.union` (M.singleton x (PolyTy [] tv))
+  (s1, t1) <- ti env'' e
+  return (s1, TFun (apply s1 tv) t1)
+
 -- Let
-
--- TODO: Remove when implemented
-ti _ _ = tiError "Unimplemented"
-
-seqTypeInference :: TyEnv -> Ex -> SeqTI Ty
-seqTypeInference env e = do
-  (sub, ty) <- ti env e
-  return $ apply sub ty
+ti env (ELet x e1 e2) = do
+  (s1, t1) <- ti env e1
+  let env' = remove env x
+      t' = generalization (apply s1 env) t1
+      env'' = M.insert x t' env'
+  (s2, t2) <- ti (apply s1 env'') e2
+  return (s1 `compSub` s2, t2)
 
 -- The LetExpr grammar is only allowed in certain places so it isn't of the GExpr type
 letExprToEx :: GELetExpr -> Ex
@@ -214,18 +260,28 @@ parseInt (IntTok s@(x:xs)) = let bNeg = x == '~'
                                       [(i, [])] -> if bNeg then -i else i
                                       _         -> error myIntegerErrorMsg
 
+-- Helper function to apply arguments to an expression
+applyArgs :: Ex -> [GEAppArg] -> Ex
+applyArgs e ((GEAppArg a):[]) = EApp e (toSeqEx a)
+applyArgs e ((GEAppArg a):as) = applyArgs (EApp e (toSeqEx a)) as
+
 -- Converts grammar to AST but does not verify its correctness
 toSeqEx :: GExpr -> Ex
-
-toSeqEx (GEAbs [] le) = error "This case should be forbidden by the grammar."
-toSeqEx (GEAbs ((GEAbsArg (LIdent i)):[]) le) = EAbs (pack i) (letExprToEx le)
-toSeqEx (GEAbs ((GEAbsArg (LIdent i)):xs) le) = EAbs (pack i) (toSeqEx $ GEAbs xs le)
-
-toSeqEx (GEIf b e1 e2) = EApp (EApp (EApp (EVar "if") (toSeqEx b)) (letExprToEx e1)) (letExprToEx e2)
 
 toSeqEx (GEPlus  e1 e2) = EApp (EApp (EVar "+") (toSeqEx e1)) (toSeqEx e2)
 toSeqEx (GEMinus e1 e2) = EApp (EApp (EVar "-") (toSeqEx e1)) (toSeqEx e2)
 toSeqEx (GETimes e1 e2) = EApp (EApp (EVar "*") (toSeqEx e1)) (toSeqEx e2)
+
+toSeqEx (GELogNot e) = EApp (EVar "!") (toSeqEx e)
+
+toSeqEx (GEIf b e1 e2) = EApp (EApp (EApp (EVar "if") (toSeqEx b)) (letExprToEx e1)) (letExprToEx e2)
+
+toSeqEx (GEApp e []) = error "Application without arguments should be forbidden by the grammar."
+toSeqEx (GEApp e as) = applyArgs (toSeqEx e) as
+
+toSeqEx (GEAbs [] le) = error "Lambda without arguments should be forbidden by the grammar."
+toSeqEx (GEAbs ((GEAbsArg (LIdent i)):[]) le) = EAbs (pack i) (letExprToEx le)
+toSeqEx (GEAbs ((GEAbsArg (LIdent i)):xs) le) = EAbs (pack i) (toSeqEx $ GEAbs xs le)
 
 toSeqEx (GEVar (LIdent i)) = EVar (pack i)
 

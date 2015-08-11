@@ -7,10 +7,12 @@ import Test.HUnit
 import Test.QuickCheck
 
 import Test.Jael.Grammar (grammarTests)
+import Test.Jael.SeqTypeInf (seqInfTests)
 
 main :: IO ()
 main = defaultMainWithOpts
         (concat [ grammarTests
+                , seqInfTests
                 ]
         ) mempty
 

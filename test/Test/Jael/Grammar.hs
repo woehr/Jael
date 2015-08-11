@@ -14,95 +14,177 @@ import Jael.Grammar
 import Jael.Parser
 
 grammarTests :: [T.Test]
-grammarTests = [ testCase "parse plus expr" (shouldParse pGExpr exprPlus)
-               , testCase "parse lambda expr" (shouldParse pGExpr exprAbs)
-               , testCase "parse func app expr" (shouldParse pGExpr exprApp)
-               , testCase "test func app tree" (checkParsedTree pGExpr exprApp gstApp)
-               , testCase "parse lambda expr with application" (shouldParse pGExpr exprAbsWithApp)
-               , testCase "parse the kitchen sink" (shouldParse pGExpr exprKitchenSink)
-               , testCase "test kitchen sink tree" (checkParsedTree pGExpr exprKitchenSink gstKitchenSink)
+grammarTests = [ testCase "plus expr" (checkParsedTree pGExpr exprPlus gstPlus)
+               , testCase "plus expr" (checkParsedTree pGExpr exprTimes gstTimes)
+               , testCase "operator precedence" (checkParsedTree pGExpr exprOpPrec gstOpPrec)
+               , testCase "lambda expr" (checkParsedTree pGExpr exprAbs gstAbs)
+               , testCase "double application" (checkParsedTree pGExpr exprApp gstApp)
+               , testCase "application with operator" (checkParsedTree pGExpr exprAppWithOp gstAppWithOp)
+               , testCase "application precedence (1)" (checkParsedTree pGExpr exprAppPrec1 gstAppPrec1)
+               , testCase "application precedence (2)" (checkParsedTree pGExpr exprAppPrec2 gstAppPrec2)
+               , testCase "lambda expr with application" (checkParsedTree pGExpr exprAbsWithApp gstAbsWithApp)
+               , testCase "if expr with application" (checkParsedTree pGExpr exprIfWithApp gstIfWithApp)
+               , testCase "if expr with application w/o paren" (shouldNotParse pGExpr exprIfWithAppFail)
                ]
 
+shouldNotParse :: ParseFun a -> Text -> Assertion
+shouldNotParse p t = either (\_ -> return ()) (\_ -> assertFailure "Expression parsed successful") (runParser p t)
+
+checkParsedTree :: (Eq a, Show a) => ParseFun a -> Text -> a -> Assertion
+checkParsedTree p tx tr = either (assertFailure . unpack) ((@=?) tr) (runParser p tx)
+
+-- 1
 exprPlus :: Text
 exprPlus = pack [raw|
-  2+2
+  a+b+c
 |]
 
+gstPlus :: GExpr
+gstPlus = (GEPlus (GEPlus (GEVar (LIdent "a"))
+                          (GEVar (LIdent "b"))
+                  )
+                  (GEVar (LIdent "c"))
+          )
+
+-- 2
+exprTimes :: Text
+exprTimes = pack [raw|
+  a*b*c
+|]
+
+gstTimes :: GExpr
+gstTimes = (GETimes (GETimes (GEVar (LIdent "a"))
+                             (GEVar (LIdent "b"))
+                    )
+                    (GEVar (LIdent "c"))
+           )
+
+-- 3
+exprOpPrec :: Text
+exprOpPrec = pack [raw|
+  !a+!b*!c // (!a)+((!b)*(!c))
+|]
+
+gstOpPrec :: GExpr
+gstOpPrec = (GEPlus (GELogNot (GEVar (LIdent "a")))
+                    (GETimes (GELogNot (GEVar (LIdent "b")))
+                             (GELogNot (GEVar (LIdent "c")))
+                    )
+            )
+
+-- 4
 exprAbs :: Text
 exprAbs = pack [raw|
   \ a b c -> {
-    a + b + c
+    a
   }
 |]
 
-exprApp :: Text
-exprApp = pack [raw|
-  a b c
-|]
-
--- Tests that function application is parsed left-associatively
-gstApp :: GExpr
-gstApp = (GEApp (GEApp (GEVar (LIdent "a"))
-                       (GEVar (LIdent "b"))
+gstAbs :: GExpr
+gstAbs = (GEAbs [ GEAbsArg (LIdent "a")
+                , GEAbsArg (LIdent "b")
+                , GEAbsArg (LIdent "c")
+                ]
+                (GELetExpr [] (GEVar (LIdent "a"))
                 )
-                (GEVar (LIdent "c"))
          )
 
+-- 5
+-- Apply b to a, then apply c to the result, application binds stronger than !
+exprApp :: Text
+exprApp = pack [raw|
+  !a(b)(c)
+|]
+
+gstApp :: GExpr
+gstApp = (GELogNot (GEApp (GEApp (GEVar (LIdent "a"))
+                                 [GEAppArg (GEVar (LIdent "b"))]
+                          )
+                          [GEAppArg (GEVar (LIdent "c"))]
+                   )
+         )
+
+-- 6
+exprAppWithOp :: Text
+exprAppWithOp = pack [raw|
+  f (1 + 2)
+|]
+
+gstAppWithOp :: GExpr
+gstAppWithOp = (GEApp (GEVar (LIdent "f"))
+                      [GEAppArg (GEPlus (GEInt (IntTok "1"))
+                                        (GEInt (IntTok "2"))
+                                )
+                      ]
+                )
+
+-- 7
+exprAppPrec1 :: Text
+exprAppPrec1 = pack [raw|
+  a+f(b)
+|]
+
+gstAppPrec1 :: GExpr
+gstAppPrec1 = (GEPlus (GEVar (LIdent "a"))
+                      (GEApp (GEVar (LIdent "f"))
+                             [GEAppArg (GEVar (LIdent "b"))]
+                      )
+              )
+
+-- 8
+exprAppPrec2 :: Text
+exprAppPrec2 = pack [raw|
+  f(b)*a
+|]
+
+gstAppPrec2 :: GExpr
+gstAppPrec2 = (GETimes (GEApp (GEVar (LIdent "f"))
+                              [GEAppArg (GEVar (LIdent "b"))]
+                       )
+                       (GEVar (LIdent "a"))
+              )
+
+-- 9
 exprAbsWithApp :: Text
 exprAbsWithApp = pack [raw|
   \ a b c -> {
-    a + b + c
-  } x y z
+    a
+  }(x, y, z)
 |]
 
--- an expression that tests many components of the defined grammar
-exprKitchenSink :: Text
-exprKitchenSink = pack [raw|
-  if x z{
-    y=1+2;
-    f = \ a b c -> {
-      a=a+b*c;
-      (a+b)*c
-    } i j k ;
-    !(f 1 ~2 y + 3)
-  }else {~2 1 a ~2 False}
+gstAbsWithApp :: GExpr
+gstAbsWithApp = (GEApp (GEAbs [ GEAbsArg (LIdent "a")
+                              , GEAbsArg (LIdent "b")
+                              , GEAbsArg (LIdent "c")
+                              ]
+                              (GELetExpr [] (GEVar (LIdent "a"))
+                              )
+                       )
+                       [ GEAppArg (GEVar (LIdent "x"))
+                       , GEAppArg (GEVar (LIdent "y"))
+                       , GEAppArg (GEVar (LIdent "z"))
+                       ]
+                )
+
+-- 10
+exprIfWithApp :: Text
+exprIfWithApp = pack [raw|
+  (if True {a} else {b})(c)
 |]
 
--- The expected "grammar syntax tree" of ifExpr1
-gstKitchenSink :: GExpr
-gstKitchenSink = GEIf (GEApp (GEVar (LIdent "x")) (GEVar (LIdent "z"))) (
-  GELetExpr [ GELetIdent (LIdent "y") (GEPlus (GEInt (IntTok "1")) (GEInt (IntTok "2")))
-            , GELetIdent (LIdent "f") (GEApp (GEApp (GEApp (GEAbs [ GEAbsArg (LIdent "a")
-                                                    , GEAbsArg (LIdent "b")
-                                                    , GEAbsArg (LIdent "c")
-                                                    ]
-                                                    ( GELetExpr [ GELetIdent (LIdent "a") (GEPlus (GEVar (LIdent "a")) (GETimes (GEVar (LIdent "b")) (GEVar (LIdent "c"))))
-                                                                ]
-                                                                (GETimes (GEPlus (GEVar (LIdent "a")) (GEVar (LIdent "b"))) (GEVar (LIdent "c")))
-                                                    )
-                                             )
-                                             (GEVar (LIdent "i"))
-                                      )      (GEVar (LIdent "j"))
-                                      )      (GEVar (LIdent "k"))
-                                      )
-            ]
-            (GELogNot (GEApp (GEApp (GEApp (GEVar (LIdent "f")) (GEInt (IntTok "1")))
-                                                  (GEInt (IntTok "~2")))
-                                                  (GEPlus (GEVar (LIdent "y")) (GEInt (IntTok "3"))))
+gstIfWithApp :: GExpr
+gstIfWithApp = (GEApp (GEIf (GETrue)
+                            (GELetExpr [] (GEVar (LIdent "a")))
+                            (GELetExpr [] (GEVar (LIdent "b")))
                       )
-  ) (
-    GELetExpr [] (
-      GEApp (GEApp (GEApp (GEApp (GEInt (IntTok "~2")) (GEInt (IntTok "1")))
-                          (GEVar (LIdent "a")))
-                          (GEInt (IntTok "~2")))
-                          GEFalse)
-    )
+                      [GEAppArg (GEVar (LIdent "c"))]
+               )
 
-shouldParse :: ParseFun a -> Text -> Assertion
-shouldParse p t = either (assertFailure . unpack) (\_ -> return ()) (runParser p t)
-
-checkParsedTree :: (Eq a, Show a) => ParseFun a -> Text -> a -> Assertion
-checkParsedTree p tx tr = case runParser p tx of
-                               Left e -> assertFailure . unpack $ e
-                               Right parsed_tr -> tr @=? parsed_tr
+-- 11
+-- This looks confusing so the grammar is defined such that parenthesis are
+-- required
+exprIfWithAppFail :: Text
+exprIfWithAppFail = pack [raw|
+  if True {a} else {b}(c)
+|]
 
