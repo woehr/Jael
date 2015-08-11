@@ -10,22 +10,32 @@ import qualified Data.Set as S
 import Text.Read (reads)
 import Jael.Grammar
 
-data Lit  = LInt Integer
-          | LBool Bool
-            deriving (Show)
-
 data Ex = EVar Text
-        | ELit Lit
+        | ELit ExLit
+        | ETup ExTup
         | EApp Ex Ex
         | EAbs Text Ex
         | ELet Text Ex Ex
           deriving (Show)
 
+data ExLit  = LInt Integer
+            | LBool Bool
+              deriving (Show)
+
+data ExTup = ExTup Ex ExTup
+           | EUnit
+             deriving (Show)
+
 data Ty = TVar Text
         | TInt
         | TBool
+        | TTup TyTup
         | TFun Ty Ty
           deriving (Eq, Show)
+
+data TyTup = TyTup (Ty, Maybe Text) TyTup
+           | TUnit
+           deriving (Eq, Show)
 
 data PolyTy = PolyTy [Text] Ty
               deriving (Show)
@@ -37,29 +47,59 @@ builtinTypes = M.fromList
   [ ( "if" -- Bool -> a -> a -> a
     , PolyTy ["a"] (TFun TBool (TFun (TVar "a") (TFun (TVar "a") (TVar "a"))))
     )
-  , ( "+"
-    , PolyTy [] (TFun TInt (TFun TInt TInt))
+  , ( "<$" -- (a -> b) -> a -> b
+    , PolyTy ["a", "b"] (TFun (TFun (TVar "a") (TVar "b")) (TFun (TVar "a") (TVar "b")))
     )
-  , ( "-"
-    , PolyTy [] (TFun TInt (TFun TInt TInt))
-    )
-  , ( "*"
-    , PolyTy [] (TFun TInt (TFun TInt TInt))
-    )
-  , ( "!"
-    , PolyTy [] (TFun TBool TBool)
-    )
-  , ( ">>" -- a -> (a -> b) -> b
+  , ( "$>" -- a -> (a -> b) -> b
     , PolyTy ["a", "b"] (TFun (TVar "a") (TFun (TFun (TVar "a") (TVar "b")) (TVar "b")))
     )
-  , ( "<<" -- (a -> b) -> a -> b
-    , PolyTy ["a", "b"] (TFun (TFun (TVar "a") (TVar "b")) (TFun (TVar "a") (TVar "b")))
+  , ( "||"
+    , PolyTy [] (TFun TBool (TFun TBool TBool))
+    )
+  , ( "&&"
+    , PolyTy [] (TFun TBool (TFun TBool TBool))
+    )
+  , ( "=="
+    , PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+    )
+  , ( "!="
+    , PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+    )
+  , ( ">="
+    , PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+    )
+  , ( "<="
+    , PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+    )
+  , ( ">"
+    , PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+    )
+  , ( "<"
+    , PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+    )
+  , ( "+"
+    , PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") (TVar "a")))
+    )
+  , ( "-"
+    , PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") (TVar "a")))
+    )
+  , ( "*"
+    , PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") (TVar "a")))
+    )
+  , ( "/"
+    , PolyTy [] (TFun TInt (TFun TInt (TTup (TyTup (TInt, Just "quot") (TyTup (TInt, Just "rem") TUnit)))))
+    )
+  , ( "%"
+    , PolyTy [] (TFun TInt (TFun TInt TInt))
+    )
+  , ( "<o" -- (b -> c) -> (a -> b) -> (a -> c)
+    , PolyTy ["a", "b", "c"] (TFun (TFun (TVar "b") (TVar "c")) (TFun (TFun (TVar "a") (TVar "b")) (TFun (TVar "a") (TVar "c"))))
     )
   , ( "o>" -- (a -> b) -> (b -> c) -> (a -> c)
     , PolyTy ["a", "b", "c"] (TFun (TFun (TVar "a") (TVar "b")) (TFun (TFun (TVar "b") (TVar "c")) (TFun (TVar "a") (TVar "c"))))
     )
-  , ( "<o" -- (b -> c) -> (a -> b) -> (a -> c)
-    , PolyTy ["a", "b", "c"] (TFun (TFun (TVar "b") (TVar "c")) (TFun (TFun (TVar "a") (TVar "b")) (TFun (TVar "a") (TVar "c"))))
+  , ( "!"
+    , PolyTy ["a"] (TFun (TVar "a") (TVar "a"))
     )
   ]
 type TySub = M.Map Text Ty
@@ -126,14 +166,23 @@ instance TyOps Ty where
   ftv (TVar t)     = S.singleton t
   ftv TInt         = S.empty
   ftv TBool        = S.empty
-  ftv (TFun t1 t2) = S.union (ftv t1) (ftv t2)
+  ftv (TFun t1 t2) = (ftv t1) `S.union` (ftv t2)
+  ftv (TTup t)     = (ftv t)
 
   apply s t@(TVar v) =
     case M.lookup v s of
       Nothing   -> t
       Just newt -> newt
   apply s (TFun t1 t2) = TFun (apply s t1) (apply s t2)
+  apply s (TTup t) = TTup (apply s t)
   apply _ t = t
+
+instance TyOps TyTup where
+  ftv (TyTup (t1, x) t2) = (ftv t2) `S.union` (ftv t2)
+  ftv TUnit = S.empty
+
+  apply s (TyTup (t1, x) t2) = TyTup (apply s t1, x) (apply s t2)
+  apply _ TUnit = TUnit
 
 instance TyOps PolyTy where
   -- Free type variables of a type scheme are the ones not bound by a universal
@@ -195,8 +244,9 @@ varBind u t
 
 ti :: TyEnv -> Ex -> SeqTI (TySub, Ty)
 -- Literals
-ti _ (ELit (LInt _))    = return (nullSub, TInt)
-ti _ (ELit (LBool _))   = return (nullSub, TBool)
+ti _ (ELit (LInt _))  = return (nullSub, TInt)
+ti _ (ELit (LBool _)) = return (nullSub, TBool)
+ti _ (ETup EUnit)          = return (nullSub, TTup TUnit)
 
 -- Variables
 ti env (EVar v) = do

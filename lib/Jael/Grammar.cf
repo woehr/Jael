@@ -5,50 +5,98 @@
 
 token UIdent  (upper (letter | digit | '_')*) ;
 token LIdent  (lower (letter | digit | '_')*) ;
-token IntTok  ('~'? ["123456789"] digit*) ;
+token IntTok  ('~'? digit+) ;
 
 -- Sequential language
 
-GTInt.      GType  ::= "Int" ;
-GTBool.     GType  ::= "Bool" ;
+GUnit.       GUnit ::= "{}" ;
 
-GELetIdent. GELetIdent ::= LIdent "=" GExpr ;
-terminator  GELetIdent ";" ;
+GTInt.       GType ::= "Int" ;
+GTBool.      GType ::= "Bool" ;
+GTUnit.      GType ::=  GUnit ;
 
-GELetExpr.  GELetExpr ::= [GELetIdent] GExpr ;
+GTTupFieldName. GTTupFieldName ::= LIdent ;
 
-GEAppArg.   GEAppArg ::= GExpr ;
-separator   nonempty GEAppArg "," ;
+-- Single element list terminated with ::
+(:[]). [GTTupFieldName] ::= GTTupFieldName "::" ;
 
-GEAbsArg.   GEAbsArg ::= LIdent ;
-separator   nonempty GEAbsArg "" ;
+-- Tuple element is one GTTupFieldName followed by type
+GTTupElement. GTTupElement ::= [GTTupFieldName] GType ;
+separator     nonempty GTTupElement "," ;
 
-GEPlus.     GExpr1 ::= GExpr1 "+" GExpr2 ;
-GEMinus.    GExpr1 ::= GExpr1 "-" GExpr2 ;
+GTTupDef.    GTTupDef ::= "{" [GTTupElement] "}" ;
+GTTupTyName. GTTupTyName ::= UIdent ;
 
-GETimes.    GExpr2 ::= GExpr2 "*" GExpr3 ;
+GTTup.       GType ::= "stuct" GTTupTyName GTTupDef ;
 
-GELogNot.   GExpr3 ::= "!" GExpr3 ;
+GELetIdent.  GELetIdent ::= LIdent "=" GExpr ;
+terminator   GELetIdent ";" ;
 
-GEIf.       GExpr4 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
+GELetExpr.   GELetExpr ::= [GELetIdent] GExpr ;
 
-GEApp.      GExpr5 ::= GExpr5 "(" [GEAppArg] ")" ;
+GEAppArg.    GEAppArg ::= GExpr ;
+separator    nonempty GEAppArg "," ;
 
-GEAbs.      GExpr6 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
+GEAbsArg.    GEAbsArg ::= LIdent ;
+separator    nonempty GEAbsArg "" ;
 
-GEVar.      GExpr7 ::= LIdent ;
-GEInt.      GExpr7 ::= IntTok ;
-GETrue.     GExpr7 ::= "True" ;
-GEFalse.    GExpr7 ::= "False";
+-- tuple args can be empty (empty tuple)
+GETupArg.    GETupArg ::= GExpr ;
+separator    GETupArg "," ;
 
-coercions   GExpr 8 ;
+GELeftApp.   GExpr0 ::= GExpr1 "<$" GExpr0 ;
+GERightApp.  GExpr0 ::= GExpr0 "$>" GExpr1 ;
+
+--GEBind.      GExpr1 ::= GExpr1 ">>=" GExpr2 ;
+--GESeq.       GExpr1 ::= GExpr1 ">>"  GExpr2 ;
+
+GELogOr.     GExpr2 ::= GExpr3 "||" GExpr2 ;
+
+GELogAnd.    GExpr3 ::= GExpr4 "&&" GExpr3 ;
+
+GEEq.        GExpr4 ::= GExpr4 "==" GExpr4 ;
+GENotEq.     GExpr4 ::= GExpr4 "!=" GExpr4 ;
+GEGtEq.      GExpr4 ::= GExpr4 ">=" GExpr4 ;
+GELtEq.      GExpr4 ::= GExpr4 "<=" GExpr4 ;
+GEGt.        GExpr4 ::= GExpr4 ">"  GExpr4 ;
+GELt.        GExpr4 ::= GExpr4 "<"  GExpr4 ;
+
+GEPlus.      GExpr6 ::= GExpr6 "+" GExpr7 ;
+GEMinus.     GExpr6 ::= GExpr6 "-" GExpr7 ;
+
+GETimes.     GExpr7 ::= GExpr7 "*" GExpr8 ;
+GEDiv.       GExpr7 ::= GExpr7 "/" GExpr8 ;
+GEMod.       GExpr7 ::= GExpr7 "%" GExpr8 ;
+
+GELeftComp.  GExpr9 ::= GExpr10 "<o" GExpr9 ;
+GERightComp. GExpr9 ::= GExpr9  "o>" GExpr10 ;
+
+GELogNot.    GExpr10 ::= "!" GExpr10 ;
+
+GEIdx.       GExpr11 ::= GExpr11 "::" GExpr12 ;
+
+GEIf.        GExpr12 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
+
+GEApp.       GExpr13 ::= GExpr13 "(" [GEAppArg] ")" ;
+
+GEAbs.       GExpr14 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
+
+GEVar.       GExpr15 ::= LIdent ;
+GEInt.       GExpr15 ::= IntTok ;
+GETrue.      GExpr15 ::= "True" ;
+GEFalse.     GExpr15 ::= "False" ;
+GETup.       GExpr15 ::= "{" [GETupArg] "}" ;
+GEUnit.      GExpr15 ::= GUnit ;
+
+coercions    GExpr 15 ;
 
 -- Hardware language
 
 GHwArea.    GHwArea ::= "area" ;
 terminator  GHwArea "" ;
 
-GHwState.   GHwState ::= "state" ;
+rules GHwStateType ::= GUnit | GTTupTyName | GTTupDef ;
+GHwState.   GHwState ::= "state" GHwStateType ;
 
 GHwChan.    GHwChan ::= "channel" ;
 terminator  GHwChan ";" ;

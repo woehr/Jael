@@ -16,17 +16,28 @@ import Jael.Seq.AST
 
 seqInfTests :: [T.Test]
 seqInfTests = [ testCase "plus" $ checkInferredType exprPlus
-              , testCase "abs" $ checkInferredType exprAbs
+              , testCase "abs" $ testInferredType exprAbs
               , testCase "app" $ checkInferredType exprApp
               , testCase "if" $ checkInferredType exprIf
               ]
 
 checkInferredType :: (Text, Ty) -> Assertion
-checkInferredType (tx, ty) = either (assertFailure . unpack) (
-    \gEx -> case seqInfer (toSeqEx gEx) of
-                  Left es -> assertFailure . unpack . intercalate "\n" $ es
-                  Right inferred -> ty @=? inferred
-  ) (runParser pGExpr tx)
+checkInferredType (tx, expected) =
+  case runParser pGExpr tx of
+       Left err -> assertFailure (unpack err)
+       Right ex -> case seqInfer (toSeqEx ex) of
+                        Left es -> assertFailure . unpack . intercalate "\n" $ es
+                        Right ty -> assertEqual "" expected ty
+
+testInferredType :: (Text, Ty -> Maybe Text) -> Assertion
+testInferredType (tx, tester) =
+  case runParser pGExpr tx of
+    Left err -> assertFailure (unpack err)
+    Right ex -> case seqInfer (toSeqEx ex) of
+                     Left es -> assertFailure . unpack . intercalate "\n" $ es
+                     Right ty -> case tester ty of
+                                      Just t  -> assertFailure (unpack t)
+                                      Nothing -> return ()
 
 -- 1
 exprPlus :: (Text, Ty)
@@ -34,12 +45,27 @@ exprPlus = (pack [raw|
   1+~2+3
 |], TInt)
 
-exprAbs :: (Text, Ty)
+-- Second value of tuple is a function that tests the type of exprAbs
+funVarsToList :: Ty -> Maybe [Text]
+funVarsToList (TFun (TVar x) t) = liftA (x:) (funVarsToList t)
+funVarsToList (TVar x) = Just (x:[])
+funVarsToList _ = Nothing
+
+-- * has type a->a->a so this is expected to be inferred as x->x->x->x
+-- where x is some type variable
+exprAbs :: (Text, Ty -> Maybe Text)
 exprAbs = (pack [raw|
   \a b c -> {
     a*b*c
   }
-|], TFun TInt (TFun TInt (TFun TInt TInt)))
+|], \ty -> case join $ liftA toMinLen (funVarsToList ty) :: Maybe (MinLen (Succ Zero) [Text]) of
+                Just vs -> if length vs /= 4
+                              then Just $ "Expected TVar->TVar->TVar but got " ++ tshow ty
+                              else if all (== head vs) (tailML vs)
+                                      then Nothing
+                                      else Just $ "Expected all type variables to be the same. Got: " ++ intercalate " " (unMinLen vs)
+                Nothing -> Just "Failed to convert to a list of type vars."
+          )
 
 exprApp :: (Text, Ty)
 exprApp = (pack [raw|
@@ -51,14 +77,14 @@ exprApp = (pack [raw|
 exprIf :: (Text, Ty)
 exprIf = (pack [raw|
   \b -> {
-    f = \a b c -> {
+    f = \a b c -> { // a and b are Int so c should be inferred as Int
       a+b*c
     };
     if b {
-      f(1, 2, 3)
+      f(1, 2)       // thus, f applied twice should be Int -> Int
     } else {
-      f(4, 5, 6)
+      f(4, 5)
     }
   }
-|], TFun TBool TInt)
+|], TFun TBool (TFun TInt TInt))
 
