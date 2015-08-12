@@ -19,6 +19,7 @@ seqInfTests = [ testCase "plus" $ checkInferredType exprPlus
               , testCase "abs" $ testInferredType exprAbs
               , testCase "app" $ checkInferredType exprApp
               , testCase "if" $ checkInferredType exprIf
+              , testCase "let" $ testInferredType exprLet
               ]
 
 checkInferredType :: (Text, Ty) -> Assertion
@@ -39,6 +40,17 @@ testInferredType (tx, tester) =
                                       Just t  -> assertFailure (unpack t)
                                       Nothing -> return ()
 
+testSingleTv :: Int -> Ty -> Maybe Text
+testSingleTv arity ty =
+  case join $ liftA toMinLen (funVarsToList ty) :: Maybe (MinLen (Succ Zero) [Text]) of
+    Just vs -> if length vs /= (arity + 1)
+                  then Just $ "Expected arity of " ++ tshow arity ++ " but got " ++ tshow ty
+                  else if all (== head vs) (tailML vs)
+                          then Nothing
+                          else Just $ "Expected all type variables to be the same. Got: " ++
+                            intercalate " " (unMinLen vs)
+    Nothing -> Just "Failed to convert to a list of type vars."
+
 -- 1
 exprPlus :: (Text, Ty)
 exprPlus = (pack [raw|
@@ -58,14 +70,7 @@ exprAbs = (pack [raw|
   \a b c -> {
     a*b*c
   }
-|], \ty -> case join $ liftA toMinLen (funVarsToList ty) :: Maybe (MinLen (Succ Zero) [Text]) of
-                Just vs -> if length vs /= 4
-                              then Just $ "Expected TVar->TVar->TVar but got " ++ tshow ty
-                              else if all (== head vs) (tailML vs)
-                                      then Nothing
-                                      else Just $ "Expected all type variables to be the same. Got: " ++ intercalate " " (unMinLen vs)
-                Nothing -> Just "Failed to convert to a list of type vars."
-          )
+|], testSingleTv 3)
 
 exprApp :: (Text, Ty)
 exprApp = (pack [raw|
@@ -87,4 +92,15 @@ exprIf = (pack [raw|
     }
   }
 |], TFun TBool (TFun TInt TInt))
+
+exprLet :: (Text, Ty -> Maybe Text)
+exprLet = (pack [raw|
+  \a b c d e -> {
+    f = a+b-c;
+    g = b-c*d;
+    h = c*d+d;
+    i = d-e+a;
+    f+g-h*i
+  }
+|], testSingleTv 5)
 

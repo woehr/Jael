@@ -20,7 +20,7 @@ let
   };
 
   extra-inputs = (with ghc; [alex BNFC happy]);
-  shell-inputs = []; #(with ghc; [ghc-mod]);
+  shell-inputs = (with ghc; [cabal-install]);
 
 in {
   jael-drv-for = expr: let

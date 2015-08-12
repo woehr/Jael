@@ -172,7 +172,7 @@ instance TyOps Ty where
   apply s t@(TVar v) =
     case M.lookup v s of
       Nothing   -> t
-      Just newt -> newt
+      Just x    -> x
   apply s (TFun t1 t2) = TFun (apply s t1) (apply s t2)
   apply s (TTup t) = TTup (apply s t)
   apply _ t = t
@@ -207,7 +207,7 @@ nullSub :: TySub
 nullSub = M.empty
 
 compSub :: TySub -> TySub -> TySub
-compSub a b = M.union (M.map (apply a) b) a
+compSub a b = (M.map (apply a) b) `M.union` a
 
 -- Creates a scheme from a type by adding the qualified type variables of the
 -- environment
@@ -227,7 +227,7 @@ mgu :: Ty -> Ty -> Either Text TySub
 mgu (TFun l1 r1) (TFun l2 r2) = do
   sub1 <- mgu l1 l2
   sub2 <- mgu (apply sub1 r1) (apply sub1 r2)
-  return $ compSub sub1 sub2
+  return $ sub2 `compSub` sub1
 mgu (TVar u) t = varBind u t
 mgu t (TVar u) = varBind u t
 mgu TInt    TInt    = Right nullSub
@@ -246,7 +246,7 @@ ti :: TyEnv -> Ex -> SeqTI (TySub, Ty)
 -- Literals
 ti _ (ELit (LInt _))  = return (nullSub, TInt)
 ti _ (ELit (LBool _)) = return (nullSub, TBool)
-ti _ (ETup EUnit)          = return (nullSub, TTup TUnit)
+ti _ (ETup EUnit)     = return (nullSub, TTup TUnit)
 
 -- Variables
 ti env (EVar v) = do
@@ -270,8 +270,7 @@ ti env (EApp e1 e2) = do
                                 ++ "Inference 2   : " ++ tshow (t2, sub2) ++ "\n"
                                 ++ "   for expr   : " ++ tshow e2 ++ "\n\n"
                            )
-       Right sub3 -> do
-         return (sub1 `compSub` sub2 `compSub` sub3, apply sub3 tv)
+       Right sub3 -> return (sub3 `compSub` sub2 `compSub` sub1, apply sub3 tv)
 
 -- Abstraction
 ti env (EAbs x e) = do
@@ -288,7 +287,7 @@ ti env (ELet x e1 e2) = do
       t' = generalization (apply s1 env) t1
       env'' = M.insert x t' env'
   (s2, t2) <- ti (apply s1 env'') e2
-  return (s1 `compSub` s2, t2)
+  return (s2 `compSub` s1, t2)
 
 -- The LetExpr grammar is only allowed in certain places so it isn't of the GExpr type
 letExprToEx :: GELetExpr -> Ex
