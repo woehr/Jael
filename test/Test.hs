@@ -6,12 +6,14 @@ import Test.Framework.Providers.QuickCheck2
 import Test.HUnit
 import Test.QuickCheck
 
-import Test.Jael.Grammar (grammarTests)
+import Test.Jael.Grammar.Expr (gExprTests)
+import Test.Jael.Grammar.Type (gTypeTests)
 import Test.Jael.SeqTypeInf (seqInfTests)
 
 main :: IO ()
 main = defaultMainWithOpts
-        (concat [ grammarTests
+        (concat [ gExprTests
+                , gTypeTests
                 , seqInfTests
                 ]
         ) mempty

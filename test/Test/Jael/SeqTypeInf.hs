@@ -12,7 +12,9 @@ import Test.HUnit
 import Test.Jael.Util
 import Jael.Grammar
 import Jael.Parser
+import Jael.Seq.Expr (gToEx)
 import Jael.Seq.AST
+import Jael.Seq.TI
 
 seqInfTests :: [T.Test]
 seqInfTests = [ testCase "plus" $ checkInferredType exprPlus
@@ -26,7 +28,7 @@ checkInferredType :: (Text, Ty) -> Assertion
 checkInferredType (tx, expected) =
   case runParser pGExpr tx of
        Left err -> assertFailure (unpack err)
-       Right ex -> case seqInfer (toSeqEx ex) of
+       Right ex -> case seqInfer (gToEx ex) of
                         Left es -> assertFailure . unpack . intercalate "\n" $ es
                         Right ty -> assertEqual "" expected ty
 
@@ -34,7 +36,7 @@ testInferredType :: (Text, Ty -> Maybe Text) -> Assertion
 testInferredType (tx, tester) =
   case runParser pGExpr tx of
     Left err -> assertFailure (unpack err)
-    Right ex -> case seqInfer (toSeqEx ex) of
+    Right ex -> case seqInfer (gToEx ex) of
                      Left es -> assertFailure . unpack . intercalate "\n" $ es
                      Right ty -> case tester ty of
                                       Just t  -> assertFailure (unpack t)

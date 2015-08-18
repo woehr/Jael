@@ -1,5 +1,6 @@
 -- Note: All grammar labels and productions are prefixed with "G" in order to
--- differentiate them from types in the target language with the same name
+-- differentiate them from types in the target language that may have the same
+-- name
 
 -- tokens
 
@@ -11,23 +12,40 @@ token IntTok  ('~'? digit+) ;
 
 GUnit.       GUnit ::= "{}" ;
 
+GTNamedParam. GTNamedParam ::= GType ;
+separator GTNamedParam "," ;
+
+--[]. [GTNamedParams] ::= ;
+
+GTNamedNoParam. GTNamedParams ::= ;
+GTNamedParams.  GTNamedParams ::= "(" [GTNamedParam] ")" ;
+
 GTInt.       GType ::= "Int" ;
 GTBool.      GType ::= "Bool" ;
 GTUnit.      GType ::=  GUnit ;
+GTNamed.     GType ::= UIdent GTNamedParams ;
+GTTVar.      GType ::= LIdent ;
 
-GTTupFieldName. GTTupFieldName ::= LIdent ;
+-- Struct element is an accessor followed by a type
+GTStructFieldName. GTStructFieldName ::= LIdent ;
+GTStructElement. GTStructElement ::= GTStructFieldName "::" GType ;
+separator        nonempty GTStructElement "," ;
 
--- Single element list terminated with ::
-(:[]). [GTTupFieldName] ::= GTTupFieldName "::" ;
+GTStructVars.   GTStructVars ::= LIdent ;
+terminator GTStructVars "" ;
 
--- Tuple element is one GTTupFieldName followed by type
-GTTupElement. GTTupElement ::= [GTTupFieldName] GType ;
-separator     nonempty GTTupElement "," ;
+GTStructDef.    GTStructDef ::= [GTStructVars] "{" [GTStructElement] "}" ;
+GTDefStruct.    GTypeDef ::= "stuct" UIdent GTStructDef ;
 
-GTTupDef.    GTTupDef ::= "{" [GTTupElement] "}" ;
-GTTupTyName. GTTupTyName ::= UIdent ;
+GTEnumTag.     GTEnumTag ::= LIdent ;
+GTEnumType.    GTEnumType ::= GType ;
+separator      GTEnumType "" ;
+GTEnumElement. GTEnumElement ::= GTEnumTag [GTEnumType] ;
+separator      nonempty GTEnumElement "," ;
 
-GTTup.       GType ::= "stuct" GTTupTyName GTTupDef ;
+GTEnumDef.     GTEnumDef ::= "{" [GTEnumElement] "}" ;
+GTEnumTyName.  GTEnumTyName ::= UIdent ;
+GTDefEnum.     GTypeDef ::= "enum" GTEnumTyName GTEnumDef ;
 
 GELetIdent.  GELetIdent ::= LIdent "=" GExpr ;
 terminator   GELetIdent ";" ;
@@ -40,9 +58,9 @@ separator    nonempty GEAppArg "," ;
 GEAbsArg.    GEAbsArg ::= LIdent ;
 separator    nonempty GEAbsArg "" ;
 
--- tuple args can be empty (empty tuple)
+-- tuple args can't be empty (GEUnit handles this)
 GETupArg.    GETupArg ::= GExpr ;
-separator    GETupArg "," ;
+separator    nonempty GETupArg "," ;
 
 GELeftApp.   GExpr0 ::= GExpr1 "<$" GExpr0 ;
 GERightApp.  GExpr0 ::= GExpr0 "$>" GExpr1 ;
@@ -81,12 +99,12 @@ GEApp.       GExpr13 ::= GExpr13 "(" [GEAppArg] ")" ;
 
 GEAbs.       GExpr14 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
 
-GEVar.       GExpr15 ::= LIdent ;
 GEInt.       GExpr15 ::= IntTok ;
-GETrue.      GExpr15 ::= "True" ;
-GEFalse.     GExpr15 ::= "False" ;
+GETrue.      GExpr15 ::= "true" ;
+GEFalse.     GExpr15 ::= "false" ;
 GETup.       GExpr15 ::= "{" [GETupArg] "}" ;
 GEUnit.      GExpr15 ::= GUnit ;
+GEVar.       GExpr15 ::= LIdent ;
 
 coercions    GExpr 15 ;
 
@@ -95,7 +113,7 @@ coercions    GExpr 15 ;
 GHwArea.    GHwArea ::= "area" ;
 terminator  GHwArea "" ;
 
-rules GHwStateType ::= GUnit | GTTupTyName | GTTupDef ;
+rules GHwStateType ::= GUnit | UIdent | GTStructDef ;
 GHwState.   GHwState ::= "state" GHwStateType ;
 
 GHwChan.    GHwChan ::= "channel" ;
@@ -118,5 +136,5 @@ GProg.      GProg ::= [GTopDef] ;
 comment "//" ;
 
 -- Only export nessecary top level parsers
-entrypoints GProg, GFunc, GProc, GHwproc, GExpr ;
+entrypoints GProg, GFunc, GProc, GHwproc, GType, GTypeDef, GExpr ;
 
