@@ -11,7 +11,7 @@ data Ex = EVar Text
         | EUnit
         | EInt Integer
         | EBool Bool
-        | ETup (NonEmpty Ex)
+        | EIdx Ex Ex
         | EApp Ex Ex
         | EAbs Text Ex
         | ELet Text Ex Ex
@@ -21,7 +21,6 @@ data Ty = TVar Text
         | TUnit
         | TInt
         | TBool
-        | TTup (NonEmpty Ty)
         | TNamed Text [Ty]
         | TFun Ty Ty
           deriving (Eq, Show)

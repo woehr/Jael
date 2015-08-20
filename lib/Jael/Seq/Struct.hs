@@ -79,8 +79,10 @@ validateStruct s@(Struct n tvs fs) =
                                  (UnusedTyVars unusedTVs)
          else
            let sTy = structTy s
-               -- Do something about the following unwieldy line
-            in Right $ (lowerFirst n, PolyTy tvs $ constructorTy s):concatMap (\((f, t), i) -> zip [n ++ "::" ++ tshow i, n ++ "::" ++ f] (replicate 2 (PolyTy tvs $ TFun sTy t))) (zip (NE.toList fs) [0..])
+               -- Adds the field and index to the environment
+            --in Right $ (lowerFirst n, PolyTy tvs $ constructorTy s):concatMap (\((f, t), i) -> zip [n ++ "::" ++ tshow i, n ++ "::" ++ f] (replicate 2 (PolyTy tvs $ TFun sTy t))) (zip (NE.toList fs) [0..])
+               -- Adds only the index to the environment 
+               in Right $ (lowerFirst n, PolyTy tvs $ constructorTy s):map (\(f, t) -> (n ++ "::" ++ f, PolyTy tvs $ TFun sTy t)) (NE.toList fs)
 
 gToSElement :: GTStructElement -> SElement
 gToSElement (GTStructElement gt (GTStructFieldName (LIdent gfn))) =

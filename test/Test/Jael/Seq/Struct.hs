@@ -65,9 +65,7 @@ structValidSimple :: (Text, [(Text, PolyTy)])
 structValidSimple = (pack [raw|
   X { Int :: f0, Bool :: f1 }
 |], [ ("x",     PolyTy [] $ TFun TInt (TFun TBool (TNamed "X" [])))
-    , ("X::0",  PolyTy [] $ TFun (TNamed "X" []) TInt)
     , ("X::f0", PolyTy [] $ TFun (TNamed "X" []) TInt)
-    , ("X::1",  PolyTy [] $ TFun (TNamed "X" []) TBool)
     , ("X::f1", PolyTy [] $ TFun (TNamed "X" []) TBool)
     ]
   )
@@ -76,9 +74,7 @@ structValidPoly :: (Text, [(Text, PolyTy)])
 structValidPoly = (pack [raw|
   X a b { a :: f0, b :: f1 }
 |], [ ("x",     PolyTy ["a", "b"] $ TFun (TVar "a") (TFun (TVar "b") (TNamed "X" [TVar "a", TVar "b"])))
-    , ("X::0",  PolyTy ["a", "b"] $ TFun (TNamed "X" [TVar "a", TVar "b"]) (TVar "a"))
     , ("X::f0", PolyTy ["a", "b"] $ TFun (TNamed "X" [TVar "a", TVar "b"]) (TVar "a"))
-    , ("X::1",  PolyTy ["a", "b"] $ TFun (TNamed "X" [TVar "a", TVar "b"]) (TVar "b"))
     , ("X::f1", PolyTy ["a", "b"] $ TFun (TNamed "X" [TVar "a", TVar "b"]) (TVar "b"))
     ]
   )

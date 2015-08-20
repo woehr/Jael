@@ -4,9 +4,9 @@
 
 -- tokens
 
-token UIdent  (upper (letter | digit | '_')*) ;
-token LIdent  (lower (letter | digit | '_')*) ;
-token IntTok  ('~'? digit+) ;
+token UIdent      (upper (letter | digit | '_')*) ;
+token LIdent      (lower (letter | digit | '_')*) ;
+token IntTok      ('0' | ('~'? ["123456789"] digit*)) ;
 
 -- Sequential language
 
@@ -91,7 +91,7 @@ GERightComp. GExpr9 ::= GExpr9  "o>" GExpr10 ;
 
 GELogNot.    GExpr10 ::= "!" GExpr10 ;
 
-GEIdx.       GExpr11 ::= GExpr11 "::" GExpr12 ;
+GEIdx.       GExpr11 ::= GExpr11 "::" GExpr12 ; --LIdent ;
 
 GEIf.        GExpr12 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
 

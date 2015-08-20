@@ -10,6 +10,7 @@ import Jael.Parser
 import Jael.Seq.AST
 import Jael.Seq.Env
 import Jael.Seq.Expr (gToEx)
+import Jael.Seq.Struct
 import Jael.Seq.TI
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
@@ -26,15 +27,33 @@ seqInfTests = [ testCase "plus" $ checkInferredType exprPlus
               , testCase "accessors, first field" $ checkInferredType exprAccessor0
               , testCase "accessors, second field" $ checkInferredType exprAccessor1
               , testCase "struct, polymorphic field" $ checkInferredType exprAccessor2
+              , testCase "tuple expr syntax" $ checkInferredType exprTup
+              , testCase "built-in tuple constructor" $ checkInferredType exprTupCons
               ]
+
+testStruct :: Text
+testStruct = pack [raw|
+  X a { Bool :: f0, Int :: f1, a :: f2 }
+|]
 
 checkInferredType :: (Text, Ty) -> Assertion
 checkInferredType (tx, expected) =
-  case runParser pGExpr tx of
+  case runParser pGTStructDef testStruct of
        Left err -> assertFailure (unpack err)
-       Right ex -> case seqInfer defaultEnv (gToEx ex) of
-                        Left es -> assertFailure . unpack . intercalate "\n" $ es
-                        Right ty -> assertEqual "" expected ty
+       Right sdef ->
+         case validateStruct (gToStruct sdef) of
+              Left err -> assertFailure (show err)
+              Right sfuns ->
+                case addToEnv defaultEnv sfuns of
+                     Left dups -> assertFailure . unpack . intercalate "\n" $
+                       "Duplicates in env:" : dups
+                     Right env ->
+                       case runParser pGExpr tx of
+                            Left err -> assertFailure (unpack err)
+                            Right ex ->
+                              case seqInfer env (gToEx ex) of
+                                   Left es -> assertFailure . unpack . intercalate "\n" $ es
+                                   Right ty -> assertEqual "" expected ty
 
 testInferredType :: (Text, Ty -> Maybe Text) -> Assertion
 testInferredType (tx, tester) =
@@ -49,24 +68,18 @@ testInferredType (tx, tester) =
 testSingleTv :: Int -> Ty -> Maybe Text
 testSingleTv arity ty =
   case join $ liftA toMinLen (funVarsToList ty) :: Maybe (MinLen (Succ Zero) [Text]) of
-    Just vs -> if length vs /= (arity + 1)
-                  then Just $ "Expected arity of " ++ tshow arity ++ " but got " ++ tshow ty
-                  else if all (== head vs) (tailML vs)
-                          then Nothing
-                          else Just $ "Expected all type variables to be the same. Got: " ++
-                            intercalate " " (unMinLen vs)
-    Nothing -> Just "Failed to convert to a list of type vars."
+       Just vs | length vs /= (arity + 1) ->
+                  Just $ "Expected arity of " ++ tshow arity ++ " but got " ++ tshow ty
+               | all (== head vs) (tailML vs) -> Nothing
+               | otherwise -> Just $ "Expected all type variables to be the same. Got: " ++
+                                     unwords (unMinLen vs)
+       Nothing -> Just "Failed to convert to a list of type vars."
 
 -- Second value of tuple is a function that tests the type of exprAbs
 funVarsToList :: Ty -> Maybe [Text]
 funVarsToList (TFun (TVar x) t) = liftA (x:) (funVarsToList t)
-funVarsToList (TVar x) = Just (x:[])
+funVarsToList (TVar x) = Just [x]
 funVarsToList _ = Nothing
-
-testStruct :: Text
-testStruct = pack [raw|
-  struct X a { Bool :: f0, Int :: f1, a :: f2 }
-|]
 
 exprPlus :: (Text, Ty)
 exprPlus = (pack [raw|
@@ -126,16 +139,28 @@ exprConstrIntDivRes = (pack [raw|
 
 exprAccessor0 :: (Text, Ty)
 exprAccessor0 = (pack [raw|
-  x(true, 0, 1)::0 && x(false, 2, 3)::f0
+  x(true, 0, 1)::f0
 |], TBool)
 
 exprAccessor1 :: (Text, Ty)
 exprAccessor1 = (pack [raw|
-  x(true, 4, 5)::1 + x(false, 6, 7)::f1
+  x(true, 4, 5)::f1
 |], TInt)
 
 exprAccessor2 :: (Text, Ty)
 exprAccessor2 = (pack [raw|
-  x(true, 4, false)::2 || x(false, 6, 7)::f0
+  x(true, 4, false)::f2
 |], TBool)
+
+exprTup :: (Text, Ty)
+exprTup = (pack [raw|
+  {1,true}
+|], TNamed "Tup2" [TInt, TBool]
+  )
+
+exprTupCons :: (Text, Ty)
+exprTupCons = (pack [raw|
+  tup2(true)
+|], TFun (TVar "a") (TNamed "Tup2" [TBool, TVar "a"])
+  )
 

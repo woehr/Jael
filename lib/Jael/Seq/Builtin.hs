@@ -11,12 +11,21 @@ import qualified Data.Map as M
 import Jael.Seq.AST
 import Jael.Seq.Struct
 
+maxBuiltinTupSize :: Int
+maxBuiltinTupSize = 10
+
+buildTup :: Int -> Struct
+buildTup i = let tvs = take i . map (\v -> "a" ++ tshow v) $ [0..]
+              in Struct ("Tup" ++ tshow i) tvs $ NE.fromList
+                                               $ map (\(ix, tv) -> (tshow ix, TVar tv))
+                                               $ zip [0..] tvs
+
 builtinStructs :: [Struct]
-builtinStructs = [ Struct "IntDivRes" [] $ NE.fromList
+builtinStructs = ( Struct "IntDivRes" [] $ NE.fromList
                                 [ ("quot", TInt)
                                 , ("rem", TInt)
                                 ]
-                 ]
+                 ) : (map buildTup [1..maxBuiltinTupSize])
 
 builtinFuncs :: TyEnv
 builtinFuncs = M.fromList

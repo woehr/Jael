@@ -7,10 +7,10 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 
 wrongNumberOfElements :: Integer -> String -> String -> a
-wrongNumberOfElements n x y = error $ "Expected exactly " ++ show n ++ x ++ "'s in " ++ y
+wrongNumberOfElements n x y = error $ "Expected exactly " ++ show n ++ x ++ "s in " ++ y
 
 notEnoughElements :: Integer -> String -> String -> a
-notEnoughElements n x y = error $ "Expected at least " ++ show n ++ x ++ "'s in " ++ y
+notEnoughElements n x y = error $ "Expected at least " ++ show n ++ x ++ "s in " ++ y
 
 addIfUnique :: Ord a => (a, b) -> M.Map a b -> Maybe (M.Map a b)
 addIfUnique (k, v) m = case M.insertLookupWithKey (\_ n _ -> n) k v m of

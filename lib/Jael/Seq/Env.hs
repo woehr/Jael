@@ -28,8 +28,8 @@ structError n xs = error . unpack $ "Builtin struct `" ++ n
 
 mkBuiltinEnv :: TyEnv -> [Struct] -> TyEnv
 mkBuiltinEnv fs ss = case addToEnv fs (validateBuiltinStructs ss) of
-                          Left dups -> error
-                            "Duplicates in environment when adding builtins."
+                          Left dups -> error $
+                            unpack . intercalate "\n" $ "Duplicates in environment when adding builtins:" : dups
                           Right env -> env
 
 addToEnv :: TyEnv -> [(Text, PolyTy)] -> Either [Text] TyEnv

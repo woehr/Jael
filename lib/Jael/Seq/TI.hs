@@ -20,12 +20,12 @@ instance TyOps Ty where
   ftv TUnit         = S.empty
   ftv TInt          = S.empty
   ftv TBool         = S.empty
-  ftv (TTup ts)     = ftv (NE.toList ts)
+--  ftv (TTup ts)     = ftv (NE.toList ts)
   ftv (TNamed n ts) = ftv ts
   ftv (TFun t1 t2)  = ftv t1 `S.union` ftv t2
 
   apply s t@(TVar v)    = fromMaybe t (M.lookup v s)
-  apply s (TTup ts)     = TTup (liftA (apply s) ts)
+--  apply s (TTup ts)     = TTup (liftA (apply s) ts)
   apply s (TNamed n ts) = TNamed n (apply s ts)
   apply s (TFun t1 t2)  = TFun (apply s t1) (apply s t2)
   apply _ t = t
@@ -39,12 +39,12 @@ instance TyOps PolyTy where
   apply s (PolyTy vs t) = PolyTy vs (apply (foldr M.delete s vs) t)
 
 instance TyOps a => TyOps [a] where
-  ftv ls = foldr S.union S.empty $ map ftv ls
-  apply s ls = map (apply s) ls
+  ftv = foldr (S.union . ftv) S.empty
+  apply s = map (apply s)
 
 instance TyOps TyEnv where
   ftv env = ftv $ M.elems env
-  apply sub env = M.map (apply sub) env
+  apply sub = M.map (apply sub)
 
 data SeqTIState = SeqTIState {
   tvCount :: Integer,
@@ -133,6 +133,10 @@ mgu (TVar u) t = varBind u t
 mgu t (TVar u) = varBind u t
 mgu TInt    TInt    = Right nullSub
 mgu TBool   TBool   = Right nullSub
+mgu (TNamed n xs) (TNamed m ys) =
+  if n /= m
+     then Left $ "Attempted to unify named types with different names: " ++ tshow n ++ " " ++ tshow m
+     else foldM (\sub (x, y) -> liftA (M.unionWith (error "Expected unique keys") sub) (mgu x y)) M.empty (zip xs ys)
 mgu t1 t2 = Left $ "Types \"" ++ tshow t1 ++ "\" and \"" ++ tshow t2 ++ "\" do not unify."
 
 varBind :: Text -> Ty -> Either Text TySub
@@ -144,17 +148,37 @@ varBind u t
   | otherwise          = Right $ M.singleton u t
 
 ti :: TyEnv -> Ex -> SeqTI (TySub, Ty)
--- Literals
-ti _ (EInt _)  = return (nullSub, TInt)
-ti _ (EBool _) = return (nullSub, TBool)
-ti _ (EUnit)   = return (nullSub, TUnit)
-
 -- Variables
 ti env (EVar v) = case M.lookup v env of
     Nothing -> tiError $ "unbound variable \"" ++ tshow v ++ "\""
     Just sigma -> do
        t <- instantiation sigma
        return (nullSub, t)
+
+-- Literals
+ti _ (EUnit)   = return (nullSub, TUnit)
+ti _ (EInt _)  = return (nullSub, TInt)
+ti _ (EBool _) = return (nullSub, TBool)
+
+{-- Tuple
+ti env (ETup xs) = do
+  res <- mapM (ti env) xs
+  return ( (M.unionsWith (error "substitutions should be unique")) . NE.toList $ map fst res
+         , TTup $ map snd res
+         )
+-}
+-- Indexing
+ti env (EIdx e1 e2) = do
+  acc <- case e2 of
+              EVar n -> return n
+              EInt i -> return (tshow i)
+              _      -> tiError "accessor must be a constant integer or label"
+  (sub1, t1) <- ti env e1
+  case t1 of
+       TNamed n xs -> do
+         (sub2, t2) <- ti env (EApp (EVar $ n ++ "::" ++ acc) e1)
+         return (sub2, t2)
+       _ -> tiError "accessor can only be applied to structs (and tuples)"
 
 -- Function application
 ti env (EApp e1 e2) = do
