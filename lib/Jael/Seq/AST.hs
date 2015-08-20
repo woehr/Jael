@@ -33,9 +33,3 @@ type TyEnv = M.Map Text PolyTy
 
 type TySub = M.Map Text Ty
 
-addToEnv :: TyEnv -> Text -> PolyTy -> Maybe TyEnv
-addToEnv = undefined
-
-findRecursiveDefs :: TyEnv -> [Text]
-findRecursiveDefs env = undefined
-

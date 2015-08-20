@@ -1,7 +1,15 @@
 {-# Language NoImplicitPrelude #-}
 
 module Jael.Seq.Struct
-where
+( Struct(..)
+, StructError(..)
+, DuplicateTyVars(..)
+, DuplicateFields(..)
+, FreeTyVars(..)
+, UnusedTyVars(..)
+, gToStruct
+, validateStruct
+) where
 
 import ClassyPrelude
 import qualified Data.List.NonEmpty as NE
@@ -13,47 +21,83 @@ import Jael.Seq.AST
 import Jael.Seq.Types
 
 type SElement = (Text, Ty)
-data Struct = Struct [Text] (NE.NonEmpty SElement)
 
-type Accessors = M.Map Text Integer
+data Struct = Struct Text [Text] (NE.NonEmpty SElement)
 
-addIfUnique :: Accessors -> (Text, Integer) -> Either Text Accessors
-addIfUnique m (k, v) = case M.insertLookupWithKey (\_ n _ -> n) k v m of
-                            (Nothing, m') -> Right m'
-                            (_, _) -> Left $ "Non-unique accessor " ++ k
+newtype DuplicateTyVars = DuplicateTyVars [Text]
+  deriving Show
 
-mkAccessorMap :: NE.NonEmpty Text -> Either Text Accessors
-mkAccessorMap xs = liftA snd $ foldM (\(i, m) x ->
-                                       liftA ((,) $ i+1) $ addIfUnique m (x, i)
-                                     ) (0, M.empty) xs
+newtype DuplicateFields = DuplicateFields [Text]
+  deriving Show
 
-parseStruct :: Struct -> Either Text (NE.NonEmpty Ty, Accessors)
-parseStruct (Struct n xs) = liftA ((,) $ map snd xs) (mkAccessorMap $ map fst xs)
+newtype FreeTyVars = FreeTyVars (S.Set Text)
+  deriving Show
 
-addStructToEnv :: Struct -> TyEnv -> Either Text TyEnv
-addStructToEnv = undefined
+newtype UnusedTyVars = UnusedTyVars (S.Set Text)
+  deriving Show
 
-builtinStructs :: M.Map Text Struct
-builtinStructs = M.fromList [ ("IntDivRes", Struct [] $ NE.fromList
-                                [ ("quot", TInt)
-                                , ("rem", TInt)
-                                ]
-                              )
-                            ]
+data StructError = StructError DuplicateTyVars
+                               DuplicateFields
+                               FreeTyVars
+                               UnusedTyVars
+                   deriving Show
+
+lowerFirst :: Text -> Text
+lowerFirst xs = case uncons xs of
+                     Just (x, xs') -> (toLower . singleton $ x) ++ xs'
+                     Nothing ->
+                       error "Compiler error. Struct name should not be empty."
+
+structTy :: Struct -> Ty
+structTy (Struct n tvs _)  = TNamed n (map TVar tvs)
+
+constructorTy :: Struct -> Ty
+constructorTy s@(Struct _ _ fs) =
+  foldr (\(fn, ft) t -> TFun ft t) (structTy s) fs
+
+tysToTyVars :: [Ty] -> [Text]
+tysToTyVars [] = []
+tysToTyVars (t:ts) = case t of
+                          (TVar x) -> x:tysToTyVars ts
+                          _        -> tysToTyVars ts
+
+validateStruct :: Struct -> Either StructError [(Text, PolyTy)]
+validateStruct s@(Struct n tvs fs) =
+  let dupTVs = repeated tvs
+      dupFields = repeated $ NE.toList (map fst fs)
+      declaredTVs = S.fromList tvs
+      usedTVs = S.fromList . tysToTyVars . NE.toList $ map snd fs
+      freeTVs = usedTVs `S.difference` declaredTVs
+      unusedTVs = declaredTVs `S.difference` usedTVs
+   in if (not . null $ dupTVs) ||
+         (not . null $ dupFields) ||
+         (not . null $ freeTVs) ||
+         (not . null $ unusedTVs)
+         then Left $ StructError (DuplicateTyVars dupTVs)
+                                 (DuplicateFields dupFields)
+                                 (FreeTyVars freeTVs)
+                                 (UnusedTyVars unusedTVs)
+         else
+           let sTy = structTy s
+               -- Do something about the following unwieldy line
+            in Right $ (lowerFirst n, PolyTy tvs $ constructorTy s):concatMap (\((f, t), i) -> zip [n ++ "::" ++ tshow i, n ++ "::" ++ f] (replicate 2 (PolyTy tvs $ TFun sTy t))) (zip (NE.toList fs) [0..])
 
 gToSElement :: GTStructElement -> SElement
-gToSElement (GTStructElement (GTStructFieldName (LIdent gfn)) gt) =
+gToSElement (GTStructElement gt (GTStructFieldName (LIdent gfn))) =
                                      (pack gfn, gToType gt)
 
 gToTVars :: [GTStructVars] -> [Text]
-gToTVars gvs = let cs = map (\(GTStructVars (LIdent s)) -> pack s) gvs
-                in if length cs == length (S.fromList cs)
-                      then cs
-                      else error "Duplicate type variables"
-
+gToTVars = map (\(GTStructVars (LIdent s)) -> pack s)
 
 gToStruct :: GTStructDef -> Struct
-gToStruct (GTStructDef tvs xs) = case NE.nonEmpty xs of
-                                  Nothing -> notEnoughElements 1 "GTStructElement" "GTStructDef"
-                                  Just ys -> Struct (gToTVars tvs) (map gToSElement ys)
+gToStruct (GTStructDef (UIdent n) tvs xs) =
+  case NE.nonEmpty xs of
+    Nothing -> notEnoughElements
+                 1
+                 "GTStructElement"
+                 "GTStructDef"
+    Just ys -> Struct
+                 (pack n)
+                 (gToTVars tvs)
+                 (map gToSElement ys)
 

@@ -9,7 +9,7 @@ import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Seq.AST
-import Jael.Seq.Builtin (builtinTypes)
+import Jael.Seq.Builtin
 
 class TyOps a where
   ftv :: a -> S.Set Text
@@ -22,7 +22,7 @@ instance TyOps Ty where
   ftv TBool         = S.empty
   ftv (TTup ts)     = ftv (NE.toList ts)
   ftv (TNamed n ts) = ftv ts
-  ftv (TFun t1 t2)  = (ftv t1) `S.union` (ftv t2)
+  ftv (TFun t1 t2)  = ftv t1 `S.union` ftv t2
 
   apply s t@(TVar v)    = fromMaybe t (M.lookup v s)
   apply s (TTup ts)     = TTup (liftA (apply s) ts)
@@ -33,7 +33,7 @@ instance TyOps Ty where
 instance TyOps PolyTy where
   -- Free type variables of a type scheme are the ones not bound by a universal
   -- quantifier. I.e., the type variables within t not in vs
-  ftv (PolyTy vs t) = (ftv t) `S.difference` (S.fromList vs)
+  ftv (PolyTy vs t) = ftv t `S.difference` S.fromList vs
   -- This first deletes the variables of the scheme from the substitution then
   -- applies the substitution
   apply s (PolyTy vs t) = PolyTy vs (apply (foldr M.delete s vs) t)
@@ -67,8 +67,8 @@ instance Applicative SeqTI where
 instance Functor SeqTI where
   fmap = liftM
 
-seqInfer :: Ex -> Either [Text] Ty
-seqInfer e = runSeqTI (seqTypeInference builtinTypes e)
+seqInfer :: TyEnv -> Ex -> Either [Text] Ty
+seqInfer env = runSeqTI . seqTypeInference env
 
 runSeqTI :: SeqTI a -> Either [Text] a
 runSeqTI t = let (SeqTI stateFunc) = t
@@ -86,7 +86,7 @@ getTvCount :: SeqTI Integer
 getTvCount = SeqTI $ \s -> (Just (tvCount s), s)
 
 incTvCount :: SeqTI ()
-incTvCount = SeqTI $ \s -> (Just (), s{tvCount = (tvCount s) + 1})
+incTvCount = SeqTI $ \s -> (Just (), s{tvCount = tvCount s + 1})
 
 newTV :: SeqTI Ty
 newTV = getTvCount >>= (\i -> (>>) incTvCount $ return . TVar $ "a" ++ tshow i)
@@ -108,7 +108,7 @@ nullSub :: TySub
 nullSub = M.empty
 
 compSub :: TySub -> TySub -> TySub
-compSub a b = (M.map (apply a) b) `M.union` a
+compSub a b = M.map (apply a) b `M.union` a
 
 -- Creates a scheme from a type by adding the qualified type variables of the
 -- environment
@@ -119,7 +119,7 @@ generalization env t = PolyTy (S.toList $ ftv t `S.difference` ftv env) t
 -- a substituion from the old to the new
 instantiation :: PolyTy -> SeqTI Ty
 instantiation (PolyTy vs ty) = do
-  nvs <- mapM (\_ -> newTV) vs
+  nvs <- mapM (const newTV) vs
   return $ apply (M.fromList $ zip vs nvs) ty
 
 -- Most general unifier. Used in the application rule for determining the return
@@ -176,7 +176,7 @@ ti env (EApp e1 e2) = do
 ti env (EAbs x e) = do
   tv <- newTV
   let env' = remove env x
-      env'' = env' `M.union` (M.singleton x (PolyTy [] tv))
+      env'' = env' `M.union` M.singleton x (PolyTy [] tv)
   (s1, t1) <- ti env'' e
   return (s1, TFun (apply s1 tv) t1)
 

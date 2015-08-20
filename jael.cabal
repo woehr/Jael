@@ -21,6 +21,7 @@ library
                        Jael.Parser
                        Jael.Seq.AST
                        Jael.Seq.Builtin
+                       Jael.Seq.Env
                        Jael.Seq.Expr
                        Jael.Seq.Struct
                        Jael.Seq.TI
@@ -57,9 +58,14 @@ test-suite test-jael
   type:                exitcode-stdio-1.0
   main-is:             Test.hs
 
+  default-extensions:  OverloadedStrings
+  other-extensions:    NoImplicitPrelude,
+                       QuasiQuotes
+
   build-depends:       base >=4.7 && <5,
                        jael,
-                       classy-prelude
+                       classy-prelude,
+                       containers
 
   build-depends:       HUnit,
                        QuickCheck,

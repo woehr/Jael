@@ -28,14 +28,14 @@ GTTVar.      GType ::= LIdent ;
 
 -- Struct element is an accessor followed by a type
 GTStructFieldName. GTStructFieldName ::= LIdent ;
-GTStructElement. GTStructElement ::= GTStructFieldName "::" GType ;
+GTStructElement. GTStructElement ::= GType "::" GTStructFieldName ;
 separator        nonempty GTStructElement "," ;
 
 GTStructVars.   GTStructVars ::= LIdent ;
 terminator GTStructVars "" ;
 
-GTStructDef.    GTStructDef ::= [GTStructVars] "{" [GTStructElement] "}" ;
-GTDefStruct.    GTypeDef ::= "stuct" UIdent GTStructDef ;
+GTStructDef.    GTStructDef ::= UIdent [GTStructVars] "{" [GTStructElement] "}" ;
+GTDefStruct.    GTypeDef ::= "stuct" GTStructDef ;
 
 GTEnumTag.     GTEnumTag ::= LIdent ;
 GTEnumType.    GTEnumType ::= GType ;
@@ -113,8 +113,7 @@ coercions    GExpr 15 ;
 GHwArea.    GHwArea ::= "area" ;
 terminator  GHwArea "" ;
 
-rules GHwStateType ::= GUnit | UIdent | GTStructDef ;
-GHwState.   GHwState ::= "state" GHwStateType ;
+GHwState.   GHwState ::= "state" GType ;
 
 GHwChan.    GHwChan ::= "channel" ;
 terminator  GHwChan ";" ;
@@ -136,5 +135,7 @@ GProg.      GProg ::= [GTopDef] ;
 comment "//" ;
 
 -- Only export nessecary top level parsers
-entrypoints GProg, GFunc, GProc, GHwproc, GType, GTypeDef, GExpr ;
+entrypoints GProg, GFunc, GProc, GHwproc,
+            GType, GTypeDef, GTStructDef,
+            GExpr ;
 

@@ -8,13 +8,13 @@ import Test.QuickCheck
 
 import Test.Jael.Grammar.Expr (gExprTests)
 import Test.Jael.Grammar.Type (gTypeTests)
-import Test.Jael.SeqTypeInf (seqInfTests)
+import Test.Jael.Seq.Struct (structTests)
+import Test.Jael.Seq.TI (seqInfTests)
 
 main :: IO ()
-main = defaultMainWithOpts
-        (concat [ gExprTests
-                , gTypeTests
-                , seqInfTests
-                ]
-        ) mempty
+main = defaultMainWithOpts [ testGroup "Expression grammar" gExprTests
+                           , testGroup "Type grammar" gTypeTests
+                           , testGroup "Struct creation" structTests
+                           , testGroup "Seq type inference" seqInfTests
+                           ] mempty
 

@@ -1,20 +1,20 @@
-{-# Language NoImplicitPrelude, QuasiQuotes, OverloadedStrings #-}
+{-# Language NoImplicitPrelude, QuasiQuotes #-}
 
-module Test.Jael.SeqTypeInf
+module Test.Jael.Seq.TI
 ( seqInfTests
 ) where
 
 import ClassyPrelude
+import Jael.Grammar
+import Jael.Parser
+import Jael.Seq.AST
+import Jael.Seq.Env
+import Jael.Seq.Expr (gToEx)
+import Jael.Seq.TI
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit
-
 import Test.Jael.Util
-import Jael.Grammar
-import Jael.Parser
-import Jael.Seq.Expr (gToEx)
-import Jael.Seq.AST
-import Jael.Seq.TI
 
 seqInfTests :: [T.Test]
 seqInfTests = [ testCase "plus" $ checkInferredType exprPlus
@@ -22,13 +22,17 @@ seqInfTests = [ testCase "plus" $ checkInferredType exprPlus
               , testCase "app" $ checkInferredType exprApp
               , testCase "if" $ checkInferredType exprIf
               , testCase "let" $ testInferredType exprLet
+              , testCase "int div result type" $ checkInferredType exprIntDiv
+              , testCase "accessors, first field" $ checkInferredType exprAccessor0
+              , testCase "accessors, second field" $ checkInferredType exprAccessor1
+              , testCase "struct, polymorphic field" $ checkInferredType exprAccessor2
               ]
 
 checkInferredType :: (Text, Ty) -> Assertion
 checkInferredType (tx, expected) =
   case runParser pGExpr tx of
        Left err -> assertFailure (unpack err)
-       Right ex -> case seqInfer (gToEx ex) of
+       Right ex -> case seqInfer defaultEnv (gToEx ex) of
                         Left es -> assertFailure . unpack . intercalate "\n" $ es
                         Right ty -> assertEqual "" expected ty
 
@@ -36,7 +40,7 @@ testInferredType :: (Text, Ty -> Maybe Text) -> Assertion
 testInferredType (tx, tester) =
   case runParser pGExpr tx of
     Left err -> assertFailure (unpack err)
-    Right ex -> case seqInfer (gToEx ex) of
+    Right ex -> case seqInfer defaultEnv (gToEx ex) of
                      Left es -> assertFailure . unpack . intercalate "\n" $ es
                      Right ty -> case tester ty of
                                       Just t  -> assertFailure (unpack t)
@@ -53,17 +57,21 @@ testSingleTv arity ty =
                             intercalate " " (unMinLen vs)
     Nothing -> Just "Failed to convert to a list of type vars."
 
--- 1
-exprPlus :: (Text, Ty)
-exprPlus = (pack [raw|
-  1+~2+3
-|], TInt)
-
 -- Second value of tuple is a function that tests the type of exprAbs
 funVarsToList :: Ty -> Maybe [Text]
 funVarsToList (TFun (TVar x) t) = liftA (x:) (funVarsToList t)
 funVarsToList (TVar x) = Just (x:[])
 funVarsToList _ = Nothing
+
+testStruct :: Text
+testStruct = pack [raw|
+  struct X a { Bool :: f0, Int :: f1, a :: f2 }
+|]
+
+exprPlus :: (Text, Ty)
+exprPlus = (pack [raw|
+  1+~2+3
+|], TInt)
 
 -- * has type a->a->a so this is expected to be inferred as x->x->x->x
 -- where x is some type variable
@@ -105,4 +113,29 @@ exprLet = (pack [raw|
     f+g-h*i
   }
 |], testSingleTv 5)
+
+exprIntDiv :: (Text, Ty)
+exprIntDiv = (pack [raw|
+  1/2
+|], TNamed "IntDivRes" [])
+
+exprConstrIntDivRes :: (Text, Ty)
+exprConstrIntDivRes = (pack [raw|
+  intDivResult
+|], TFun TInt (TFun TInt (TNamed "IntDivRes" [])))
+
+exprAccessor0 :: (Text, Ty)
+exprAccessor0 = (pack [raw|
+  x(true, 0, 1)::0 && x(false, 2, 3)::f0
+|], TBool)
+
+exprAccessor1 :: (Text, Ty)
+exprAccessor1 = (pack [raw|
+  x(true, 4, 5)::1 + x(false, 6, 7)::f1
+|], TInt)
+
+exprAccessor2 :: (Text, Ty)
+exprAccessor2 = (pack [raw|
+  x(true, 4, false)::2 || x(false, 6, 7)::f0
+|], TBool)
 

@@ -1,15 +1,25 @@
 {-# Language NoImplicitPrelude #-}
 
 module Jael.Seq.Builtin
-( builtinTypes
+( builtinFuncs
+, builtinStructs
 ) where
 
 import ClassyPrelude
+import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import Jael.Seq.AST
+import Jael.Seq.Struct
 
-builtinTypes :: TyEnv
-builtinTypes = M.fromList
+builtinStructs :: [Struct]
+builtinStructs = [ Struct "IntDivRes" [] $ NE.fromList
+                                [ ("quot", TInt)
+                                , ("rem", TInt)
+                                ]
+                 ]
+
+builtinFuncs :: TyEnv
+builtinFuncs = M.fromList
   [ ( "if" -- Bool -> a -> a -> a
     , PolyTy ["a"] (TFun TBool (TFun (TVar "a") (TFun (TVar "a") (TVar "a"))))
     )
@@ -52,8 +62,8 @@ builtinTypes = M.fromList
   , ( "*"
     , PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") (TVar "a")))
     )
-  , ( "/" -- TODO: Refactor this so it can look up the struct's type from the struct map
-    , PolyTy [] (TFun TInt (TFun TInt (TNamed "IntDivRes" [TInt, TInt])))
+  , ( "/"
+    , PolyTy [] (TFun TInt (TFun TInt (TNamed "IntDivRes" [])))
     )
   , ( "%"
     , PolyTy [] (TFun TInt (TFun TInt TInt))
