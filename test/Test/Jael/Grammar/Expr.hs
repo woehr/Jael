@@ -10,7 +10,6 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit
 
 import Test.Jael.Util
-import Test.Jael.Grammar.Util
 import Jael.Grammar
 import Jael.Parser
 

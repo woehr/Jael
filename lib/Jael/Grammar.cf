@@ -20,32 +20,36 @@ separator GTNamedParam "," ;
 GTNamedNoParam. GTNamedParams ::= ;
 GTNamedParams.  GTNamedParams ::= "(" [GTNamedParam] ")" ;
 
+GTTupArg.    GTTupArg ::= GType ;
+separator    nonempty GTTupArg "," ;
+
+GTVars.      GTVars ::= LIdent ;
+terminator   GTVars "" ;
+
 GTInt.       GType ::= "Int" ;
 GTBool.      GType ::= "Bool" ;
 GTUnit.      GType ::=  GUnit ;
+GTTup.       GType ::= "{" [GTTupArg] "}";
 GTNamed.     GType ::= UIdent GTNamedParams ;
 GTTVar.      GType ::= LIdent ;
 
 -- Struct element is an accessor followed by a type
 GTStructFieldName. GTStructFieldName ::= LIdent ;
-GTStructElement. GTStructElement ::= GType "::" GTStructFieldName ;
-separator        nonempty GTStructElement "," ;
+GTStructElement.   GTStructElement   ::= GTStructFieldName "::" GType ;
+separator          nonempty GTStructElement "," ;
 
-GTStructVars.   GTStructVars ::= LIdent ;
-terminator GTStructVars "" ;
-
-GTStructDef.    GTStructDef ::= UIdent [GTStructVars] "{" [GTStructElement] "}" ;
+GTStructDef.    GTStructDef ::= UIdent [GTVars] "{" [GTStructElement] "}" ;
 GTDefStruct.    GTypeDef ::= "stuct" GTStructDef ;
 
-GTEnumTag.     GTEnumTag ::= LIdent ;
 GTEnumType.    GTEnumType ::= GType ;
-separator      GTEnumType "" ;
-GTEnumElement. GTEnumElement ::= GTEnumTag [GTEnumType] ;
+-- 0 or 1 types
+(:[]).        [GTEnumType] ::= GTEnumType ;
+
+GTEnumElement. GTEnumElement ::= LIdent [GTEnumType] ;
 separator      nonempty GTEnumElement "," ;
 
-GTEnumDef.     GTEnumDef ::= "{" [GTEnumElement] "}" ;
-GTEnumTyName.  GTEnumTyName ::= UIdent ;
-GTDefEnum.     GTypeDef ::= "enum" GTEnumTyName GTEnumDef ;
+GTEnumDef.     GTEnumDef ::= UIdent [GTVars] "{" [GTEnumElement] "}" ;
+GTDefEnum.     GTypeDef ::= "enum" GTEnumDef ;
 
 GELetIdent.  GELetIdent ::= LIdent "=" GExpr ;
 terminator   GELetIdent ";" ;
@@ -136,6 +140,6 @@ comment "//" ;
 
 -- Only export nessecary top level parsers
 entrypoints GProg, GFunc, GProc, GHwproc,
-            GType, GTypeDef, GTStructDef,
+            GType, GTypeDef, GTStructDef, GTEnumDef,
             GExpr ;
 

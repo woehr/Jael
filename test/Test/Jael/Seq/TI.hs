@@ -33,7 +33,7 @@ seqInfTests = [ testCase "plus" $ checkInferredType exprPlus
 
 testStruct :: Text
 testStruct = pack [raw|
-  X a { Bool :: f0, Int :: f1, a :: f2 }
+  X a { f0 :: Bool , f1 :: Int , f2 :: a }
 |]
 
 checkInferredType :: (Text, Ty) -> Assertion

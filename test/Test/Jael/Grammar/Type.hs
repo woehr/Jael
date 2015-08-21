@@ -6,18 +6,18 @@ module Test.Jael.Grammar.Type
 
 import ClassyPrelude
 import Jael.Grammar
-import Jael.Parser
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
-import Test.HUnit
 import Test.Jael.Util
-import Test.Jael.Grammar.Util
 
 gTypeTests :: [T.Test]
 gTypeTests = [ testCase "unit type" (checkParsedTree pGType unit)
+             , testCase "bad unit type" (shouldNotParse pGType badUnit)
              , testCase "int type" (checkParsedTree pGType int)
              , testCase "bool type" (checkParsedTree pGType bool)
              , testCase "type variable type" (checkParsedTree pGType tvar)
+             , testCase "tuple type (1)" (checkParsedTree pGType tup1)
+             , testCase "tuple type (2)" (checkParsedTree pGType tup2)
              , testCase "named type, no vars" (checkParsedTree pGType named)
              , testCase "named type, type params" (checkParsedTree pGType kind)
              ]
@@ -26,6 +26,11 @@ unit :: (Text, GType)
 unit = (pack [raw|
   {}
 |], GTUnit GUnit)
+
+badUnit :: Text
+badUnit = pack [raw|
+  { }
+|]
 
 int :: (Text, GType)
 int = (pack [raw|
@@ -41,6 +46,21 @@ tvar :: (Text, GType)
 tvar = (pack [raw|
   a
 |], GTTVar (LIdent "a"))
+
+tup1 :: (Text, GType)
+tup1 = (pack [raw|
+  { Int }
+|], GTTup $ map GTTupArg [ GTInt
+                         ]
+  )
+
+tup2 :: (Text, GType)
+tup2 = (pack [raw|
+  { I, a }
+|], GTTup $ map GTTupArg [ GTNamed (UIdent "I") GTNamedNoParam
+                         , GTTVar (LIdent "a")
+                         ]
+  )
 
 named :: (Text, GType)
 named = (pack [raw|

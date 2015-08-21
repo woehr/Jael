@@ -1,12 +1,7 @@
-{-# Language NoImplicitPrelude #-}
+{-#Language NoImplicitPrelude #-}
 
 module Jael.Seq.Struct
 ( Struct(..)
-, StructError(..)
-, DuplicateTyVars(..)
-, DuplicateFields(..)
-, FreeTyVars(..)
-, UnusedTyVars(..)
 , gToStruct
 , validateStruct
 ) where
@@ -23,24 +18,6 @@ import Jael.Seq.Types
 type SElement = (Text, Ty)
 
 data Struct = Struct Text [Text] (NE.NonEmpty SElement)
-
-newtype DuplicateTyVars = DuplicateTyVars [Text]
-  deriving Show
-
-newtype DuplicateFields = DuplicateFields [Text]
-  deriving Show
-
-newtype FreeTyVars = FreeTyVars (S.Set Text)
-  deriving Show
-
-newtype UnusedTyVars = UnusedTyVars (S.Set Text)
-  deriving Show
-
-data StructError = StructError DuplicateTyVars
-                               DuplicateFields
-                               FreeTyVars
-                               UnusedTyVars
-                   deriving Show
 
 lowerFirst :: Text -> Text
 lowerFirst xs = case uncons xs of
@@ -61,35 +38,35 @@ tysToTyVars (t:ts) = case t of
                           (TVar x) -> x:tysToTyVars ts
                           _        -> tysToTyVars ts
 
-validateStruct :: Struct -> Either StructError [(Text, PolyTy)]
+validateStruct :: Struct -> Either TDefError [(Text, PolyTy)]
 validateStruct s@(Struct n tvs fs) =
   let dupTVs = repeated tvs
       dupFields = repeated $ NE.toList (map fst fs)
       declaredTVs = S.fromList tvs
       usedTVs = S.fromList . tysToTyVars . NE.toList $ map snd fs
-      freeTVs = usedTVs `S.difference` declaredTVs
-      unusedTVs = declaredTVs `S.difference` usedTVs
+      freeTVs = S.toList $ usedTVs `S.difference` declaredTVs
+      unusedTVs = S.toList $ declaredTVs `S.difference` usedTVs
    in if (not . null $ dupTVs) ||
          (not . null $ dupFields) ||
          (not . null $ freeTVs) ||
          (not . null $ unusedTVs)
-         then Left $ StructError (DuplicateTyVars dupTVs)
-                                 (DuplicateFields dupFields)
-                                 (FreeTyVars freeTVs)
-                                 (UnusedTyVars unusedTVs)
+         then Left $ TDefError (DuplicateTyVars dupTVs)
+                               (DuplicateFields dupFields)
+                               (FreeTyVars freeTVs)
+                               (UnusedTyVars unusedTVs)
          else
            let sTy = structTy s
                -- Adds the field and index to the environment
-            --in Right $ (lowerFirst n, PolyTy tvs $ constructorTy s):concatMap (\((f, t), i) -> zip [n ++ "::" ++ tshow i, n ++ "::" ++ f] (replicate 2 (PolyTy tvs $ TFun sTy t))) (zip (NE.toList fs) [0..])
+            --in Right $ (lowerFirst n, PolyTy tvs $ constructorTy s):concatMap (\((f, t), i) -> zip [n+ "::" ++ tshow i, n ++ "::" ++ f] (replicate 2 (PolyTy tvs $ TFun sTy t))) (zip (NE.toList fs) [0..])
                -- Adds only the index to the environment 
                in Right $ (lowerFirst n, PolyTy tvs $ constructorTy s):map (\(f, t) -> (n ++ "::" ++ f, PolyTy tvs $ TFun sTy t)) (NE.toList fs)
 
 gToSElement :: GTStructElement -> SElement
-gToSElement (GTStructElement gt (GTStructFieldName (LIdent gfn))) =
+gToSElement (GTStructElement (GTStructFieldName (LIdent gfn)) gt) =
                                      (pack gfn, gToType gt)
 
-gToTVars :: [GTStructVars] -> [Text]
-gToTVars = map (\(GTStructVars (LIdent s)) -> pack s)
+gToTVars :: [GTVars] -> [Text]
+gToTVars = map (\(GTVars (LIdent s)) -> pack s)
 
 gToStruct :: GTStructDef -> Struct
 gToStruct (GTStructDef (UIdent n) tvs xs) =

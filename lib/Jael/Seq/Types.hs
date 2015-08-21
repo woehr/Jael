@@ -6,6 +6,24 @@ import ClassyPrelude
 import Jael.Grammar
 import Jael.Seq.AST
 
+newtype DuplicateTyVars = DuplicateTyVars [Text]
+  deriving Show
+
+newtype DuplicateFields = DuplicateFields [Text]
+  deriving Show
+
+newtype FreeTyVars = FreeTyVars [Text]
+  deriving Show
+
+newtype UnusedTyVars = UnusedTyVars [Text]
+  deriving Show
+
+data TDefError = TDefError DuplicateTyVars
+                           DuplicateFields
+                           FreeTyVars
+                           UnusedTyVars
+                 deriving Show
+
 gToType :: GType -> Ty
 gToType GTInt = TInt
 gToType GTBool = TBool
