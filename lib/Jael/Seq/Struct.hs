@@ -8,7 +8,6 @@ module Jael.Seq.Struct
 
 import ClassyPrelude
 import qualified Data.List.NonEmpty as NE
-import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Util
@@ -30,7 +29,7 @@ structTy (Struct n tvs _)  = TNamed n (map TVar tvs)
 
 constructorTy :: Struct -> Ty
 constructorTy s@(Struct _ _ fs) =
-  foldr (\(fn, ft) t -> TFun ft t) (structTy s) fs
+  foldr (\(_, ft) t -> TFun ft t) (structTy s) fs
 
 tysToTyVars :: [Ty] -> [Text]
 tysToTyVars [] = []
@@ -56,10 +55,9 @@ validateStruct s@(Struct n tvs fs) =
                                (UnusedTyVars unusedTVs)
          else
            let sTy = structTy s
-               -- Adds the field and index to the environment
-            --in Right $ (lowerFirst n, PolyTy tvs $ constructorTy s):concatMap (\((f, t), i) -> zip [n+ "::" ++ tshow i, n ++ "::" ++ f] (replicate 2 (PolyTy tvs $ TFun sTy t))) (zip (NE.toList fs) [0..])
-               -- Adds only the index to the environment 
-               in Right $ (lowerFirst n, PolyTy tvs $ constructorTy s):map (\(f, t) -> (n ++ "::" ++ f, PolyTy tvs $ TFun sTy t)) (NE.toList fs)
+            in Right $ (lowerFirst n, PolyTy tvs $ constructorTy s) :
+                       map (\(f, t) -> (n ++ "::" ++ f, PolyTy tvs $ TFun sTy t))
+                           (NE.toList fs)
 
 gToSElement :: GTStructElement -> SElement
 gToSElement (GTStructElement (GTStructFieldName (LIdent gfn)) gt) =

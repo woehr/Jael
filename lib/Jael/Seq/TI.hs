@@ -1,55 +1,18 @@
-{-# Language NoImplicitPrelude, TypeSynonymInstances, FlexibleInstances #-}
+{-# Language NoImplicitPrelude #-}
 
 -- Implementation based off of https://github.com/wh5a/Algorithm-W-Step-By-Step
 
 module Jael.Seq.TI where
 
 import ClassyPrelude
-import qualified Data.List.NonEmpty as NE 
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Seq.AST
-import Jael.Seq.Builtin
 
-class TyOps a where
-  ftv :: a -> S.Set Text
-  apply :: TySub -> a -> a
-
-instance TyOps Ty where
-  ftv (TVar t)      = S.singleton t
-  ftv TUnit         = S.empty
-  ftv TInt          = S.empty
-  ftv TBool         = S.empty
---  ftv (TTup ts)     = ftv (NE.toList ts)
-  ftv (TNamed n ts) = ftv ts
-  ftv (TFun t1 t2)  = ftv t1 `S.union` ftv t2
-
-  apply s t@(TVar v)    = fromMaybe t (M.lookup v s)
---  apply s (TTup ts)     = TTup (liftA (apply s) ts)
-  apply s (TNamed n ts) = TNamed n (apply s ts)
-  apply s (TFun t1 t2)  = TFun (apply s t1) (apply s t2)
-  apply _ t = t
-
-instance TyOps PolyTy where
-  -- Free type variables of a type scheme are the ones not bound by a universal
-  -- quantifier. I.e., the type variables within t not in vs
-  ftv (PolyTy vs t) = ftv t `S.difference` S.fromList vs
-  -- This first deletes the variables of the scheme from the substitution then
-  -- applies the substitution
-  apply s (PolyTy vs t) = PolyTy vs (apply (foldr M.delete s vs) t)
-
-instance TyOps a => TyOps [a] where
-  ftv = foldr (S.union . ftv) S.empty
-  apply s = map (apply s)
-
-instance TyOps TyEnv where
-  ftv env = ftv $ M.elems env
-  apply sub = M.map (apply sub)
-
-data SeqTIState = SeqTIState {
-  tvCount :: Integer,
-  tiErrors :: [Text]
-}
+data SeqTIState = SeqTIState
+  { tvCount :: Integer
+  , tiErrors :: [Text]
+  }
 
 newtype SeqTI a = SeqTI (SeqTIState -> (Maybe a, SeqTIState))
 
@@ -74,7 +37,7 @@ runSeqTI :: SeqTI a -> Either [Text] a
 runSeqTI t = let (SeqTI stateFunc) = t
                  initState = SeqTIState{ tvCount = 0, tiErrors = [] }
              in  case stateFunc initState of
-                      (Just v,  s) -> Right v
+                      (Just v,  _) -> Right v
                       (Nothing, s) -> Left $ tiErrors s
 
 seqTypeInference :: TyEnv -> Ex -> SeqTI Ty
@@ -99,7 +62,8 @@ putTiErrors ts = SeqTI $ \s -> (Just (), s{tiErrors=ts})
 
 -- Halts inference and records the error
 tiError :: Text -> SeqTI a
-tiError t = getTiErrors >>= (\ts -> putTiErrors $ t:ts) >> (SeqTI $ \s -> (Nothing, s))
+tiError t = getTiErrors >>= (\ts -> putTiErrors $ t:ts)
+                        >> (SeqTI $ \s -> (Nothing, s))
 
 remove :: TyEnv -> Text -> TyEnv
 remove env t = M.delete t env
@@ -135,16 +99,20 @@ mgu TInt    TInt    = Right nullSub
 mgu TBool   TBool   = Right nullSub
 mgu (TNamed n xs) (TNamed m ys) =
   if n /= m
-     then Left $ "Attempted to unify named types with different names: " ++ tshow n ++ " " ++ tshow m
-     else foldM (\sub (x, y) -> liftA (M.unionWith (error "Expected unique keys") sub) (mgu x y)) M.empty (zip xs ys)
-mgu t1 t2 = Left $ "Types \"" ++ tshow t1 ++ "\" and \"" ++ tshow t2 ++ "\" do not unify."
+     then Left $ "Attempted to unify named types with different names: " ++
+                 tshow n ++ " " ++ tshow m
+     else foldM (\sub (x, y) ->
+                   liftA (M.unionWith (error "Expected unique keys") sub) (mgu x y)
+                ) M.empty (zip xs ys)
+mgu t1 t2 = Left $ "Types \"" ++ tshow t1 ++ "\" and \"" ++ tshow t2 ++
+                   "\" do not unify."
 
 varBind :: Text -> Ty -> Either Text TySub
 varBind u t
   | t == TVar u        = Right nullSub
   | S.member u (ftv t) = Left $ "Can not bind \"" ++ tshow u ++ "\" to \""
-      ++ tshow t ++ "\" because \"" ++ tshow u ++ "\" is a free type variable of \""
-      ++ tshow t
+      ++ tshow t ++ "\" because \"" ++ tshow u
+      ++ "\" is a free type variable of \"" ++ tshow t
   | otherwise          = Right $ M.singleton u t
 
 ti :: TyEnv -> Ex -> SeqTI (TySub, Ty)
@@ -160,22 +128,15 @@ ti _ (EUnit)   = return (nullSub, TUnit)
 ti _ (EInt _)  = return (nullSub, TInt)
 ti _ (EBool _) = return (nullSub, TBool)
 
-{-- Tuple
-ti env (ETup xs) = do
-  res <- mapM (ti env) xs
-  return ( (M.unionsWith (error "substitutions should be unique")) . NE.toList $ map fst res
-         , TTup $ map snd res
-         )
--}
 -- Indexing
 ti env (EIdx e1 e2) = do
   acc <- case e2 of
               EVar n -> return n
               EInt i -> return (tshow i)
               _      -> tiError "accessor must be a constant integer or label"
-  (sub1, t1) <- ti env e1
+  (_, t1) <- ti env e1
   case t1 of
-       TNamed n xs -> do
+       TNamed n _ -> do
          (sub2, t2) <- ti env (EApp (EVar $ n ++ "::" ++ acc) e1)
          return (sub2, t2)
        _ -> tiError "accessor can only be applied to structs (and tuples)"
@@ -187,14 +148,15 @@ ti env (EApp e1 e2) = do
   (sub2, t2) <- ti (apply sub1 env) e2
   let sub3 = mgu (apply sub2 t1) (TFun t2 tv)
   case sub3 of
-       Left err -> tiError (err ++ "\n\n"
-                                ++ "Type variable : " ++ tshow tv ++ "\n\n"
-                                ++ "Inference 1   : " ++ tshow (t1, sub1) ++ "\n"
-                                ++ "   for expr   : " ++ tshow e1 ++ "\n\n"
-                                ++ "Inference 2   : " ++ tshow (t2, sub2) ++ "\n"
-                                ++ "   for expr   : " ++ tshow e2 ++ "\n\n"
-                           )
-       Right sub3 -> return (sub3 `compSub` sub2 `compSub` sub1, apply sub3 tv)
+       Left err -> tiError
+                     (err ++ "\n\n"
+                          ++ "Type variable : " ++ tshow tv ++ "\n\n"
+                          ++ "Inference 1   : " ++ tshow (t1, sub1) ++ "\n"
+                          ++ "   for expr   : " ++ tshow e1 ++ "\n\n"
+                          ++ "Inference 2   : " ++ tshow (t2, sub2) ++ "\n"
+                          ++ "   for expr   : " ++ tshow e2 ++ "\n\n"
+                     )
+       Right sub3' -> return (sub3' `compSub` sub2 `compSub` sub1, apply sub3' tv)
 
 -- Abstraction
 ti env (EAbs x e) = do

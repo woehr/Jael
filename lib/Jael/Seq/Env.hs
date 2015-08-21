@@ -6,7 +6,6 @@ module Jael.Seq.Env
 ) where
 
 import ClassyPrelude
-import qualified Data.Map as M
 import Jael.Seq.AST
 import Jael.Seq.Builtin
 import Jael.Seq.Struct

@@ -6,26 +6,27 @@ module Jael.Seq.Builtin
 ) where
 
 import ClassyPrelude
+import Data.List (genericTake)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import Jael.Seq.AST
 import Jael.Seq.Struct
 
-maxBuiltinTupSize :: Int
+maxBuiltinTupSize :: Integer
 maxBuiltinTupSize = 10
 
-buildTup :: Int -> Struct
-buildTup i = let tvs = take i . map (\v -> "a" ++ tshow v) $ [0..]
+buildTup :: Integer -> Struct
+buildTup i = let tvs = genericTake i . map (\v -> "a" ++ tshow v) $ ([0..]::[Integer])
               in Struct ("Tup" ++ tshow i) tvs $ NE.fromList
                                                $ map (\(ix, tv) -> (tshow ix, TVar tv))
-                                               $ zip [0..] tvs
+                                               $ zip ([0..]::[Integer]) tvs
 
 builtinStructs :: [Struct]
-builtinStructs = ( Struct "IntDivRes" [] $ NE.fromList
-                                [ ("quot", TInt)
-                                , ("rem", TInt)
-                                ]
-                 ) : (map buildTup [1..maxBuiltinTupSize])
+builtinStructs = Struct "IntDivRes" [] ( NE.fromList [ ("quot", TInt)
+                                                     , ("rem", TInt)
+                                                     ]
+                                       )
+                 : map buildTup [1..maxBuiltinTupSize]
 
 builtinFuncs :: TyEnv
 builtinFuncs = M.fromList

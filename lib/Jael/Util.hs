@@ -18,7 +18,7 @@ addIfUnique (k, v) m = case M.insertLookupWithKey (\_ n _ -> n) k v m of
                             (_, _) -> Nothing
 
 collectDup :: Ord a => (a, b) -> ([a], M.Map a b) -> ([a], M.Map a b)
-collectDup ins@(k, v) (col, m) = case addIfUnique ins m of
+collectDup ins@(k, _) (col, m) = case addIfUnique ins m of
                                       Nothing -> (k:col, m)
                                       Just m' -> (col, m')
 

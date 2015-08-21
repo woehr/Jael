@@ -31,4 +31,6 @@ gToType (GTUnit GUnit) = TUnit
 gToType (GTNamed (UIdent n) GTNamedNoParam) = TNamed (pack n) []
 gToType (GTNamed (UIdent n) (GTNamedParams xs)) = TNamed (pack n) (map (\(GTNamedParam t) -> gToType t) xs)
 gToType (GTTVar (LIdent s)) = TVar (pack s)
+gToType (GTTup xs) = TNamed ("Tup" ++ tshow (length xs+1))
+                            (map (\(GTTupArg x) -> gToType x) xs)
 

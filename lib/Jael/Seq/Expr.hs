@@ -16,7 +16,7 @@ import Text.Read (reads)
 letExprToEx :: GELetExpr -> Ex
 letExprToEx (GELetExpr [] e)    = gToEx e
 -- i[dentifier]; h[ead] e[xpression]; t[ail] l[et expression]s; e[xpression]
-letExprToEx (GELetExpr ((GELetIdent (LIdent i) he):tls) e) =
+letExprToEx (GELetExpr (GELetIdent (LIdent i) he : tls) e) =
   ELet (pack i) (gToEx he) (letExprToEx $ GELetExpr tls e)
 
 tupArgToEx :: GETupArg -> Ex
@@ -37,9 +37,10 @@ parseInt (IntTok s@(x:xs)) = let bNeg = x == '~'
                                       _         -> error parseIntErrorMsg
 
 -- Helper function to apply arguments to an expression
-applyArgs :: Ex -> [GEAppArg] -> Ex
-applyArgs e ((GEAppArg a):[]) = EApp e (gToEx a)
-applyArgs e ((GEAppArg a):as) = applyArgs (EApp e (gToEx a)) as
+applyArgs :: Ex -> NE.NonEmpty GEAppArg -> Ex
+applyArgs e (GEAppArg a :| as) = case NE.nonEmpty as of
+                                      Nothing -> EApp e (gToEx a)
+                                      Just ne -> applyArgs (EApp e (gToEx a)) ne
 
 unaryOp :: Text -> GExpr -> Ex
 unaryOp op e = EApp (EVar op) (gToEx e)
@@ -72,12 +73,12 @@ gToEx (GEIdx       e1 e2) = EIdx (gToEx e1) (gToEx e2)
 
 gToEx (GEIf b e1 e2) = EApp (EApp (EApp (EVar "if") (gToEx b)) (letExprToEx e1)) (letExprToEx e2)
 
-gToEx (GEApp e []) = notEnoughElements 1 "GEAppArg" "GEApp"
-gToEx (GEApp e as) = applyArgs (gToEx e) as
+gToEx (GEApp _ []) = notEnoughElements 1 "GEAppArg" "GEApp"
+gToEx (GEApp e as) = applyArgs (gToEx e) (NE.fromList as)
 
-gToEx (GEAbs [] le) = notEnoughElements 1 "GEAbsArg" "GEAbs"
-gToEx (GEAbs ((GEAbsArg (LIdent i)):[]) le) = EAbs (pack i) (letExprToEx le)
-gToEx (GEAbs ((GEAbsArg (LIdent i)):xs) le) = EAbs (pack i) (gToEx $ GEAbs xs le)
+gToEx (GEAbs [] _) = notEnoughElements 1 "GEAbsArg" "GEAbs"
+gToEx (GEAbs [GEAbsArg (LIdent i)]      le) = EAbs (pack i) (letExprToEx le)
+gToEx (GEAbs (GEAbsArg (LIdent i) : xs) le) = EAbs (pack i) (gToEx $ GEAbs xs le)
 
 gToEx (GEVar (LIdent i)) = EVar (pack i)
 gToEx (GEInt i) = EInt $ parseInt i

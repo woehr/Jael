@@ -18,18 +18,20 @@ import Test.HUnit
 import Test.Jael.Util
 
 seqInfTests :: [T.Test]
-seqInfTests = [ testCase "plus" $ checkInferredType exprPlus
-              , testCase "abs" $ testInferredType exprAbs
-              , testCase "app" $ checkInferredType exprApp
-              , testCase "if" $ checkInferredType exprIf
-              , testCase "let" $ testInferredType exprLet
-              , testCase "int div result type" $ checkInferredType exprIntDiv
-              , testCase "accessors, first field" $ checkInferredType exprAccessor0
-              , testCase "accessors, second field" $ checkInferredType exprAccessor1
-              , testCase "struct, polymorphic field" $ checkInferredType exprAccessor2
-              , testCase "tuple expr syntax" $ checkInferredType exprTup
-              , testCase "built-in tuple constructor" $ checkInferredType exprTupCons
-              ]
+seqInfTests =
+  [ testCase "plus" $ checkInferredType exprPlus
+  , testCase "abs" $ checkInferredType exprAbs
+  , testCase "app" $ checkInferredType exprApp
+  , testCase "if" $ checkInferredType exprIf
+  , testCase "let" $ checkInferredType exprLet
+  , testCase "int div result type" $ checkInferredType exprIntDiv
+  , testCase "type of int div result constructor" $ checkInferredType exprConstrIntDivRes 
+  , testCase "accessors, first field" $ checkInferredType exprAccessor0
+  , testCase "accessors, second field" $ checkInferredType exprAccessor1
+  , testCase "struct, polymorphic field" $ checkInferredType exprAccessor2
+  , testCase "tuple expr syntax" $ checkInferredType exprTup
+  , testCase "built-in tuple constructor" $ checkInferredType exprTupCons
+  ]
 
 testStruct :: Text
 testStruct = pack [raw|
@@ -53,33 +55,12 @@ checkInferredType (tx, expected) =
                             Right ex ->
                               case seqInfer env (gToEx ex) of
                                    Left es -> assertFailure . unpack . intercalate "\n" $ es
-                                   Right ty -> assertEqual "" expected ty
-
-testInferredType :: (Text, Ty -> Maybe Text) -> Assertion
-testInferredType (tx, tester) =
-  case runParser pGExpr tx of
-    Left err -> assertFailure (unpack err)
-    Right ex -> case seqInfer defaultEnv (gToEx ex) of
-                     Left es -> assertFailure . unpack . intercalate "\n" $ es
-                     Right ty -> case tester ty of
-                                      Just t  -> assertFailure (unpack t)
-                                      Nothing -> return ()
-
-testSingleTv :: Int -> Ty -> Maybe Text
-testSingleTv arity ty =
-  case join $ liftA toMinLen (funVarsToList ty) :: Maybe (MinLen (Succ Zero) [Text]) of
-       Just vs | length vs /= (arity + 1) ->
-                  Just $ "Expected arity of " ++ tshow arity ++ " but got " ++ tshow ty
-               | all (== head vs) (tailML vs) -> Nothing
-               | otherwise -> Just $ "Expected all type variables to be the same. Got: " ++
-                                     unwords (unMinLen vs)
-       Nothing -> Just "Failed to convert to a list of type vars."
-
--- Second value of tuple is a function that tests the type of exprAbs
-funVarsToList :: Ty -> Maybe [Text]
-funVarsToList (TFun (TVar x) t) = liftA (x:) (funVarsToList t)
-funVarsToList (TVar x) = Just [x]
-funVarsToList _ = Nothing
+                                   Right ty -> assertBool ("Expected:\n" ++
+                                                           show expected ++
+                                                           "\n    and:\n" ++
+                                                           show ty ++
+                                                           "\nto be equivalent."
+                                                          ) (expected `tyEquiv` ty)
 
 exprPlus :: (Text, Ty)
 exprPlus = (pack [raw|
@@ -88,12 +69,18 @@ exprPlus = (pack [raw|
 
 -- * has type a->a->a so this is expected to be inferred as x->x->x->x
 -- where x is some type variable
-exprAbs :: (Text, Ty -> Maybe Text)
+exprAbs :: (Text, Ty)
 exprAbs = (pack [raw|
   \a b c -> {
     a*b*c
   }
-|], testSingleTv 3)
+|], TFun (TVar "a")
+         (TFun (TVar "a")
+               (TFun (TVar "a")
+                     (TVar "a")
+               )
+         )
+  )
 
 exprApp :: (Text, Ty)
 exprApp = (pack [raw|
@@ -116,7 +103,7 @@ exprIf = (pack [raw|
   }
 |], TFun TBool (TFun TInt TInt))
 
-exprLet :: (Text, Ty -> Maybe Text)
+exprLet :: (Text, Ty)
 exprLet = (pack [raw|
   \a b c d e -> {
     f = a+b-c;
@@ -125,7 +112,17 @@ exprLet = (pack [raw|
     i = d-e+a;
     f+g-h*i
   }
-|], testSingleTv 5)
+|], TFun (TVar "a")
+         (TFun (TVar "a")
+               (TFun (TVar "a")
+                     (TFun (TVar "a")
+                           (TFun (TVar "a")
+                                 (TVar "a")
+                           )
+                     )
+               )
+         )
+  )
 
 exprIntDiv :: (Text, Ty)
 exprIntDiv = (pack [raw|
@@ -134,7 +131,7 @@ exprIntDiv = (pack [raw|
 
 exprConstrIntDivRes :: (Text, Ty)
 exprConstrIntDivRes = (pack [raw|
-  intDivResult
+  intDivRes
 |], TFun TInt (TFun TInt (TNamed "IntDivRes" [])))
 
 exprAccessor0 :: (Text, Ty)

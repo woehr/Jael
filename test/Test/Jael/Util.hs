@@ -32,12 +32,6 @@ shouldNotParse p t = either (\_ -> return ()) (\_ -> assertFailure "Expression p
 checkParsedTree :: (Eq a, Show a) => ParseFun a -> (Text, a) -> Assertion
 checkParsedTree p (tx, tr) = either (assertFailure . unpack) (tr @=?) (runParser p tx)
 
--- For testing purposes two PolyTy are equal when their type variables and types
--- are equal. Consider, however, whether PolyTy ["a"] (TVar "a") should be equal
--- to PolyTy ["b"] (TVar "b")
-instance Eq PolyTy where
-  (PolyTy xs ts) == (PolyTy ys us) = xs == ys && ts == us
-
 checkTDefErr :: ParseFun a -> (a -> Either TDefError b) -> (Text, TDefError) -> Assertion
 checkTDefErr p validator (def, TDefError (DuplicateTyVars ets)
                                          (DuplicateFields efs)
@@ -68,5 +62,13 @@ checkParsedTypes p validator (def, expected) =
        Right gDef ->
          case validator gDef of
               Left sErr -> assertFailure (show sErr)
-              Right tys -> assertEqual "" (M.fromList expected) (M.fromList tys)
+              Right tys ->
+                let mExpected = M.fromList expected
+                    mActual = M.fromList tys
+                    mInter = M.intersectionWith polyEquiv mExpected mActual
+                 in assertBool ("Expected:\n" ++ show expected ++
+                                "\n     and:\n" ++ show tys ++
+                                "\nto be equivalent."
+                               )
+                               (M.size mExpected == M.size mInter && and mInter)
 
