@@ -19,16 +19,14 @@ gEnumTests =
 tagNoType :: (Text, GTEnumDef)
 tagNoType = (pack [raw|
   X { a }
-|], GTEnumDef (UIdent "X") [] $ map (uncurry GTEnumElement)
-                                  [ (LIdent "a", [])
-                                  ]
+|], GTEnumDef (UIdent "X") [] [ GTEnumElemNoTy (LIdent "a")
+                              ]
   )
 
 tagWithType :: (Text, GTEnumDef)
 tagWithType = (pack [raw|
   X { a Int }
-|], GTEnumDef (UIdent "X") [] $ map (uncurry GTEnumElement)
-                                  [ (LIdent "a", [GTEnumType GTInt])
-                                  ]
+|], GTEnumDef (UIdent "X") [] [ GTEnumElemWithTy (LIdent "a") GTInt
+                              ]
   )
 

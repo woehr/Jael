@@ -41,14 +41,11 @@ separator          nonempty GTStructElement "," ;
 GTStructDef.    GTStructDef ::= UIdent [GTVars] "{" [GTStructElement] "}" ;
 GTDefStruct.    GTypeDef ::= "stuct" GTStructDef ;
 
-GTEnumType.    GTEnumType ::= GType ;
--- 0 or 1 types
-(:[]).        [GTEnumType] ::= GTEnumType ;
+GTEnumElemNoTy.   GTEnumElem ::= LIdent ;
+GTEnumElemWithTy. GTEnumElem ::= LIdent GType ;
+separator      nonempty GTEnumElem "," ;
 
-GTEnumElement. GTEnumElement ::= LIdent [GTEnumType] ;
-separator      nonempty GTEnumElement "," ;
-
-GTEnumDef.     GTEnumDef ::= UIdent [GTVars] "{" [GTEnumElement] "}" ;
+GTEnumDef.     GTEnumDef ::= UIdent [GTVars] "{" [GTEnumElem] "}" ;
 GTDefEnum.     GTypeDef ::= "enum" GTEnumDef ;
 
 GELetIdent.  GELetIdent ::= LIdent "=" GExpr ;
