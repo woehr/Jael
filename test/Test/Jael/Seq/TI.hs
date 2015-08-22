@@ -7,10 +7,10 @@ module Test.Jael.Seq.TI
 import ClassyPrelude
 import Jael.Grammar
 import Jael.Parser
+import Jael.Seq.AlgDataTy
 import Jael.Seq.AST
 import Jael.Seq.Env
 import Jael.Seq.Expr (gToEx)
-import Jael.Seq.Struct
 import Jael.Seq.TI
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
@@ -35,18 +35,25 @@ seqInfTests =
 
 testStruct :: Text
 testStruct = pack [raw|
-  X a { f0 :: Bool , f1 :: Int , f2 :: a }
+  S a { f0 :: Bool , f1 :: Int , f2 :: a }
+|]
+
+testEnum :: Text
+testEnum = pack [raw|
+  E a { t0 Bool , t1 Int , t2 a , t3 }
 |]
 
 checkInferredType :: (Text, Ty) -> Assertion
 checkInferredType (tx, expected) =
-  case runParser pGTStructDef testStruct of
-       Left err -> assertFailure (unpack err)
-       Right sdef ->
-         case validateStruct (gToStruct sdef) of
-              Left err -> assertFailure (show err)
-              Right sfuns ->
-                case addToEnv defaultEnv sfuns of
+  case (runParser pGTStructDef testStruct, runParser pGTEnumDef testEnum) of
+       (Left err, _) -> assertFailure (unpack err)
+       (_, Left err) -> assertFailure (unpack err)
+       (Right sdef, Right edef) ->
+         case (validateAdt (gToStruct sdef), validateAdt (gToEnumer edef)) of
+              (Left err, _) -> assertFailure (show err)
+              (_, Left err) -> assertFailure (show err)
+              (Right sfuns, Right efuns) ->
+                case join $ liftA (flip addToEnv efuns) (addToEnv defaultEnv sfuns) of
                      Left dups -> assertFailure . unpack . intercalate "\n" $
                        "Duplicates in env:" : dups
                      Right env ->
@@ -136,17 +143,17 @@ exprConstrIntDivRes = (pack [raw|
 
 exprAccessor0 :: (Text, Ty)
 exprAccessor0 = (pack [raw|
-  x(true, 0, 1)::f0
+  s(true, 0, 1)::f0
 |], TBool)
 
 exprAccessor1 :: (Text, Ty)
 exprAccessor1 = (pack [raw|
-  x(true, 4, 5)::f1
+  s(true, 4, 5)::f1
 |], TInt)
 
 exprAccessor2 :: (Text, Ty)
 exprAccessor2 = (pack [raw|
-  x(true, 4, false)::f2
+  s(true, 4, false)::f2
 |], TBool)
 
 exprTup :: (Text, Ty)

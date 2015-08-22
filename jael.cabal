@@ -19,12 +19,11 @@ library
                        Jael.Grammar.Par
                        Jael.Grammar.Print
                        Jael.Parser
+                       Jael.Seq.AlgDataTy
                        Jael.Seq.AST
                        Jael.Seq.Builtin
-                       Jael.Seq.Enum
                        Jael.Seq.Env
                        Jael.Seq.Expr
-                       Jael.Seq.Struct
                        Jael.Seq.TI
                        Jael.Seq.Types
                        Jael.Util

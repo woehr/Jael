@@ -7,8 +7,8 @@ module Test.Jael.Seq.Struct
 import ClassyPrelude
 import Jael.Grammar
 import Jael.Parser
+import Jael.Seq.AlgDataTy
 import Jael.Seq.AST
-import Jael.Seq.Struct
 import Jael.Seq.Types
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
@@ -19,7 +19,7 @@ p :: ParseFun GTStructDef
 p = pGTStructDef
 
 validator :: GTStructDef -> Either TDefError [(Text, PolyTy)]
-validator = validateStruct . gToStruct
+validator = validateAdt . gToStruct
 
 checkStruct :: (Text, [(Text, PolyTy)]) -> Assertion
 checkStruct = checkParsedTypes p validator

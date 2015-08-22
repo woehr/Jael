@@ -6,9 +6,9 @@ module Jael.Seq.Env
 ) where
 
 import ClassyPrelude
+import Jael.Seq.AlgDataTy
 import Jael.Seq.AST
 import Jael.Seq.Builtin
-import Jael.Seq.Struct
 import Jael.Util
 
 defaultEnv :: TyEnv
@@ -16,7 +16,7 @@ defaultEnv = mkBuiltinEnv builtinFuncs builtinStructs -- builtinEnums
 
 validateBuiltinStructs :: [Struct] -> [(Text, PolyTy)]
 validateBuiltinStructs =
-  concatMap (\s@(Struct n _ _) -> case validateStruct s of
+  concatMap (\s@(Struct n _ _) -> case validateAdt s of
                                        Left errs -> structError n (tshow errs)
                                        Right xs -> xs
             )
