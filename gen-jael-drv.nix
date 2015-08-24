@@ -5,6 +5,7 @@ let
   stdenv = pkgs.stdenv;
   ghc-str = "ghc7102";
   ghc = pkgs.haskell.packages."${ghc-str}";
+  overrideCabal = pkgs.haskell.lib.overrideCabal;
 
   jael-exprs = stdenv.mkDerivation {
     name = "jael-default-expr";
@@ -25,7 +26,14 @@ let
 in {
   jael-drv-for = expr: let
     drv = (if expr == "default"
-              then (ghc.callPackage "${jael-exprs}/default.nix" {})
+              then overrideCabal (ghc.callPackage "${jael-exprs}/default.nix" {})
+                                 (drv: {
+                                   # Setup fails to find some _o_split files
+                                   # when run with nix's haskell builder.
+                                   # Need to investigate more
+                                   enableSplitObjs = false;
+                                   doHaddock = false;
+                                 })
               else (if expr == "shell"
                        then (import "${jael-exprs}/shell.nix" { inherit nixpkgs; compiler = ghc-str; })
                        else throw "Provide either default or shell as the argument.")
