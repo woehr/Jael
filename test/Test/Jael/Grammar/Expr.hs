@@ -7,11 +7,9 @@ module Test.Jael.Grammar.Expr
 import ClassyPrelude
 import qualified Test.Framework as T
 import Test.Framework.Providers.HUnit
-import Test.HUnit
 
 import Test.Jael.Util
 import Jael.Grammar
-import Jael.Parser
 
 gExprTests :: [T.Test]
 gExprTests = [ testCase "int zero" (checkParsedTree pGExpr intZero)

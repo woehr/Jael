@@ -62,13 +62,20 @@ checkParsedTypes p validator (def, expected) =
        Right gDef ->
          case validator gDef of
               Left sErr -> assertFailure (show sErr)
-              Right tys ->
-                let mExpected = M.fromList expected
-                    mActual = M.fromList tys
-                    mInter = M.intersectionWith polyEquiv mExpected mActual
-                 in assertBool ("Expected:\n" ++ show expected ++
-                                "\n     and:\n" ++ show tys ++
-                                "\nto be equivalent."
-                               )
-                               (M.size mExpected == M.size mInter && and mInter)
+              Right tys -> expected `envListEq` tys
+
+envListEq :: [(Text, PolyTy)] -> [(Text, PolyTy)] -> Assertion
+envListEq expected actual =
+  let mExpected = M.fromList expected
+      mActual = M.fromList actual
+   in mExpected `envEq` mActual
+
+envEq :: TyEnv -> TyEnv -> Assertion
+envEq expected actual =
+   let inter = M.intersectionWith polyEquiv expected actual
+   in assertBool ("Expected:\n" ++ show expected ++
+                  "\n     and:\n" ++ show actual ++
+                  "\nto be equivalent."
+                 )
+                 (M.size expected == M.size inter && and inter)
 

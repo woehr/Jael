@@ -11,6 +11,7 @@ import Test.Jael.Seq.AST (astTests)
 import Test.Jael.Seq.Enum (enumTests)
 import Test.Jael.Seq.Struct (structTests)
 import Test.Jael.Seq.TI (seqInfTests)
+import Test.Jael.Seq.Builtin (builtinTests)
 
 main :: IO ()
 main = defaultMainWithOpts [ testGroup "Enum grammar" gEnumTests
@@ -18,6 +19,7 @@ main = defaultMainWithOpts [ testGroup "Enum grammar" gEnumTests
                            , testGroup "Struct grammar" gStructTests
                            , testGroup "Type grammar" gTypeTests
                            , testGroup "AST tests" astTests
+                           , testGroup "Builtin tests" builtinTests
                            , testGroup "Enum creation" enumTests
                            , testGroup "Struct creation" structTests
                            , testGroup "Seq type inference" seqInfTests

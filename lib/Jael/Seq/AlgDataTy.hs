@@ -12,12 +12,16 @@ import Jael.Seq.Types
 
 type Field = (Text, Ty)
 data Struct = Struct Text [Text] (NE.NonEmpty Field)
+              deriving Show
 
 data Tag = Tag Text
          | TagWithTy Text Ty
-data Enumer = Enumer Text [Text] (NE.NonEmpty Tag)
+           deriving Show
 
-class AlgDataTy a where
+data Enumer = Enumer Text [Text] (NE.NonEmpty Tag)
+              deriving Show
+
+class Show a => AlgDataTy a where
   validateAdt :: a -> Either TDefError [(Text, PolyTy)]
   adtTy :: a -> Ty
 

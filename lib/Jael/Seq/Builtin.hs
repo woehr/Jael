@@ -1,7 +1,8 @@
 {-# Language NoImplicitPrelude #-}
 
 module Jael.Seq.Builtin
-( builtinFuncs
+( builtinEnums
+, builtinFuncs
 , builtinStructs
 ) where
 
@@ -18,7 +19,7 @@ maxBuiltinTupSize = 10
 buildTup :: Integer -> Struct
 buildTup i = let tvs = genericTake i . map (\v -> "a" ++ tshow v) $ ([0..]::[Integer])
               in Struct ("Tup" ++ tshow i) tvs $ NE.fromList
-                                               $ map (\(ix, tv) -> (tshow ix, TVar tv))
+                                               $ map (tshow *** TVar)
                                                $ zip ([0..]::[Integer]) tvs
 
 builtinStructs :: [Struct]
@@ -27,6 +28,12 @@ builtinStructs = Struct "IntDivRes" [] ( NE.fromList [ ("quot", TInt)
                                                      ]
                                        )
                  : map buildTup [1..maxBuiltinTupSize]
+
+builtinEnums :: [Enumer]
+builtinEnums = [ Enumer "Maybe" ["a"] $ NE.fromList [ TagWithTy "just" (TVar "a")
+                                                    , Tag "nothing"
+                                                    ]
+               ]
 
 builtinFuncs :: TyEnv
 builtinFuncs = M.fromList

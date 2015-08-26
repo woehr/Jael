@@ -12,24 +12,27 @@ import Jael.Seq.Builtin
 import Jael.Util
 
 defaultEnv :: TyEnv
-defaultEnv = mkBuiltinEnv builtinFuncs builtinStructs -- builtinEnums
+defaultEnv = mkBuiltinEnv builtinFuncs builtinStructs builtinEnums
 
-validateBuiltinStructs :: [Struct] -> [(Text, PolyTy)]
-validateBuiltinStructs =
-  concatMap (\s@(Struct n _ _) -> case validateAdt s of
-                                       Left errs -> structError n (tshow errs)
-                                       Right xs -> xs
+validateBuiltinAdt :: AlgDataTy a => [a] -> [(Text, PolyTy)]
+validateBuiltinAdt =
+  concatMap (\s -> case validateAdt s of
+                        Left errs -> validationError s (tshow errs)
+                        Right xs -> xs
             )
   
-structError :: Text -> Text -> a
-structError n xs = error . unpack $ "Builtin struct `" ++ n
-                                  ++ "` did not validate:\n" ++ xs
+validationError :: AlgDataTy a => a -> Text -> b
+validationError n xs = error . unpack $ "Builtin struct `" ++ tshow n
+                                     ++ "` did not validate:\n" ++ xs
 
-mkBuiltinEnv :: TyEnv -> [Struct] -> TyEnv
-mkBuiltinEnv fs ss = case addToEnv fs (validateBuiltinStructs ss) of
-                          Left dups -> error $
-                            unpack . intercalate "\n" $ "Duplicates in environment when adding builtins:" : dups
-                          Right env -> env
+mkBuiltinEnv :: TyEnv -> [Struct] -> [Enumer] -> TyEnv
+mkBuiltinEnv fs ss es =
+  let structFns = validateBuiltinAdt ss
+      enumerFns = validateBuiltinAdt es
+   in case join $ liftA (`addToEnv` enumerFns) (addToEnv fs structFns) of
+           Left dups -> error $ unpack . intercalate "\n" $
+             "Duplicates in environment when adding builtins:" : dups
+           Right env -> env
 
 addToEnv :: TyEnv -> [(Text, PolyTy)] -> Either [Text] TyEnv
 addToEnv = insertCollectDups
