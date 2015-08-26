@@ -69,7 +69,6 @@ gToEx (GEMod       e1 e2) = binOp   "%"  e1 e2
 gToEx (GELeftComp  e1 e2) = binOp   "<o" e1 e2
 gToEx (GERightComp e1 e2) = binOp   "o>" e1 e2
 gToEx (GELogNot    e    ) = unaryOp "!"  e
-gToEx (GEIdx       e1 e2) = EIdx (gToEx e1) (gToEx e2)
 
 gToEx (GEIf b e1 e2) = EApp (EApp (EApp (EVar "if") (gToEx b)) (letExprToEx e1)) (letExprToEx e2)
 
@@ -80,13 +79,13 @@ gToEx (GEAbs [] _) = notEnoughElements 1 "GEAbsArg" "GEAbs"
 gToEx (GEAbs [GEAbsArg (LIdent i)]      le) = EAbs (pack i) (letExprToEx le)
 gToEx (GEAbs (GEAbsArg (LIdent i) : xs) le) = EAbs (pack i) (gToEx $ GEAbs xs le)
 
-gToEx (GEVar (LIdent i)) = EVar (pack i)
 gToEx (GEInt i) = EInt $ parseInt i
 gToEx (GETrue)  = EBool True
 gToEx (GEFalse) = EBool False
-gToEx (GEUnit GUnit)  = EUnit
-
 gToEx (GETup xs) = case NE.nonEmpty (map tupArgToEx xs) of
                         Nothing -> notEnoughElements 1 "GETupArg" "GETup"
                         Just (y:|ys) -> foldl' EApp (EApp (EVar $ "tup" ++ tshow (length xs)) y) ys
+gToEx (GEUnit GUnit)  = EUnit
+gToEx (GEVar (LIdent i)) = EVar (pack i)
+gToEx (GEScopedFn (UIdent t) (LIdent f)) = (EVar . pack $ t ++ "::" ++ f)
 

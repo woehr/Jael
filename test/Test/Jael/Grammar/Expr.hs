@@ -32,10 +32,9 @@ gExprTests = [ testCase "int zero" (checkParsedTree pGExpr intZero)
              , testCase "if expr with application w/o paren" (shouldNotParse pGExpr ifWithAppFail)
              , testCase "tuple expr" (checkParsedTree pGExpr tup)
              , testCase "tuple in abs" (checkParsedTree pGExpr tupInAbs)
-             , testCase "index accessor" (checkParsedTree pGExpr accIndex)
-             , testCase "label accessor" (checkParsedTree pGExpr accLabel)
-             , testCase "multi accessors" (checkParsedTree pGExpr accMulti)
-             , testCase "accessor, invalid ident" (shouldNotParse pGExpr accInvalidIdent)
+             , testCase "tuple scoped fn" (checkParsedTree pGExpr accIndex)
+             , testCase "struct scoped fn" (checkParsedTree pGExpr accLabel)
+             , testCase "invalid scoped" (shouldNotParse pGExpr accMulti)
              ]
 
 intZero :: (Text, GExpr)
@@ -229,29 +228,21 @@ tupInAbs = (pack [raw|
 
 accIndex :: (Text, GExpr)
 accIndex = (pack [raw|
-  x :: 0
-|], GEIdx (GEVar (LIdent "x")) (GEInt (IntTok "0"))
+  Tup1::at0
+|], GEScopedFn (UIdent "Tup1") (LIdent "at0")
   )
 
 accLabel :: (Text, GExpr)
 accLabel = (pack [raw|
-  x :: abc
-|], GEIdx (GEVar (LIdent "x")) (GEVar (LIdent "abc"))
-  )
-
-accMulti :: (Text, GExpr)
-accMulti = (pack [raw|
-  x::0:: xyz ::123
-|], GEIdx (GEIdx (GEIdx (GEVar (LIdent "x"))
-                        (GEInt (IntTok "0"))
-                 )
-                 (GEVar (LIdent "xyz"))
+  SomeStruct::someField(x)
+|], GEApp (GEScopedFn (UIdent "SomeStruct")
+                      (LIdent "someField")
           )
-          (GEInt (IntTok "123"))
+          [ GEAppArg (GEVar (LIdent "x")) ]
   )
 
-accInvalidIdent :: Text
-accInvalidIdent = pack [raw|
-  x::UPPER
+accMulti :: Text
+accMulti = pack [raw|
+  x::a::b x
 |]
 

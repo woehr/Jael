@@ -143,17 +143,17 @@ exprConstrIntDivRes = (pack [raw|
 
 exprAccessor0 :: (Text, Ty)
 exprAccessor0 = (pack [raw|
-  s(true, 0, 1)::f0
+  S::f0(s(true, 0, 1))
 |], TBool)
 
 exprAccessor1 :: (Text, Ty)
 exprAccessor1 = (pack [raw|
-  s(true, 4, 5)::f1
+  S::f1(s(true, 4, 5))
 |], TInt)
 
 exprAccessor2 :: (Text, Ty)
 exprAccessor2 = (pack [raw|
-  s(true, 4, false)::f2
+  S::f2(s(true, 4, false))
 |], TBool)
 
 exprTup :: (Text, Ty)

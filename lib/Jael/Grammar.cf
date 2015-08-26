@@ -92,22 +92,21 @@ GERightComp. GExpr9 ::= GExpr9  "o>" GExpr10 ;
 
 GELogNot.    GExpr10 ::= "!" GExpr10 ;
 
-GEIdx.       GExpr11 ::= GExpr11 "::" GExpr12 ; --LIdent ;
+GEIf.        GExpr11 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
 
-GEIf.        GExpr12 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
+GEApp.       GExpr12 ::= GExpr12 "(" [GEAppArg] ")" ;
 
-GEApp.       GExpr13 ::= GExpr13 "(" [GEAppArg] ")" ;
+GEAbs.       GExpr13 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
 
-GEAbs.       GExpr14 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
+GETrue.      GExpr14 ::= "true" ;
+GEFalse.     GExpr14 ::= "false" ;
+GEInt.       GExpr14 ::= IntTok ;
+GEVar.       GExpr14 ::= LIdent ;
+GEScopedFn.  GExpr14 ::= UIdent "::" LIdent ;
+GEUnit.      GExpr14 ::= GUnit ;
+GETup.       GExpr14 ::= "{" [GETupArg] "}" ;
 
-GEInt.       GExpr15 ::= IntTok ;
-GETrue.      GExpr15 ::= "true" ;
-GEFalse.     GExpr15 ::= "false" ;
-GETup.       GExpr15 ::= "{" [GETupArg] "}" ;
-GEUnit.      GExpr15 ::= GUnit ;
-GEVar.       GExpr15 ::= LIdent ;
-
-coercions    GExpr 15 ;
+coercions    GExpr 14 ;
 
 -- Hardware language
 

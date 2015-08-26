@@ -10,7 +10,6 @@ data Ex = EVar Text
         | EUnit
         | EInt Integer
         | EBool Bool
-        | EIdx Ex Ex
         | EApp Ex Ex
         | EAbs Text Ex
         | ELet Text Ex Ex

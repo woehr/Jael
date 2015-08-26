@@ -128,19 +128,6 @@ ti _ (EUnit)   = return (nullSub, TUnit)
 ti _ (EInt _)  = return (nullSub, TInt)
 ti _ (EBool _) = return (nullSub, TBool)
 
--- Indexing
-ti env (EIdx e1 e2) = do
-  acc <- case e2 of
-              EVar n -> return n
-              EInt i -> return (tshow i)
-              _      -> tiError "accessor must be a constant integer or label"
-  (_, t1) <- ti env e1
-  case t1 of
-       TNamed n _ -> do
-         (sub2, t2) <- ti env (EApp (EVar $ n ++ "::" ++ acc) e1)
-         return (sub2, t2)
-       _ -> tiError "accessor can only be applied to structs (and tuples)"
-
 -- Function application
 ti env (EApp e1 e2) = do
   tv <- newTV
