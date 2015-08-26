@@ -87,5 +87,6 @@ gToEx (GETup xs) = case NE.nonEmpty (map tupArgToEx xs) of
                         Just (y:|ys) -> foldl' EApp (EApp (EVar $ "tup" ++ tshow (length xs)) y) ys
 gToEx (GEUnit GUnit)  = EUnit
 gToEx (GEVar (LIdent i)) = EVar (pack i)
-gToEx (GEScopedFn (UIdent t) (LIdent f)) = (EVar . pack $ t ++ "::" ++ f)
+gToEx (GEScopedFn (UIdent t) (GEScopeIdent (LIdent f))) = (EVar . pack $ t ++ "::" ++ f)
+gToEx (GEScopedFn (UIdent t) (GEScopeIndex (IntTok n))) = (EVar . pack $ t ++ "::" ++ n)
 

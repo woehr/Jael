@@ -228,15 +228,15 @@ tupInAbs = (pack [raw|
 
 accIndex :: (Text, GExpr)
 accIndex = (pack [raw|
-  Tup1::at0
-|], GEScopedFn (UIdent "Tup1") (LIdent "at0")
+  Tup1::0
+|], GEScopedFn (UIdent "Tup1") (GEScopeIndex (IntTok "0"))
   )
 
 accLabel :: (Text, GExpr)
 accLabel = (pack [raw|
   SomeStruct::someField(x)
 |], GEApp (GEScopedFn (UIdent "SomeStruct")
-                      (LIdent "someField")
+                      (GEScopeIdent (LIdent "someField"))
           )
           [ GEAppArg (GEVar (LIdent "x")) ]
   )

@@ -98,11 +98,14 @@ GEApp.       GExpr12 ::= GExpr12 "(" [GEAppArg] ")" ;
 
 GEAbs.       GExpr13 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
 
+GEScopeIdent. GEScopeArg ::= LIdent ;
+GEScopeIndex. GEScopeArg ::= IntTok ;
+
 GETrue.      GExpr14 ::= "true" ;
 GEFalse.     GExpr14 ::= "false" ;
 GEInt.       GExpr14 ::= IntTok ;
 GEVar.       GExpr14 ::= LIdent ;
-GEScopedFn.  GExpr14 ::= UIdent "::" LIdent ;
+GEScopedFn.  GExpr14 ::= UIdent "::" GEScopeArg ;
 GEUnit.      GExpr14 ::= GUnit ;
 GETup.       GExpr14 ::= "{" [GETupArg] "}" ;
 
