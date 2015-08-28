@@ -42,8 +42,8 @@ runSeqTI t = let (SeqTI stateFunc) = t
 
 seqTypeInference :: TyEnv -> Ex -> SeqTI Ty
 seqTypeInference env e = do
-  (sub, ty) <- ti env e
-  return $ apply sub ty
+  (sub, te) <- ti env e
+  return $ apply sub (tyOf te)
 
 getTvCount :: SeqTI Integer
 getTvCount = SeqTI $ \s -> (Just (tvCount s), s)
@@ -115,50 +115,50 @@ varBind u t
       ++ "\" is a free type variable of \"" ++ tshow t
   | otherwise          = Right $ M.singleton u t
 
-ti :: TyEnv -> Ex -> SeqTI (TySub, Ty)
+ti :: TyEnv -> Ex -> SeqTI (TySub, TypedEx)
 -- Variables
 ti env (EVar v) = case M.lookup v env of
     Nothing -> tiError $ "unbound variable \"" ++ tshow v ++ "\""
     Just sigma -> do
        t <- instantiation sigma
-       return (nullSub, t)
+       return (nullSub, TEVar t v)
 
 -- Literals
-ti _ (EUnit)   = return (nullSub, TUnit)
-ti _ (EInt _)  = return (nullSub, TInt)
-ti _ (EBool _) = return (nullSub, TBool)
+ti _ (EUnit)   = return (nullSub, TEUnit TUnit)
+ti _ (EInt x)  = return (nullSub, TEInt TInt x)
+ti _ (EBool x) = return (nullSub, TEBool TBool x)
 
 -- Function application
 ti env (EApp e1 e2) = do
   tv <- newTV
-  (sub1, t1) <- ti env e1
-  (sub2, t2) <- ti (apply sub1 env) e2
-  let sub3 = mgu (apply sub2 t1) (TFun t2 tv)
+  (sub1, te1) <- ti env e1
+  (sub2, te2) <- ti (apply sub1 env) e2
+  let sub3 = mgu (apply sub2 (tyOf te1)) (TFun (tyOf te2) tv)
   case sub3 of
        Left err -> tiError
                      (err ++ "\n\n"
                           ++ "Type variable : " ++ tshow tv ++ "\n\n"
-                          ++ "Inference 1   : " ++ tshow (t1, sub1) ++ "\n"
+                          ++ "Inference 1   : " ++ tshow (te1, sub1) ++ "\n"
                           ++ "   for expr   : " ++ tshow e1 ++ "\n\n"
-                          ++ "Inference 2   : " ++ tshow (t2, sub2) ++ "\n"
+                          ++ "Inference 2   : " ++ tshow (te2, sub2) ++ "\n"
                           ++ "   for expr   : " ++ tshow e2 ++ "\n\n"
                      )
-       Right sub3' -> return (sub3' `compSub` sub2 `compSub` sub1, apply sub3' tv)
+       Right sub3' -> return (sub3' `compSub` sub2 `compSub` sub1, TEApp (apply sub3' tv) te1 te2)
 
 -- Abstraction
 ti env (EAbs x e) = do
   tv <- newTV
   let env' = remove env x
       env'' = env' `M.union` M.singleton x (PolyTy [] tv)
-  (s1, t1) <- ti env'' e
-  return (s1, TFun (apply s1 tv) t1)
+  (s1, te1) <- ti env'' e
+  return (s1, TEAbs (TFun (apply s1 tv) (tyOf te1)) x te1)
 
 -- Let
 ti env (ELet x e1 e2) = do
-  (s1, t1) <- ti env e1
+  (s1, te1) <- ti env e1
   let env' = remove env x
-      t' = generalization (apply s1 env) t1
+      t' = generalization (apply s1 env) (tyOf te1)
       env'' = M.insert x t' env'
-  (s2, t2) <- ti (apply s1 env'') e2
-  return (s2 `compSub` s1, t2)
+  (s2, te2) <- ti (apply s1 env'') e2
+  return (s2 `compSub` s1, TELet (tyOf te2) x te1 te2)
 

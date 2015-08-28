@@ -15,6 +15,24 @@ data Ex = EVar Text
         | ELet Text Ex Ex
           deriving (Show)
 
+data TypedEx = TEVar  Ty Text
+             | TEUnit Ty
+             | TEInt  Ty Integer
+             | TEBool Ty Bool
+             | TEApp  Ty TypedEx TypedEx
+             | TEAbs  Ty Text TypedEx
+             | TELet  Ty Text TypedEx TypedEx
+               deriving (Show)
+
+tyOf :: TypedEx -> Ty
+tyOf (TEVar  t _    ) = t
+tyOf (TEUnit t      ) = t
+tyOf (TEInt  t _    ) = t
+tyOf (TEBool t _    ) = t
+tyOf (TEApp  t _ _  ) = t
+tyOf (TEAbs  t _ _  ) = t
+tyOf (TELet  t _ _ _) = t
+
 data Ty = TVar Text
         | TUnit
         | TInt
@@ -62,6 +80,16 @@ instance TyOps a => TyOps [a] where
 instance TyOps TyEnv where
   ftv env = ftv $ M.elems env
   apply sub = M.map (apply sub)
+
+instance TyOps TypedEx where
+  ftv te = ftv (tyOf te)
+  apply sub (TEVar  t x    ) = TEVar  (apply sub t) x
+  apply sub (TEUnit t      ) = TEUnit (apply sub t)
+  apply sub (TEInt  t x    ) = TEInt  (apply sub t) x
+  apply sub (TEBool t x    ) = TEBool (apply sub t) x
+  apply sub (TEApp  t x y  ) = TEApp  (apply sub t) (apply sub x) (apply sub y)
+  apply sub (TEAbs  t x y  ) = TEAbs  (apply sub t) x (apply sub y)
+  apply sub (TELet  t x y z) = TELet  (apply sub t) x (apply sub y) (apply sub z)
 
 -- Two PolyTy are equivalent when their structure is the same and there exists a
 -- one-to-one mapping of the type variables of both types to each other.
