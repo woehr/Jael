@@ -63,53 +63,73 @@ separator    nonempty GEAbsArg "" ;
 GETupArg.    GETupArg ::= GExpr ;
 separator    nonempty GETupArg "," ;
 
-GELeftApp.   GExpr0 ::= GExpr1 "<$" GExpr0 ;
+----- Begin operators -----
+
+-- Haskell precedence 0
 GERightApp.  GExpr0 ::= GExpr0 "$>" GExpr1 ;
+GELeftApp.   GExpr1 ::= GExpr2 "<$" GExpr1 ;
 
---GEBind.      GExpr1 ::= GExpr1 ">>=" GExpr2 ;
---GESeq.       GExpr1 ::= GExpr1 ">>"  GExpr2 ;
+-- Haskell precedence 1
+--GEBind.      GExpr2 ::= GExpr2 ">>=" GExpr3 ;
+--GESeq.       GExpr2 ::= GExpr2 ">>"  GExpr3 ;
 
-GELogOr.     GExpr2 ::= GExpr3 "||" GExpr2 ;
+-- Haskell precedence 2
+GELogOr.     GExpr3 ::= GExpr4 "||" GExpr3 ;
 
-GELogAnd.    GExpr3 ::= GExpr4 "&&" GExpr3 ;
+-- Haskell precedence 3
+GELogAnd.    GExpr4 ::= GExpr5 "&&" GExpr4 ;
 
-GEEq.        GExpr4 ::= GExpr4 "==" GExpr4 ;
-GENotEq.     GExpr4 ::= GExpr4 "!=" GExpr4 ;
-GEGtEq.      GExpr4 ::= GExpr4 ">=" GExpr4 ;
-GELtEq.      GExpr4 ::= GExpr4 "<=" GExpr4 ;
-GEGt.        GExpr4 ::= GExpr4 ">"  GExpr4 ;
-GELt.        GExpr4 ::= GExpr4 "<"  GExpr4 ;
+-- Haskell precedence 4
+GEEq.        GExpr5 ::= GExpr5 "==" GExpr5 ;
+GENotEq.     GExpr5 ::= GExpr5 "!=" GExpr5 ;
+GEGtEq.      GExpr5 ::= GExpr5 ">=" GExpr5 ;
+GELtEq.      GExpr5 ::= GExpr5 "<=" GExpr5 ;
+GEGt.        GExpr5 ::= GExpr5 ">"  GExpr5 ;
+GELt.        GExpr5 ::= GExpr5 "<"  GExpr5 ;
+-- elem, notElem
 
-GEPlus.      GExpr6 ::= GExpr6 "+" GExpr7 ;
-GEMinus.     GExpr6 ::= GExpr6 "-" GExpr7 ;
+-- Haskell precedence 5
+-- cons, append
 
-GETimes.     GExpr7 ::= GExpr7 "*" GExpr8 ;
-GEDiv.       GExpr7 ::= GExpr7 "/" GExpr8 ;
-GEMod.       GExpr7 ::= GExpr7 "%" GExpr8 ;
+-- Haskell precedence 6
+GEPlus.      GExpr7 ::= GExpr7 "+" GExpr8 ;
+GEMinus.     GExpr7 ::= GExpr7 "-" GExpr8 ;
 
-GELeftComp.  GExpr9 ::= GExpr10 "<o" GExpr9 ;
-GERightComp. GExpr9 ::= GExpr9  "o>" GExpr10 ;
+-- Haskell precedence 7
+GETimes.     GExpr8 ::= GExpr8 "*" GExpr9 ;
+GEDiv.       GExpr8 ::= GExpr8 "/" GExpr9 ;
+GEMod.       GExpr8 ::= GExpr8 "%" GExpr9 ;
+-- rem, quot, div
 
-GELogNot.    GExpr10 ::= "!" GExpr10 ;
+-- Haskell precedence 8
+-- Power operators
 
-GEIf.        GExpr11 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
+-- Haskell precedence 9
+GERightComp. GExpr10 ::= GExpr10  "o>" GExpr11 ;
+GELeftComp.  GExpr11 ::= GExpr12 "<o" GExpr11 ;
 
-GEApp.       GExpr12 ::= GExpr12 "(" [GEAppArg] ")" ;
+GELogNot.    GExpr12 ::= "!" GExpr12 ;
 
-GEAbs.       GExpr13 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
+----- End operators -----
+
+GEIf.        GExpr13 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
+
+GEApp.       GExpr14 ::= GExpr14 "(" [GEAppArg] ")" ;
+
+GEAbs.       GExpr15 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
 
 GEScopeIdent. GEScopeArg ::= LIdent ;
 GEScopeIndex. GEScopeArg ::= IntTok ;
 
-GETrue.      GExpr14 ::= "true" ;
-GEFalse.     GExpr14 ::= "false" ;
-GEInt.       GExpr14 ::= IntTok ;
-GEVar.       GExpr14 ::= LIdent ;
-GEScopedFn.  GExpr14 ::= UIdent "::" GEScopeArg ;
-GEUnit.      GExpr14 ::= GUnit ;
-GETup.       GExpr14 ::= "{" [GETupArg] "}" ;
+GETrue.      GExpr16 ::= "true" ;
+GEFalse.     GExpr16 ::= "false" ;
+GEInt.       GExpr16 ::= IntTok ;
+GEVar.       GExpr16 ::= LIdent ;
+GEScopedFn.  GExpr16 ::= UIdent "::" GEScopeArg ;
+GEUnit.      GExpr16 ::= GUnit ;
+GETup.       GExpr16 ::= "{" [GETupArg] "}" ;
 
-coercions    GExpr 14 ;
+coercions    GExpr 16 ;
 
 -- Hardware language
 
