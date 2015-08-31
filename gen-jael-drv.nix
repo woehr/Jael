@@ -3,7 +3,7 @@
 let
   pkgs = nixpkgs.pkgs;
   stdenv = pkgs.stdenv;
-  ghc-str = "ghc7102";
+  ghc-str = "ghc784";
   ghc = pkgs.haskell.packages."${ghc-str}";
   overrideCabal = pkgs.haskell.lib.overrideCabal;
 
@@ -21,7 +21,8 @@ let
   };
 
   extra-inputs = (with ghc; [alex BNFC happy]);
-  shell-inputs = (with ghc; [cabal-install ghc-mod]);
+  shell-inputs = (with ghc; [cabal-install]);
+  #shell-inputs = (with ghc; [cabal-install ghc-mod]);
 
 in {
   jael-drv-for = expr: let

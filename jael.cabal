@@ -35,6 +35,8 @@ library
                        array,
                        classy-prelude,
                        containers,
+                       llvm-general,
+                       llvm-general-pure,
                        semigroups
 
   hs-source-dirs:      lib
