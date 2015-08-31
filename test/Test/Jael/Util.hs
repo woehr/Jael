@@ -64,6 +64,28 @@ checkParsedTypes p validator (def, expected) =
               Left sErr -> assertFailure (show sErr)
               Right tys -> expected `envListEq` tys
 
+checkInferredType :: (Text, Ty) -> Assertion
+checkInferredType (tx, expected) =
+  let res = do
+      sdef <- runParser pGTStructDef testStruct
+      edef <- runParser pGTEnumDef testEnum
+      sfuns <- validateAdt (gToStruct sdef)
+      efuns <- validateAdt (gToEnumer edef)
+      env <- case join $ liftA (flip addToEnv efuns) (addToEnv defaultEnv sfuns) of
+                  Left dups -> intercalate "\n" "Duplicates in env:" : dups
+                  Right x -> x
+      ex <- runParser pGExpr tx
+      ty <- case seqInfer env (gToEx ex) of
+                 Left errs -> intercalate "\n" errs
+                 Right x -> x
+      return $ assertBool ("Expected:\n" ++
+                          show expected ++
+                          "\n    and:\n" ++
+                          show ty ++
+                          "\nto be equivalent."
+                          ) (expected `tyEquiv` ty)
+  in  either (assertFailure . unpack) id res
+
 envListEq :: [(Text, PolyTy)] -> [(Text, PolyTy)] -> Assertion
 envListEq expected actual =
   let mExpected = M.fromList expected

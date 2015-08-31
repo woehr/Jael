@@ -33,6 +33,9 @@ instance Functor SeqTI where
 seqInfer :: TyEnv -> Ex -> Either [Text] Ty
 seqInfer env = runSeqTI . seqTypeInference env
 
+seqTypeEx :: TyEnv -> Ex -> Either [Text] TypedEx
+seqTypeEx env = runSeqTI . seqTypeEx env
+
 runSeqTI :: SeqTI a -> Either [Text] a
 runSeqTI t = let (SeqTI stateFunc) = t
                  initState = SeqTIState{ tvCount = 0, tiErrors = [] }
@@ -45,6 +48,11 @@ seqTypeInference env e = do
   (sub, te) <- ti env e
   return $ apply sub (tyOf te)
 
+seqTypeEx :: TyEnv -> Ex -> SeqTI TypedEx
+seqTypeEx env e = do
+  (sub, te) <- ti env e
+  return $ apply sub te
+
 getTvCount :: SeqTI Integer
 getTvCount = SeqTI $ \s -> (Just (tvCount s), s)
 
@@ -52,7 +60,7 @@ incTvCount :: SeqTI ()
 incTvCount = SeqTI $ \s -> (Just (), s{tvCount = tvCount s + 1})
 
 newTV :: SeqTI Ty
-newTV = getTvCount >>= (\i -> (>>) incTvCount $ return . TVar $ "a" ++ tshow i)
+newTV = getTvCount >>= (\i -> (incTvCount >>) $ return . TVar $ "a" ++ tshow i)
 
 getTiErrors :: SeqTI [Text]
 getTiErrors = SeqTI $ \s -> (Just $ tiErrors s, s)

@@ -43,32 +43,6 @@ testEnum = pack [raw|
   E a { t0 Bool , t1 Int , t2 a , t3 }
 |]
 
-checkInferredType :: (Text, Ty) -> Assertion
-checkInferredType (tx, expected) =
-  case (runParser pGTStructDef testStruct, runParser pGTEnumDef testEnum) of
-       (Left err, _) -> assertFailure (unpack err)
-       (_, Left err) -> assertFailure (unpack err)
-       (Right sdef, Right edef) ->
-         case (validateAdt (gToStruct sdef), validateAdt (gToEnumer edef)) of
-              (Left err, _) -> assertFailure (show err)
-              (_, Left err) -> assertFailure (show err)
-              (Right sfuns, Right efuns) ->
-                case join $ liftA (flip addToEnv efuns) (addToEnv defaultEnv sfuns) of
-                     Left dups -> assertFailure . unpack . intercalate "\n" $
-                       "Duplicates in env:" : dups
-                     Right env ->
-                       case runParser pGExpr tx of
-                            Left err -> assertFailure (unpack err)
-                            Right ex ->
-                              case seqInfer env (gToEx ex) of
-                                   Left es -> assertFailure . unpack . intercalate "\n" $ es
-                                   Right ty -> assertBool ("Expected:\n" ++
-                                                           show expected ++
-                                                           "\n    and:\n" ++
-                                                           show ty ++
-                                                           "\nto be equivalent."
-                                                          ) (expected `tyEquiv` ty)
-
 exprPlus :: (Text, Ty)
 exprPlus = (pack [raw|
   1+~2+3
