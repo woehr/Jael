@@ -1,10 +1,21 @@
+{-# Language NoImplicitPrelude #-}
+
 module Jael.Seq.Closure where
 
+import ClassyPrelude
 import Jael.Seq.AST
 
-data ExCC = Asdf
-  deriving (Eq, Show)
+data CCFun = CCFun [Text] ExCC
+             deriving (Eq, Show)
 
-closureConversion :: TypedEx -> ExCC
+data ExCC = ECVar Text
+          | ECUnit
+          | ECInt Integer
+          | ECBool Bool
+          | ECApp Text [ExCC]
+          | ECClos Text ExCC
+            deriving (Eq, Show)
+
+closureConversion :: TypedEx -> (ExCC, [(Text, CCFun)])
 closureConversion = undefined
 

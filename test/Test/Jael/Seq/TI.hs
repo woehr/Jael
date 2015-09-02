@@ -18,6 +18,7 @@ seqInfTests =
   , testCase "app" $ checkInferredType exprApp
   , testCase "if" $ checkInferredType exprIf
   , testCase "let" $ checkInferredType exprLet
+  , testCase "let polymorphism" $ checkInferredType exprLetPoly
   , testCase "int div result type" $ checkInferredType exprIntDiv
   , testCase "type of int div result constructor" $ checkInferredType exprConstrIntDivRes 
   , testCase "accessors, first field" $ checkInferredType exprAccessor0
@@ -100,6 +101,16 @@ exprLet = (pack [raw|
                      )
                )
          )
+  )
+
+exprLetPoly :: (Text, Ty)
+exprLetPoly = (pack [raw|
+  \a -> {
+    id = \x -> { x };
+    { id(a), id(1), id(true) }
+  }
+|], TFun (TVar "a")
+         (TNamed "Tup3" [TVar "a", TInt, TBool])
   )
 
 exprIntDiv :: (Text, Ty)
