@@ -5,13 +5,7 @@ module Test.Jael.Seq.TI
 ) where
 
 import ClassyPrelude
-import Jael.Grammar
-import Jael.Parser
-import Jael.Seq.AlgDataTy
 import Jael.Seq.AST
-import Jael.Seq.Env
-import Jael.Seq.Expr (gToEx)
-import Jael.Seq.TI
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit
@@ -32,6 +26,9 @@ seqInfTests =
   , testCase "tuple expr syntax" $ checkInferredType exprTup
   , testCase "built-in tuple constructor" $ checkInferredType exprTupCons
   ]
+
+checkInferredType :: (Text, Ty) -> Assertion
+checkInferredType = checkInference testStruct testEnum
 
 testStruct :: Text
 testStruct = pack [raw|

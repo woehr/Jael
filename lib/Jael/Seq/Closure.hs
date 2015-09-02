@@ -1,6 +1,9 @@
 module Jael.Seq.Closure where
 
-data ExCC = ExCC
+import Jael.Seq.AST
+
+data ExCC = Asdf
+  deriving (Eq, Show)
 
 closureConversion :: TypedEx -> ExCC
 closureConversion = undefined

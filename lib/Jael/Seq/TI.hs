@@ -33,8 +33,8 @@ instance Functor SeqTI where
 seqInfer :: TyEnv -> Ex -> Either [Text] Ty
 seqInfer env = runSeqTI . seqTypeInference env
 
-seqTypeEx :: TyEnv -> Ex -> Either [Text] TypedEx
-seqTypeEx env = runSeqTI . seqTypeEx env
+seqInferTypedEx :: TyEnv -> Ex -> Either [Text] TypedEx
+seqInferTypedEx env = runSeqTI . seqTypedExInference env
 
 runSeqTI :: SeqTI a -> Either [Text] a
 runSeqTI t = let (SeqTI stateFunc) = t
@@ -48,8 +48,8 @@ seqTypeInference env e = do
   (sub, te) <- ti env e
   return $ apply sub (tyOf te)
 
-seqTypeEx :: TyEnv -> Ex -> SeqTI TypedEx
-seqTypeEx env e = do
+seqTypedExInference :: TyEnv -> Ex -> SeqTI TypedEx
+seqTypedExInference env e = do
   (sub, te) <- ti env e
   return $ apply sub te
 

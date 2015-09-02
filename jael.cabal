@@ -22,6 +22,7 @@ library
                        Jael.Seq.AlgDataTy
                        Jael.Seq.AST
                        Jael.Seq.Builtin
+                       Jael.Seq.Closure
                        Jael.Seq.Env
                        Jael.Seq.Expr
                        Jael.Seq.TI
