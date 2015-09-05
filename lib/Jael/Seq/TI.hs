@@ -116,8 +116,10 @@ mgu t1 t2 = Left $ "Types \"" ++ tshow t1 ++ "\" and \"" ++ tshow t2 ++
                    "\" do not unify."
 
 varBind :: Text -> Ty -> Either Text TySub
+varBind u t@(TVar t')
+  | u == t'    = Right nullSub
+  | otherwise  = Right $ M.singleton u t
 varBind u t
-  | t == TVar u        = Right nullSub
   | S.member u (ftv t) = Left $ "Can not bind \"" ++ tshow u ++ "\" to \""
       ++ tshow t ++ "\" because \"" ++ tshow u
       ++ "\" is a free type variable of \"" ++ tshow t

@@ -39,7 +39,7 @@ data Ty = TVar Text
         | TBool
         | TNamed Text [Ty]
         | TFun Ty Ty
-          deriving (Eq, Show)
+          deriving (Show)
 
 data PolyTy = PolyTy [Text] Ty
               deriving (Show)
@@ -99,14 +99,14 @@ tyEquiv :: Ty -> Ty -> Bool
 tyEquiv t u =
     case mkSub M.empty t u of
          Nothing -> False
-         Just s  -> apply s t == u
+         Just s  -> apply s t `identical` u
     where mkSub :: TySub -> Ty -> Ty -> Maybe TySub
-          mkSub sub (TVar a) b@(TVar _) =
+          mkSub sub (TVar a) b@(TVar bname) =
             case M.lookup a sub of
-                 Just b' -> if b == b'
-                               then Just sub
-                               else Nothing
-                 Nothing -> Just (M.insert a b sub)
+                 Just (TVar b'name) -> if bname == b'name
+                                          then Just sub
+                                          else Nothing
+                 _ -> Just (M.insert a b sub)
           mkSub sub (TNamed n as) (TNamed m bs) =
             if n == m && length as == length bs
                then foldM (\acc (a, b) -> mkSub acc a b) sub (zip as bs)
@@ -115,9 +115,21 @@ tyEquiv t u =
             case mkSub sub a b of
                  Just sub' -> mkSub sub' a' b'
                  Nothing -> Nothing
-          mkSub sub a b = if a == b
+          mkSub sub a b = if a `identical` b
                              then Just sub
                              else Nothing
+
+          identical :: Ty -> Ty -> Bool
+          identical (TVar a) (TVar b) = a == b
+          identical (TUnit) (TUnit) = True
+          identical (TInt) (TInt) = True
+          identical (TBool) (TBool) = True
+          identical (TNamed n ts) (TNamed m us) = n == m &&
+                                                  length ts == length us &&
+                                                  and (zipWith identical ts us)
+          identical (TFun w x) (TFun y z) = w `identical` y && x `identical` z
+          identical _ _ = False
+
 
 polyEquiv :: PolyTy -> PolyTy -> Bool
 polyEquiv (PolyTy _ t) (PolyTy _ u) = t `tyEquiv` u
