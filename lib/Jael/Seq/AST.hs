@@ -1,10 +1,9 @@
-{-# Language NoImplicitPrelude, TypeSynonymInstances, FlexibleInstances #-}
-
+{-# Language DeriveFunctor, NoImplicitPrelude, TypeFamilies #-}
 module Jael.Seq.AST where
 
-import ClassyPrelude
-import qualified Data.Map as M
-import qualified Data.Set as S
+import ClassyPrelude hiding (Foldable)
+import Data.Functor.Foldable
+import Jael.Seq.Types
 
 data Ex = EVar Text
         | EUnit
@@ -15,122 +14,61 @@ data Ex = EVar Text
         | ELet Text Ex Ex
           deriving (Show)
 
-data TypedEx = TEVar  Ty Text
-             | TEUnit Ty
-             | TEInt  Ty Integer
-             | TEBool Ty Bool
-             | TEApp  Ty TypedEx TypedEx
-             | TEAbs  Ty Text TypedEx
-             | TELet  Ty Text TypedEx TypedEx
-               deriving (Show)
+data ExF a = EVarF Text
+           | EUnitF
+           | EIntF Integer
+           | EBoolF Bool
+           | EAppF a a
+           | EAbsF Text a
+           | ELetF Text a a
+             deriving (Eq, Functor, Show)
 
-tyOf :: TypedEx -> Ty
-tyOf (TEVar  t _    ) = t
-tyOf (TEUnit t      ) = t
-tyOf (TEInt  t _    ) = t
-tyOf (TEBool t _    ) = t
-tyOf (TEApp  t _ _  ) = t
-tyOf (TEAbs  t _ _  ) = t
-tyOf (TELet  t _ _ _) = t
+type instance Base Ex = ExF
 
-data Ty = TVar Text
-        | TUnit
-        | TInt
-        | TBool
-        | TNamed Text [Ty]
-        | TFun Ty Ty
-          deriving (Show)
+instance Foldable Ex where
+  project (EVar x)     = EVarF x
+  project (EUnit)      = EUnitF
+  project (EInt x)     = EIntF x
+  project (EBool x)    = EBoolF x
+  project (EApp x y)   = EAppF x y
+  project (EAbs x y)   = EAbsF x y
+  project (ELet x y z) = ELetF x y z
 
-data PolyTy = PolyTy [Text] Ty
-              deriving (Show)
+instance Unfoldable Ex where
+  embed (EVarF x)     = EVar x
+  embed (EUnitF)      = EUnit
+  embed (EIntF x)     = EInt x
+  embed (EBoolF x)    = EBool x
+  embed (EAppF x y)   = EApp x y
+  embed (EAbsF x y)   = EAbs x y
+  embed (ELetF x y z) = ELet x y z
 
-type TyEnv = M.Map Text PolyTy
+-- Annotate type f a with something of type x
+data Ann x f a = Ann { ann :: x, unAnn :: f a }
+  deriving (Show, Functor)
 
-type TySub = M.Map Text Ty
+data TypedEx = TypedEx (Ann Ty ExF TypedEx)
+  deriving (Show)
 
-class TyOps a where
-  ftv :: a -> S.Set Text
-  apply :: TySub -> a -> a
+data TypedExF a = TypedExF (Ann Ty ExF a)
+  deriving (Show, Functor)
 
-instance TyOps Ty where
-  ftv (TVar t)      = S.singleton t
-  ftv TUnit         = S.empty
-  ftv TInt          = S.empty
-  ftv TBool         = S.empty
-  ftv (TNamed _ ts) = ftv ts
-  ftv (TFun t1 t2)  = ftv t1 `S.union` ftv t2
+type instance Base TypedEx = TypedExF
 
-  apply s t@(TVar v)    = fromMaybe t (M.lookup v s)
-  apply s (TNamed n ts) = TNamed n (apply s ts)
-  apply s (TFun t1 t2)  = TFun (apply s t1) (apply s t2)
-  apply _ t = t
+instance Foldable TypedEx where
+  project (TypedEx (Ann { ann = t, unAnn = e })) = TypedExF (Ann { ann = t, unAnn = e})
 
-instance TyOps PolyTy where
-  -- Free type variables of a type scheme are the ones not bound by a universal
-  -- quantifier. I.e., the type variables within t not in vs
-  ftv (PolyTy vs t) = ftv t `S.difference` S.fromList vs
-  -- This first deletes the variables of the scheme from the substitution then
-  -- applies the substitution
-  apply s (PolyTy vs t) = PolyTy vs (apply (foldr M.delete s vs) t)
-
-instance TyOps a => TyOps [a] where
-  ftv = foldr (S.union . ftv) S.empty
-  apply s = map (apply s)
-
-instance TyOps TyEnv where
-  ftv env = ftv $ M.elems env
-  apply sub = M.map (apply sub)
+instance Unfoldable TypedEx where
+  embed (TypedExF (Ann { ann = t, unAnn = e })) = TypedEx (Ann {ann = t, unAnn = e})
 
 instance TyOps TypedEx where
-  ftv te = ftv (tyOf te)
-  apply sub (TEVar  t x    ) = TEVar  (apply sub t) x
-  apply sub (TEUnit t      ) = TEUnit (apply sub t)
-  apply sub (TEInt  t x    ) = TEInt  (apply sub t) x
-  apply sub (TEBool t x    ) = TEBool (apply sub t) x
-  apply sub (TEApp  t x y  ) = TEApp  (apply sub t) (apply sub x) (apply sub y)
-  apply sub (TEAbs  t x y  ) = TEAbs  (apply sub t) x (apply sub y)
-  apply sub (TELet  t x y z) = TELet  (apply sub t) x (apply sub y) (apply sub z)
+  ftv (TypedEx (Ann { ann = t })) = ftv t
+  apply s = cata alg
+    where alg (TypedExF (Ann {ann = t, unAnn = e})) = TypedEx (Ann {ann = apply s t, unAnn = e})
 
--- Two PolyTy are equivalent when their structure is the same and there exists a
--- one-to-one mapping of the type variables of both types to each other.
--- a -> b -> b is equivalent to b -> c -> c because the substituion a->b; b->c
--- makes the first into the second and b->a; c->b makes the second.
-tyEquiv :: Ty -> Ty -> Bool
-tyEquiv t u =
-    case mkSub M.empty t u of
-         Nothing -> False
-         Just s  -> apply s t `identical` u
-    where mkSub :: TySub -> Ty -> Ty -> Maybe TySub
-          mkSub sub (TVar a) b@(TVar bname) =
-            case M.lookup a sub of
-                 Just (TVar b'name) -> if bname == b'name
-                                          then Just sub
-                                          else Nothing
-                 _ -> Just (M.insert a b sub)
-          mkSub sub (TNamed n as) (TNamed m bs) =
-            if n == m && length as == length bs
-               then foldM (\acc (a, b) -> mkSub acc a b) sub (zip as bs)
-               else Nothing
-          mkSub sub (TFun a a') (TFun b b') =
-            case mkSub sub a b of
-                 Just sub' -> mkSub sub' a' b'
-                 Nothing -> Nothing
-          mkSub sub a b = if a `identical` b
-                             then Just sub
-                             else Nothing
+tyOf :: TypedEx -> Ty
+tyOf (TypedEx (Ann { ann = t })) = t
 
-          identical :: Ty -> Ty -> Bool
-          identical (TVar a) (TVar b) = a == b
-          identical (TUnit) (TUnit) = True
-          identical (TInt) (TInt) = True
-          identical (TBool) (TBool) = True
-          identical (TNamed n ts) (TNamed m us) = n == m &&
-                                                  length ts == length us &&
-                                                  and (zipWith identical ts us)
-          identical (TFun w x) (TFun y z) = w `identical` y && x `identical` z
-          identical _ _ = False
-
-
-polyEquiv :: PolyTy -> PolyTy -> Bool
-polyEquiv (PolyTy _ t) (PolyTy _ u) = t `tyEquiv` u
+mkTyped :: Ty -> ExF TypedEx -> TypedEx
+mkTyped t e = TypedEx $ Ann {ann = t, unAnn = e}
 

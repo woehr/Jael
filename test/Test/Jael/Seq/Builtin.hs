@@ -8,6 +8,7 @@ import ClassyPrelude
 import qualified Data.Map as M
 import Jael.Seq.AST
 import Jael.Seq.Env
+import Jael.Seq.Types
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit
@@ -15,8 +16,9 @@ import Test.Jael.Util
 
 checkBuiltins :: [(Text, PolyTy)] -> Assertion
 checkBuiltins expected =
-  let mExpected = M.fromList expected
-   in mExpected `envEq` M.intersection defaultEnv mExpected
+  let (TyEnv mDefault) = defaultEnv
+      mExpected = M.fromList expected
+   in TyEnv mExpected `envEq` TyEnv (M.intersection mDefault mExpected)
 
 builtinTests :: [T.Test]
 builtinTests =

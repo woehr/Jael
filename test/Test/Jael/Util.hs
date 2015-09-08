@@ -7,12 +7,11 @@ import ClassyPrelude
 import qualified Data.Map as M
 import Jael.Grammar
 import Jael.Parser
-import Jael.Seq.AlgDataTy
-import Jael.Seq.AST
 import Jael.Seq.Env
 import Jael.Seq.Expr
 import Jael.Seq.TI
 import Jael.Seq.Types
+import Jael.Seq.UserDefTy
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import Test.HUnit
@@ -38,18 +37,19 @@ checkParsedTree :: (Eq a, Show a) => ParseFun a -> (Text, a) -> Assertion
 checkParsedTree p (tx, tr) = either (assertFailure . unpack) (tr @=?) (runParser p tx)
 
 checkTDefErr :: ParseFun a -> (a -> Either TDefError b) -> (Text, TDefError) -> Assertion
-checkTDefErr p validator (def, TDefError (DuplicateTyVars ets)
-                                         (DuplicateFields efs)
-                                         (FreeTyVars eftvs)
-                                         (UnusedTyVars eutvs)) =
+checkTDefErr p validator (def, TDefError { dupTv = ets
+                                         , dupField = efs
+                                         , freeTv = eftvs
+                                         , unusedTv = eutvs
+                                         }) =
   case runParser p def of
        Left err -> assertFailure (show err)
        Right gDef ->
          case validator gDef of
-              Left (TDefError (DuplicateTyVars ts)
-                              (DuplicateFields fs)
-                              (FreeTyVars ftvs)
-                              (UnusedTyVars utvs))-> do
+              Left (TDefError { dupTv = ts
+                              , dupField = fs
+                              , freeTv = ftvs
+                              , unusedTv = utvs})-> do
                    assertEqual "Duplicate type variables wrong" (sort ets) (sort ts)
                    assertEqual "Duplicate fields wrong" (sort efs) (sort fs)
                    assertEqual "Free type variables wrong" eftvs ftvs
@@ -74,8 +74,8 @@ checkInference testStruct testEnum (tx, expected) =
   either (assertFailure . unpack) id $ do
     sdef <- runParser pGTStructDef testStruct
     edef <- runParser pGTEnumDef testEnum
-    sfuns <- either (Left . tshow) Right $ validateAdt (gToStruct sdef)
-    efuns <- either (Left . tshow) Right $ validateAdt (gToEnumer edef)
+    sfuns <- either (Left . tshow) Right $ validateType (gToStruct sdef)
+    efuns <- either (Left . tshow) Right $ validateType (gToEnumer edef)
     env <- either
               (\x -> Left . intercalate "\n" $ "Duplicates in env: " : x)
               Right
@@ -91,12 +91,12 @@ checkInference testStruct testEnum (tx, expected) =
 
 envListEq :: [(Text, PolyTy)] -> [(Text, PolyTy)] -> Assertion
 envListEq expected actual =
-  let mExpected = M.fromList expected
-      mActual = M.fromList actual
+  let mExpected = TyEnv $ M.fromList expected
+      mActual = TyEnv $ M.fromList actual
    in mExpected `envEq` mActual
 
 envEq :: TyEnv -> TyEnv -> Assertion
-envEq expected actual =
+envEq (TyEnv expected) (TyEnv actual) =
    let inter = M.intersectionWith polyEquiv expected actual
    in assertBool ("Expected:\n" ++ show expected ++
                   "\n     and:\n" ++ show actual ++

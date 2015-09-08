@@ -1,12 +1,14 @@
-{-# Language NoImplicitPrelude #-}
+{-# Language DeriveFunctor, NoImplicitPrelude, TypeFamilies #-}
 
 module Jael.Seq.Closure where
 
-import ClassyPrelude
+import ClassyPrelude hiding (Foldable)
+import Data.Functor.Foldable
 import Data.List.NonEmpty as NE (NonEmpty((:|)), (<|), fromList)
 import qualified Data.Set as S
-import Jael.Seq.AlgDataTy
 import Jael.Seq.AST
+import Jael.Seq.UserDefTy
+import Jael.Seq.Types
 
 data CCFun = CCFun [Text] ExCC
              deriving (Eq, Show)
@@ -20,6 +22,35 @@ data ExCC = ECVar Text
           | ECClos Text ExCC -- code and an environment
             deriving (Eq, Show)
 
+data ExCCF a = ECVarF Text
+             | ECFunF Text
+             | ECUnitF
+             | ECIntF Integer
+             | ECBoolF Bool
+             | ECAppF a [a]
+             | ECClosF Text a
+             deriving (Show, Functor)
+
+type instance Base ExCC = ExCCF
+
+instance Foldable ExCC where
+  project (ECVar x)    = ECVarF x
+  project (ECFun x)    = ECFunF x
+  project (ECUnit)     = ECUnitF
+  project (ECInt x)    = ECIntF x
+  project (ECBool x)   = ECBoolF x
+  project (ECApp x y)  = ECAppF x y
+  project (ECClos x y) = ECClosF x y
+
+instance Unfoldable ExCC where
+  embed (ECVarF x)    = ECVar x
+  embed (ECFunF x)    = ECFun x
+  embed (ECUnitF)     = ECUnit
+  embed (ECIntF x)    = ECInt x
+  embed (ECBoolF x)   = ECBool x
+  embed (ECAppF x y)  = ECApp x y
+  embed (ECClosF x y) = ECClos x y
+
 data CConvR = CConvR
   { ccrGlobals :: S.Set Text
   , ccrEnvPrefix :: Text
@@ -29,7 +60,7 @@ data CConvR = CConvR
 
 data CConvW = CConvW
   { ccwFns :: [(Text, CCFun)]
-  , ccwEnvs :: [Struct]
+  , ccwEnvs :: [UserDefTy]
   }
   deriving (Show)
 
@@ -56,7 +87,7 @@ instance Applicative CConvM where
 instance Functor CConvM where
   fmap = liftM
 
-runCC :: CConvR -> CConvM ExCC -> (ExCC, [(Text, CCFun)], [Struct])
+runCC :: CConvR -> CConvM ExCC -> (ExCC, [(Text, CCFun)], [UserDefTy])
 runCC r m = let (CConvM f) = m
                 (v, w, _) = f ( r
                               , CConvW{ccwFns=[], ccwEnvs=[]}
@@ -114,16 +145,13 @@ isBound :: Text -> CConvM Bool
 isBound x = CConvM $ \(_, w, s@(CConvS{ccsBoundVars=(v:|_)})) -> (x `S.member` v, w, s)
 
 letConversion :: TypedEx -> TypedEx
-letConversion (TELet t x e1 e2) =
-  TEApp t
-        (TEAbs (TFun (tyOf e1) (tyOf e2))
-               x
-               (letConversion e2)
-        )
-        (letConversion e1)
-letConversion (TEApp t e1 e2) = TEApp t (letConversion e1) (letConversion e2)
-letConversion (TEAbs t x e) = TEAbs t x (letConversion e)
-letConversion x = x
+letConversion = cata alg
+  where alg (TypedExF (Ann {ann=t, unAnn=(ELetF x e1 e2)})) =
+          mkTyped t $ EAppF (mkTyped (TFun (tyOf e1) (tyOf e2))
+                                     (EAbsF x e2)
+                            )
+                            e1
+        alg x = embed x
 
 -- remove from x the elements of y
 remove :: Ord a => Set a -> Set a -> Set a
@@ -134,21 +162,24 @@ remove x y = S.foldr S.delete x y
 -- not considered free since to type check it would have had to be in the type
 -- environment, that is, it's global and doesn't have to be captured
 freeVars :: TypedEx -> S.Set Text
-freeVars (TEAbs _ x e) = freeVars e `remove` S.singleton x
-freeVars (TEVar _ v) = S.singleton v
-freeVars (TEApp _ (TEVar _ _) e) = freeVars e
-freeVars (TEApp _ f e) = freeVars f `S.union` freeVars e
-freeVars (TELet _ x e1 e2) = freeVars e1 `S.union` (freeVars e2 `remove` S.singleton x)
-freeVars _ = S.empty
+freeVars = para alg
+  where alg (TypedExF (Ann {unAnn=(EAbsF x (_, e))})) = e `remove` S.singleton x
+        alg (TypedExF (Ann {unAnn=(EVarF x)})) = S.singleton x
+        alg (TypedExF (Ann {unAnn=(EAppF (p, e1) (_, e2))})) =
+          case p of
+               (TypedEx (Ann {unAnn=(EVarF _)})) -> e2
+               _                                 -> e1 `S.union` e2
+        alg (TypedExF (Ann {unAnn=(ELetF x (_, e1) (_, e2))})) = e1 `S.union` (e2 `remove` S.singleton x)
+        alg _ = S.empty
 
 collectArgs :: TypedEx -> [TypedEx] -> (TypedEx, [TypedEx])
-collectArgs (TEApp _ f e) as = collectArgs f (e:as)
+collectArgs (TypedEx (Ann {unAnn=(EAppF f e)})) as = collectArgs f (e:as)
 collectArgs f as = (f, as)
 
 mashLams :: TypedEx -> [Text] -> ([Text], TypedEx)
-mashLams (TEAbs _ x e) as = let (as', e') = mashLams e as
-                             in (x:as', e')
-mashLams e             as = (as, e)
+mashLams (TypedEx (Ann {unAnn=(EAbsF x e)})) as = let (as', e') = mashLams e as
+                                                   in (x:as', e')
+mashLams e as = (as, e)
 
 -- Lifts lambda with args as and expression e to the top level and returns the
 -- expression that replaces it
@@ -190,29 +221,29 @@ liftLam (as, e) = do
        CConvM $ \(_, w, s) -> (ECClos newName env, w, s)
 
 doCc :: TypedEx -> CConvM ExCC
-doCc (TEVar  _ v)   = do
+doCc (TypedEx (Ann {unAnn=(EVarF v)})) = do
   x <- isBound v
   if x
      then return $ ECVar v
      else getLamName >>= flip mkAccessor v >>= \n -> return $ ECApp (ECFun n) [ECVar "'env"]
 
-doCc (TEUnit _)     = return $ ECUnit
-doCc (TEInt  _ i)   = return $ ECInt i
-doCc (TEBool _ b)   = return $ ECBool b
+doCc (TypedEx (Ann {unAnn=(EUnitF)}))   = return $ ECUnit
+doCc (TypedEx (Ann {unAnn=(EIntF i)}))  = return $ ECInt i
+doCc (TypedEx (Ann {unAnn=(EBoolF b)})) = return $ ECBool b
 
-doCc x@(TEApp _ _ _) =
+doCc x@(TypedEx (Ann {unAnn=(EAppF _ _)})) =
   let (f, as) = collectArgs x []
    in do as' <- mapM doCc as
          f' <- case f of
-                    TEVar _ n -> return $ ECFun n
-                    _         -> doCc f
+                    (TypedEx (Ann {unAnn=(EVarF n)})) -> return $ ECFun n
+                    _ -> doCc f
          return $ ECApp f' as'
 
-doCc l@(TEAbs _ _ _) = liftLam $ mashLams l []
+doCc x@(TypedEx (Ann {unAnn=(EAbsF _ _)})) = liftLam $ mashLams x []
 
-doCc x@(TELet _ _ _ _) = doCc (letConversion x)
+doCc x@(TypedEx (Ann {unAnn=(ELetF _ _ _)})) = doCc (letConversion x)
 
-closureConversion :: S.Set Text -> Text -> Text -> TypedEx -> (ExCC, [(Text, CCFun)], [Struct])
+closureConversion :: S.Set Text -> Text -> Text -> TypedEx -> (ExCC, [(Text, CCFun)], [UserDefTy])
 closureConversion globals envPref liftLabel e =
    runCC CConvR { ccrGlobals = globals
                 , ccrEnvPrefix = envPref

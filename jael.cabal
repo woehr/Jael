@@ -19,7 +19,6 @@ library
                        Jael.Grammar.Par
                        Jael.Grammar.Print
                        Jael.Parser
-                       Jael.Seq.AlgDataTy
                        Jael.Seq.AST
                        Jael.Seq.Builtin
                        Jael.Seq.Closure
@@ -27,6 +26,7 @@ library
                        Jael.Seq.Expr
                        Jael.Seq.TI
                        Jael.Seq.Types
+                       Jael.Seq.UserDefTy
                        Jael.Util
 
   default-extensions:  OverloadedStrings
@@ -38,6 +38,7 @@ library
                        containers,
                        llvm-general,
                        llvm-general-pure,
+                       recursion-schemes,
                        semigroups
 
   hs-source-dirs:      lib

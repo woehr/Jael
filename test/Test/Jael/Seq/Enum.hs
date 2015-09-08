@@ -7,9 +7,8 @@ module Test.Jael.Seq.Enum
 import ClassyPrelude
 import Jael.Grammar
 import Jael.Parser
-import Jael.Seq.AlgDataTy
-import Jael.Seq.AST
 import Jael.Seq.Types
+import Jael.Seq.UserDefTy
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit
@@ -19,7 +18,7 @@ p :: ParseFun GTEnumDef
 p = pGTEnumDef
 
 validator :: GTEnumDef -> Either TDefError [(Text, PolyTy)]
-validator = validateAdt . gToEnumer
+validator = validateType . gToEnumer
 
 checkEnum :: (Text, [(Text, PolyTy)]) -> Assertion
 checkEnum = checkParsedTypes p validator
@@ -63,9 +62,10 @@ enumMixedTags = (pack [raw|
 enumAllErrs :: (Text, TDefError)
 enumAllErrs = (pack [raw|
   X a a b b { f0 a, f1 a, f1 c, f2 c }
-|], TDefError (DuplicateTyVars ["a", "b"])
-              (DuplicateFields ["f1"])
-              (FreeTyVars ["c"])
-              (UnusedTyVars ["b"])
+|], TDefError { dupTv = ["a", "b"]
+              , dupField = ["f1"]
+              , freeTv = ["c"]
+              , unusedTv = ["b"]
+              }
   )
 

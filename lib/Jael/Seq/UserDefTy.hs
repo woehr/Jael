@@ -1,29 +1,30 @@
 {-#Language NoImplicitPrelude #-}
 
-module Jael.Seq.AlgDataTy where
+module Jael.Seq.UserDefTy where
 
 import ClassyPrelude
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Util
-import Jael.Seq.AST
 import Jael.Seq.Types
 
 type Field = (Text, Ty)
-data Struct = Struct Text [Text] (NE.NonEmpty Field)
-              deriving Show
 
 data Tag = Tag Text
          | TagWithTy Text Ty
            deriving Show
 
-data Enumer = Enumer Text [Text] (NE.NonEmpty Tag)
-              deriving Show
+data UserDefTy = Struct Text [Text] (NE.NonEmpty Field)
+               | Enumer Text [Text] (NE.NonEmpty Tag)
+               deriving (Show)
 
-class Show a => AlgDataTy a where
-  validateAdt :: a -> Either TDefError [(Text, PolyTy)]
-  adtTy :: a -> Ty
+data TDefError = TDefError
+  { dupTv    :: [Text]
+  , dupField :: [Text]
+  , freeTv   :: [Text]
+  , unusedTv :: [Text]
+  } deriving (Show)
 
 splitTags :: [Tag] -> ([Text], [Ty])
 splitTags ts = let xs = map splitTag ts
@@ -34,31 +35,29 @@ splitTag t = case t of
                   Tag tn -> (tn, Nothing)
                   TagWithTy tn ty -> (tn, Just ty)
 
-instance AlgDataTy Enumer where
-  validateAdt x@(Enumer n tvs ts) =
-    case uncurry (checkDefErr tvs) (splitTags . NE.toList $ ts) of
-         Just err -> Left err
-         Nothing  ->
-           Right $ map (
-                     \t -> case t of
-                                Tag tn -> (n ++ "::" ++ tn, PolyTy tvs $ adtTy x)
-                                TagWithTy tn ty -> (n ++ "::" ++ tn, PolyTy tvs $ TFun ty $ adtTy x)
-                   ) (NE.toList ts)
+validateType :: UserDefTy -> Either TDefError [(Text, PolyTy)]
+validateType (Enumer n tvs fs) =
+  let enumTy = TNamed n $ map TVar tvs
+   in case uncurry (checkDefErr tvs) (splitTags . NE.toList $ fs) of
+           Just err -> Left err
+           Nothing  ->
+             Right $ map (
+                       \t -> case t of
+                                  Tag tn -> (n ++ "::" ++ tn, PolyTy tvs enumTy)
+                                  TagWithTy tn ty -> ( n ++ "::" ++ tn
+                                                     , PolyTy tvs $ TFun ty enumTy)
+                     ) (NE.toList fs)
 
-
-  adtTy (Enumer n tvs _) = TNamed n (map TVar tvs)
-
-instance AlgDataTy Struct where
-  validateAdt x@(Struct n tvs fs) =
-    case uncurry (checkDefErr tvs) (unzip . NE.toList $ fs) of
-         Just err -> Left err
-         Nothing  ->
-           Right $ (lowerFirst n, PolyTy tvs $ structConsTy x) :
-             map (
-               \(f, t) -> (n ++ "::" ++ f, PolyTy tvs $ TFun (adtTy x) t)
-             ) (NE.toList fs)
-
-  adtTy (Struct n tvs _) = TNamed n (map TVar tvs)
+validateType (Struct n tvs fs) =
+  let structTy = TNamed n (map TVar tvs)
+      consTy = (foldr (\(_, ft) t -> TFun ft t) structTy fs)
+   in case uncurry (checkDefErr tvs) (unzip . NE.toList $ fs) of
+           Just err -> Left err
+           Nothing  ->
+             Right $ (lowerFirst n, PolyTy tvs consTy) :
+               map (
+                 \(f, t) -> (n ++ "::" ++ f, PolyTy tvs $ TFun structTy t)
+               ) (NE.toList fs)
 
 lowerFirst :: Text -> Text
 lowerFirst xs = case uncons xs of
@@ -66,9 +65,6 @@ lowerFirst xs = case uncons xs of
                      Nothing ->
                        error "Compiler error. Struct name should not be empty."
 
-structConsTy :: Struct -> Ty
-structConsTy s@(Struct _ _ fs) =
-  foldr (\(_, ft) t -> TFun ft t) (adtTy s) fs
 
 tysToTyVars :: [Ty] -> [Text]
 tysToTyVars [] = []
@@ -90,10 +86,12 @@ checkDefErr tvs fs ts =
          (not . null $ dupFields) ||
          (not . null $ freeTVs) ||
          (not . null $ unusedTVs)
-         then Just $ TDefError (DuplicateTyVars dupTVs)
-                               (DuplicateFields dupFields)
-                               (FreeTyVars freeTVs)
-                               (UnusedTyVars unusedTVs)
+         then Just $ TDefError
+           { dupTv = dupTVs
+           , dupField = dupFields
+           , freeTv = freeTVs
+           , unusedTv = unusedTVs
+           }
          else Nothing
 
 gToTVars :: [GTVars] -> [Text]
@@ -103,7 +101,7 @@ gToField :: GTStructElement -> Field
 gToField (GTStructElement (GTStructFieldName (LIdent gfn)) gt) =
                                      (pack gfn, gToType gt)
 
-gToStruct :: GTStructDef -> Struct
+gToStruct :: GTStructDef -> UserDefTy
 gToStruct (GTStructDef (UIdent n) tvs fields) =
   case NE.nonEmpty fields of
     Nothing -> notEnoughElements 1 "GTStructElement" "GTStructDef"
@@ -113,7 +111,7 @@ gToTag :: GTEnumElem -> Tag
 gToTag (GTEnumElemNoTy (LIdent t)) = Tag (pack t)
 gToTag (GTEnumElemWithTy (LIdent t) ty) = TagWithTy (pack t) (gToType ty)
 
-gToEnumer :: GTEnumDef -> Enumer
+gToEnumer :: GTEnumDef -> UserDefTy
 gToEnumer (GTEnumDef (UIdent n) tvs elems) =
   case NE.nonEmpty elems of
        Nothing -> notEnoughElements 1 "GTEnumDef" "GTEnumElem"

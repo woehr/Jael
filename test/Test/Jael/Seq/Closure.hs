@@ -14,6 +14,7 @@ import Jael.Seq.Closure
 import Jael.Seq.Env
 import Jael.Seq.Expr
 import Jael.Seq.TI
+import Jael.Seq.Types
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit
@@ -33,14 +34,7 @@ closureTests =
   ]
 
 instance Eq TypedEx where
-  (TEVar t x)        == (TEVar t' x')           = t `tyEquiv` t' && x == x'
-  (TEUnit t)         == (TEUnit t')             = t `tyEquiv` t'
-  (TEInt t i)        == (TEInt t' i')           = t `tyEquiv` t' && i == i'
-  (TEBool t b)       == (TEBool t' b')          = t `tyEquiv` t' && b == b'
-  (TEApp t e1 e2)    == (TEApp t' e1' e2')      = t `tyEquiv` t' && e1 == e1' && e2 == e2'
-  (TEAbs t x e)      == (TEAbs t' x' e')        = t `tyEquiv` t' && x == x'   && e == e'
-  (TELet t x e1 e2)  == (TELet t' x' e1' e2')   = t `tyEquiv` t' && x == x'   && e1 == e1' && e2 == e2'
-  _                  == _                       = False
+  (TypedEx x) == (TypedEx y) = ann x `tyEquiv` ann y && unAnn x == unAnn y
 
 checkLetConv :: (Text, TypedEx) -> Assertion
 checkLetConv (tx, te) = either
@@ -76,75 +70,91 @@ letConv = (pack [raw|
     z = y + 1;
     a + z
   }
-|], TEAbs (TFun TInt TInt)
+|], mkTyped (TFun TInt TInt) $ EAbsF
           "a"
-          (TEApp TInt
-                 (TEAbs (TFun TInt TInt)
+          (mkTyped TInt $ EAppF
+                 (mkTyped (TFun TInt TInt) $ EAbsF
                         "x"
-                        (TEApp TInt
-                               (TEAbs (TFun TInt TInt)
+                        (mkTyped TInt $ EAppF
+                               (mkTyped (TFun TInt TInt) $ EAbsF
                                       "y"
-                                      (TEApp TInt
-                                             (TEAbs (TFun TInt TInt)
+                                      (mkTyped TInt $ EAppF
+                                             (mkTyped (TFun TInt TInt) $ EAbsF
                                                     "z"
-                                                    (TEApp TInt
-                                                           (TEApp (TFun TInt TInt)
-                                                                  (TEVar (TFun TInt (TFun TInt TInt)) "+")
-                                                                  (TEVar TInt "a")
+                                                    (mkTyped TInt $ EAppF
+                                                           (mkTyped (TFun TInt TInt) $ EAppF
+                                                                  (mkTyped (TFun TInt (TFun TInt TInt)) $ EVarF "+")
+                                                                  (mkTyped TInt $ EVarF "a")
                                                            )
-                                                           (TEVar TInt "z")
+                                                           (mkTyped TInt $ EVarF "z")
                                                     )
                                              )
-                                             (TEApp TInt
-                                                    (TEApp (TFun TInt TInt)
-                                                           (TEVar (TFun TInt (TFun TInt TInt)) "+")
-                                                           (TEVar TInt "y")
+                                             (mkTyped TInt $ EAppF
+                                                    (mkTyped (TFun TInt TInt) $ EAppF
+                                                           (mkTyped (TFun TInt (TFun TInt TInt)) $ EVarF "+")
+                                                           (mkTyped TInt $ EVarF "y")
                                                     )
-                                                    (TEInt TInt 1)
+                                                    (mkTyped TInt $ EIntF 1)
                                              )
                                       )
                                )
-                               (TEApp TInt
-                                      (TEApp (TFun TInt TInt)
-                                             (TEVar (TFun TInt (TFun TInt TInt)) "+")
-                                             (TEVar TInt "x")
+                               (mkTyped TInt $ EAppF
+                                      (mkTyped (TFun TInt TInt) $ EAppF
+                                             (mkTyped (TFun TInt (TFun TInt TInt)) $ EVarF "+")
+                                             (mkTyped TInt $ EVarF "x")
                                       )
-                                      (TEInt TInt 1)
+                                      (mkTyped TInt $ EIntF 1)
                                )
                         )
                  )
-                 (TEApp TInt
-                        (TEApp (TFun TInt TInt)
-                               (TEVar (TFun TInt (TFun TInt TInt)) "+")
-                               (TEVar TInt "a")
+                 (mkTyped TInt $ EAppF
+                        (mkTyped (TFun TInt TInt) $ EAppF
+                               (mkTyped (TFun TInt (TFun TInt TInt)) $ EVarF "+")
+                               (mkTyped TInt $ EVarF "a")
                         )
-                        (TEInt TInt 1)
+                        (mkTyped TInt $ EIntF 1)
                  )
           )
   )
 
 noFv :: (TypedEx, S.Set Text)
 noFv =
-  ( TEAbs TUnit "a" (TEApp TUnit (TEVar TUnit "a") (TEInt TUnit 1))
+  ( mkTyped TUnit $ EAbsF
+        "a"
+        (mkTyped TUnit $ EAppF
+            (mkTyped TUnit $ EVarF "a")
+            (mkTyped TUnit $ EIntF 1)
+        )
   , S.empty
   )
 
 oneFv :: (TypedEx, S.Set Text)
 oneFv =
-  ( TEApp TUnit (TEApp TUnit (TEVar TUnit "+") (TEInt TUnit 1)) (TEVar TUnit "a")
+  ( mkTyped TUnit $ EAppF
+        (mkTyped TUnit $ EAppF
+            (mkTyped TUnit $ EVarF "+")
+            (mkTyped TUnit $ EIntF 1)
+        )
+        (mkTyped TUnit $ EVarF "a")
   , S.fromList ["a"]
   )
 
 nestedFv :: (TypedEx, S.Set Text)
 nestedFv =
-  ( TEAbs TUnit
+  ( mkTyped TUnit $ EAbsF
           "a"
-          (TEApp TUnit
-                 (TEAbs TUnit
-                        "b"
-                        (TEApp TUnit (TEVar TUnit "a") (TEVar TUnit "c"))
-                 )
-                 (TEApp TUnit (TEVar TUnit "a") (TEVar TUnit "d"))
+          (mkTyped TUnit $ EAppF
+                (mkTyped TUnit $ EAbsF
+                      "b"
+                      (mkTyped TUnit $ EAppF
+                            (mkTyped TUnit $ EVarF "a")
+                            (mkTyped TUnit $ EVarF "c")
+                      )
+                )
+                (mkTyped TUnit $ EAppF
+                      (mkTyped TUnit $ EVarF "a")
+                      (mkTyped TUnit $ EVarF "d")
+                )
           )
   , S.fromList ["c", "d"]
   )

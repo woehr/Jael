@@ -5,7 +5,7 @@ module Test.Jael.Seq.AST
 ) where
 
 import ClassyPrelude
-import Jael.Seq.AST
+import Jael.Seq.Types
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit

@@ -7,9 +7,8 @@ module Test.Jael.Seq.Struct
 import ClassyPrelude
 import Jael.Grammar
 import Jael.Parser
-import Jael.Seq.AlgDataTy
-import Jael.Seq.AST
 import Jael.Seq.Types
+import Jael.Seq.UserDefTy
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit
@@ -19,7 +18,7 @@ p :: ParseFun GTStructDef
 p = pGTStructDef
 
 validator :: GTStructDef -> Either TDefError [(Text, PolyTy)]
-validator = validateAdt . gToStruct
+validator = validateType . gToStruct
 
 checkStruct :: (Text, [(Text, PolyTy)]) -> Assertion
 checkStruct = checkParsedTypes p validator
@@ -59,45 +58,50 @@ structValidPoly = (pack [raw|
 structDupTyVars :: (Text, TDefError)
 structDupTyVars = (pack [raw|
   X a a { f1:: a , f2 :: a }
-|], TDefError (DuplicateTyVars ["a"])
-                (DuplicateFields [])
-                (FreeTyVars [])
-                (UnusedTyVars [])
+|],    TDefError { dupTv = ["a"]
+                 , dupField = []
+                 , freeTv = []
+                 , unusedTv = []
+                 }
   )
 
 structDupFields :: (Text, TDefError)
 structDupFields = (pack [raw|
   X { same :: Int , same :: Bool }
-|], TDefError (DuplicateTyVars [])
-                (DuplicateFields ["same"])
-                (FreeTyVars [])
-                (UnusedTyVars [])
+|],    TDefError { dupTv = []
+                 , dupField = ["same"]
+                 , freeTv = []
+                 , unusedTv = []
+                 }
   )
 
 structFreeTvs :: (Text, TDefError)
 structFreeTvs = (pack [raw|
   X a { f1 :: a , f2 :: b }
-|], TDefError (DuplicateTyVars [])
-                (DuplicateFields [])
-                (FreeTyVars ["b"])
-                (UnusedTyVars [])
+|],    TDefError { dupTv = []
+                 , dupField = []
+                 , freeTv = ["b"]
+                 , unusedTv = []
+                 }
   )
 
 structUnusedTv :: (Text, TDefError)
 structUnusedTv = (pack [raw|
   X a { f1 :: Int , f2 :: Bool }
-|], TDefError (DuplicateTyVars [])
-                (DuplicateFields [])
-                (FreeTyVars [])
-                (UnusedTyVars ["a"])
+|],    TDefError { dupTv = []
+                 , dupField = []
+                 , freeTv = []
+                 , unusedTv = ["a"]
+                 }
   )
 
 structAllErrs :: (Text, TDefError)
 structAllErrs = (pack [raw|
   X a a c c { f1 :: a , f1 :: a , f2 :: b , f2 :: b }
-|], TDefError (DuplicateTyVars ["a", "c"])
-                (DuplicateFields ["f1", "f2"])
-                (FreeTyVars ["b"])
-                (UnusedTyVars ["c"])
+|],    TDefError { dupTv = ["a", "c"]
+                 , dupField = ["f1", "f2"]
+                 , freeTv = ["b"]
+                 , unusedTv = ["c"]
+                 }
   )
 
