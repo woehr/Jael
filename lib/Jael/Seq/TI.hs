@@ -45,9 +45,7 @@ runSeqTI t = let (SeqTI stateFunc) = t
                       (Nothing, s) -> Left $ tiErrors s
 
 seqTypeInference :: TyEnv -> Ex -> SeqTI Ty
-seqTypeInference env e = do
-  (sub, te) <- ti env e
-  return $ apply sub (tyOf te)
+seqTypeInference env = liftM tyOf . seqTypedExInference env
 
 seqTypedExInference :: TyEnv -> Ex -> SeqTI TypedEx
 seqTypedExInference env e = do
@@ -134,11 +132,6 @@ ti (TyEnv env) (EVar v) = case M.lookup v env of
        t <- instantiation sigma
        return (nullSub, mkTyped t $ EVarF v)
 
--- Literals
-ti _ (EUnit)   = return (nullSub, mkTyped TUnit EUnitF)
-ti _ (EInt x)  = return (nullSub, mkTyped TInt $ EIntF x)
-ti _ (EBool x) = return (nullSub, mkTyped TBool $ EBoolF x)
-
 -- Function application
 ti env (EApp e1 e2) = do
   tv <- newTV
@@ -173,4 +166,33 @@ ti env (ELet x e1 e2) = do
       env'' = TyEnv $ M.insert x t' env'
   (s2, te2) <- ti (apply s1 env'') e2
   return (s2 `compSub` s1, mkTyped (tyOf te2) $ ELetF x te1 te2)
+
+-- Literals
+ti _ (ELit (LUnit))   = return (nullSub, mkTyped TUnit $ ELitF $ LUnit)
+ti _ (ELit (LInt x))  = return (nullSub, mkTyped TInt  $ ELitF $ LInt x)
+ti _ (ELit (LBool x)) = return (nullSub, mkTyped TBool $ ELitF $ LBool x)
+ti _ (ELit (LBit x))  = return (nullSub, mkTyped TBit  $ ELitF $ LBit x)
+
+-- Primitives
+ti _ (EPrm x) =
+  let instPrim :: PolyTy -> SeqTI (TySub, TypedEx)
+      instPrim p = instantiation p >>= \t -> return (nullSub, mkTyped t $ EPrmF x)
+   in instPrim $
+        case x of
+             PIf    -> PolyTy ["a"] (TFun TBool (TFun (TVar "a") (TFun (TVar "a") (TVar "a"))))
+             PAdd   -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") (TVar "a")))
+             PSub   -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") (TVar "a")))
+             PTimes -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") (TVar "a")))
+             PDiv   -> PolyTy [] (TFun TInt (TFun TInt (TNamed "IntDivRes" [])))
+             PMod   -> PolyTy [] (TFun TInt (TFun TInt TInt))
+             POr    -> PolyTy [] (TFun TBool (TFun TBool TBool))
+             PAnd   -> PolyTy [] (TFun TBool (TFun TBool TBool))
+             PEq    -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+             PNeq   -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+             PGeq   -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+             PLeq   -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+             PGt    -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+             PLt    -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
+             PNot   -> PolyTy ["a"] (TFun (TVar "a") (TVar "a"))
+             PBitCat -> PolyTy [] (TFun TBit (TFun TBit TBit))
 

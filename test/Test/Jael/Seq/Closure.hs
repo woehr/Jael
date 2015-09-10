@@ -23,9 +23,6 @@ import Test.Jael.Util
 closureTests :: [T.Test]
 closureTests =
   [ testCase "lets to lambdas" $ checkLetConv letConv
-  , testCase "no free vars" $ checkFreeVars noFv
-  , testCase "one free var" $ checkFreeVars oneFv
-  , testCase "nested free vars" $ checkFreeVars nestedFv
   , testCase "closure is returned" $ checkExClosureConv closureReturned
   , testCase "non-escaping closure" $ checkExClosureConv nonEscaping
   , testCase "nested lets with dependencies" $ checkExClosureConv nestedLetsWithDepends
@@ -35,6 +32,13 @@ closureTests =
 
 instance Eq TypedEx where
   (TypedEx x) == (TypedEx y) = ann x `tyEquiv` ann y && unAnn x == unAnn y
+
+instance Eq TypedCC where
+  (TypedCC x) == (TypedCC y) = ann x `tyEquiv` ann y && unAnn x == unAnn y
+
+instance Eq CCFun where
+  (CCFun{funArg=a, funEnv=e, funExp=x}) == (CCFun{funArg=a', funEnv=e', funExp=x'}) =
+    a == a' && M.keys e == M.keys e' && (and . M.elems) (M.intersectionWith tyEquiv e e') && x == x'
 
 checkLetConv :: (Text, TypedEx) -> Assertion
 checkLetConv (tx, te) = either
@@ -46,17 +50,17 @@ checkLetConv (tx, te) = either
            Right
            (liftA letConversion . seqInferTypedEx defaultEnv $ gToEx g)
 
-checkFreeVars :: (TypedEx, S.Set Text) -> Assertion
-checkFreeVars (te, s) = assertEqual "" (freeVars te) s
+--checkFreeVars :: (TypedEx, S.Set Text) -> Assertion
+--checkFreeVars (te, s) = assertEqual "" (freeVars te) s
 
-checkExClosureConv :: (Text, ExCC, [(Text, CCFun)]) -> Assertion
+checkExClosureConv :: (Text, TypedCC, [(Text, CCFun)]) -> Assertion
 checkExClosureConv (tx, expectedEx, expectedLiftedLams) = either
   (assertFailure . unpack)
-  (\typedEx -> let (ccEx, ccLiftedLams, _) = --newStructs) =
-                     closureConversion S.empty "Env'" "lam'" typedEx
+  (\typedEx -> let (ccEx, ccLiftedLams) =
+                     closureConversion S.empty "lam'" typedEx
                 in do
                      assertEqual "" expectedEx ccEx
-                     assertEqual "" (M.fromList expectedLiftedLams) (M.fromList ccLiftedLams)
+                     assertEqual "" (M.fromList expectedLiftedLams) ccLiftedLams
   )
   $ do
     g <- runParser pGExpr tx
@@ -83,7 +87,7 @@ letConv = (pack [raw|
                                                     "z"
                                                     (mkTyped TInt $ EAppF
                                                            (mkTyped (TFun TInt TInt) $ EAppF
-                                                                  (mkTyped (TFun TInt (TFun TInt TInt)) $ EVarF "+")
+                                                                  (mkTyped (TFun TInt (TFun TInt TInt)) $ EPrmF PAdd)
                                                                   (mkTyped TInt $ EVarF "a")
                                                            )
                                                            (mkTyped TInt $ EVarF "z")
@@ -91,88 +95,69 @@ letConv = (pack [raw|
                                              )
                                              (mkTyped TInt $ EAppF
                                                     (mkTyped (TFun TInt TInt) $ EAppF
-                                                           (mkTyped (TFun TInt (TFun TInt TInt)) $ EVarF "+")
+                                                           (mkTyped (TFun TInt (TFun TInt TInt)) $ EPrmF PAdd)
                                                            (mkTyped TInt $ EVarF "y")
                                                     )
-                                                    (mkTyped TInt $ EIntF 1)
+                                                    (mkTyped TInt $ ELitF $ LInt 1)
                                              )
                                       )
                                )
                                (mkTyped TInt $ EAppF
                                       (mkTyped (TFun TInt TInt) $ EAppF
-                                             (mkTyped (TFun TInt (TFun TInt TInt)) $ EVarF "+")
+                                             (mkTyped (TFun TInt (TFun TInt TInt)) $ EPrmF PAdd)
                                              (mkTyped TInt $ EVarF "x")
                                       )
-                                      (mkTyped TInt $ EIntF 1)
+                                      (mkTyped TInt $ ELitF $ LInt 1)
                                )
                         )
                  )
                  (mkTyped TInt $ EAppF
                         (mkTyped (TFun TInt TInt) $ EAppF
-                               (mkTyped (TFun TInt (TFun TInt TInt)) $ EVarF "+")
+                               (mkTyped (TFun TInt (TFun TInt TInt)) $ EPrmF PAdd)
                                (mkTyped TInt $ EVarF "a")
                         )
-                        (mkTyped TInt $ EIntF 1)
+                        (mkTyped TInt $ ELitF $ LInt 1)
                  )
           )
   )
 
-noFv :: (TypedEx, S.Set Text)
-noFv =
-  ( mkTyped TUnit $ EAbsF
-        "a"
-        (mkTyped TUnit $ EAppF
-            (mkTyped TUnit $ EVarF "a")
-            (mkTyped TUnit $ EIntF 1)
-        )
-  , S.empty
-  )
-
-oneFv :: (TypedEx, S.Set Text)
-oneFv =
-  ( mkTyped TUnit $ EAppF
-        (mkTyped TUnit $ EAppF
-            (mkTyped TUnit $ EVarF "+")
-            (mkTyped TUnit $ EIntF 1)
-        )
-        (mkTyped TUnit $ EVarF "a")
-  , S.fromList ["a"]
-  )
-
-nestedFv :: (TypedEx, S.Set Text)
-nestedFv =
-  ( mkTyped TUnit $ EAbsF
-          "a"
-          (mkTyped TUnit $ EAppF
-                (mkTyped TUnit $ EAbsF
-                      "b"
-                      (mkTyped TUnit $ EAppF
-                            (mkTyped TUnit $ EVarF "a")
-                            (mkTyped TUnit $ EVarF "c")
-                      )
-                )
-                (mkTyped TUnit $ EAppF
-                      (mkTyped TUnit $ EVarF "a")
-                      (mkTyped TUnit $ EVarF "d")
-                )
-          )
-  , S.fromList ["c", "d"]
-  )
-
 -- A closure is returned
--- A function lam'0 is defined at the top level as follows
--- lam'0 = \a b -> { a + b + 1 } since is doesn't capture any variables.
--- The partial application is replaced by a closure with lam_0 as the code,
--- with no environment (since nothing was captured), and with the first applied
--- argument in the argument list.
-closureReturned :: (Text, ExCC, [(Text, CCFun)])
+closureReturned :: (Text, TypedCC, [(Text, CCFun)])
 closureReturned = (pack [raw|
   \a b -> {
     a + b + 1
   }(1)
-|], ECApp (ECFun "lam'0") [ECInt 1]
+|], mkTypedCC (TFun TInt TInt) $ CAppF
+      (mkTypedCC (TFun TInt (TFun TInt TInt)) $ CClosF
+        "lam'1"
+      )
+      (mkTypedCC TInt $ CLitF
+        (LInt 1)
+      )
   , [ ( "lam'0"
-      , CCFun ["a", "b"] (ECApp (ECFun "+") [ECApp (ECFun "+") [ECVar "a", ECVar "b"], ECInt 1])
+      , CCFun
+          { funArg = "b"
+          , funEnv = M.fromList [("a", TInt)]
+          , funExp = mkTypedCC TInt $ CAppF
+              (mkTypedCC (TFun TInt TInt) $ CAppF
+                (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PAdd))
+                (mkTypedCC TInt $ CAppF
+                  (mkTypedCC (TFun TInt TInt) $ CAppF
+                    (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PAdd))
+                    (mkTypedCC TInt $ CVarF "a")
+                  )
+                  (mkTypedCC TInt $ CVarF "b")
+                )
+              )
+              (mkTypedCC TInt $ CLitF $ LInt 1)
+          }
+      )
+    , ( "lam'1"
+      , CCFun
+          { funArg = "a"
+          , funEnv = M.empty
+          , funExp = mkTypedCC (TFun TInt TInt) $ CClosF "lam'0"
+          }
       )
     ]
   )
@@ -187,26 +172,43 @@ to be
 
 instead of what it is.
 -}
-nonEscaping :: (Text, ExCC, [(Text, CCFun)])
+nonEscaping :: (Text, TypedCC, [(Text, CCFun)])
 nonEscaping = (pack [raw|
   \a -> {
     \b -> { a + b + 1 }(2)
   }(1)
-|], ECApp (ECFun "lam'0") [ECInt 1]
+|], (mkTypedCC TInt $ CAppF
+      (mkTypedCC (TFun TInt TInt) $ CClosF "lam'1")
+      (mkTypedCC TInt $ CLitF $ LInt 1)
+    )
   , [ ( "lam'0"
-      , CCFun ["a"] $ ECApp (ECClos "lam'1"
-                                    (ECApp (ECFun "env'lam'1") [ECVar "a"])
-                            )
-                            [ECInt 2]
+      , CCFun
+          { funArg = "b"
+          , funEnv = M.fromList [("a", TInt)]
+          , funExp = mkTypedCC TInt $ CAppF
+              (mkTypedCC (TFun TInt TInt) $ CAppF
+                (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PAdd))
+                (mkTypedCC TInt $ CAppF
+                  (mkTypedCC (TFun TInt TInt) $ CAppF
+                    (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PAdd))
+                    (mkTypedCC TInt $ CVarF "a")
+                  )
+                  (mkTypedCC TInt $ CVarF "b")
+                )
+              )
+              (mkTypedCC TInt $ CLitF $ LInt 1)
+          }
       )
     , ( "lam'1"
-      , CCFun ["'env", "b"] $ ECApp (ECFun "+")
-                                    [ ECApp (ECFun "+")
-                                            [ ECApp (ECFun "env'lam'1::a") [ECVar "'env"]
-                                            , ECVar "b"
-                                            ]
-                                    , ECInt 1
-                                    ]
+      , CCFun
+          { funArg = "a"
+          , funEnv = M.empty
+          , funExp =
+              (mkTypedCC TInt $ CAppF
+                (mkTypedCC (TFun TInt TInt) $ CClosF "lam'0")
+                (mkTypedCC TInt $ CLitF $ LInt 2)
+              )
+          }
       )
     ]
   )
@@ -227,9 +229,8 @@ lam'0 = \a -> { lam'1('env(a), 1) }
 lam'1 = \'env x -> { lam'2('env, x+1) }
 lam'2 = \'env y -> { lam'3('env, y+1) }
 lam'3 = \'env z -> { 'env::a + z }
-
 -}
-nestedLetsWithDepends :: (Text, ExCC, [(Text, CCFun)])
+nestedLetsWithDepends :: (Text, TypedCC, [(Text, CCFun)])
 nestedLetsWithDepends = (pack [raw|
   \a -> {
     x = 1;
@@ -237,51 +238,65 @@ nestedLetsWithDepends = (pack [raw|
     z = y + 1;
     a + z
   }
-|], ECFun "lam'0"
+|], mkTypedCC (TFun TInt TInt) $ CClosF "lam'3"
   , [ ( "lam'0"
-      , CCFun ["a"] $ ECApp (ECClos "lam'1"
-                                    (ECApp (ECFun "env'lam'1")
-                                           [ECVar "a"]
-                                    )
-                            )
-                            [ECInt 1]
+      , CCFun
+          { funArg = "z"
+          , funEnv = M.fromList [("a", TInt)]
+          , funExp =
+              (mkTypedCC TInt $ CAppF
+                (mkTypedCC (TFun TInt TInt) $ CAppF
+                  (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PAdd))
+                  (mkTypedCC TInt $ CVarF "a")
+                )
+                (mkTypedCC TInt $ CVarF "z")
+              )
+          }
       )
     , ( "lam'1"
-      , CCFun ["'env", "x"] $ ECApp (ECClos "lam'2"
-                                            (ECApp (ECFun "env'lam'2")
-                                                   [ ECApp (ECFun "env'lam'1::a")
-                                                           [ECVar "'env"]
-                                                   ]
-                                            )
-                                    )
-                                    [ ECApp ( ECFun "+"
-                                            )
-                                            [ ECVar "x"
-                                            , ECInt 1
-                                            ]
-                                    ]
+      , CCFun
+          { funArg = "y"
+          , funEnv = M.fromList [("a", TInt)]
+          , funExp =
+              (mkTypedCC TInt $ CAppF
+                (mkTypedCC (TFun TInt TInt) $ CClosF "lam'0")
+                (mkTypedCC TInt $ CAppF
+                  (mkTypedCC (TFun TInt TInt) $ CAppF
+                    (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PAdd))
+                    (mkTypedCC TInt $ CVarF "y")
+                  )
+                  (mkTypedCC TInt $ CLitF $ LInt 1)
+                )
+              )
+          }
       )
     , ( "lam'2"
-      , CCFun ["'env", "y"] $ ECApp (ECClos "lam'3"
-                                            (ECApp (ECFun "env'lam'3")
-                                                   [ ECApp (ECFun "env'lam'2::a")
-                                                           [ECVar "'env"]
-                                                   ]
-                                            )
-                                    )
-                                    [ ECApp ( ECFun "+"
-                                            )
-                                            [ ECVar "y"
-                                            , ECInt 1
-                                            ]
-                                    ]
+      , CCFun
+          { funArg = "x"
+          , funEnv = M.fromList [("a", TInt)]
+          , funExp =
+              (mkTypedCC TInt $ CAppF
+                (mkTypedCC (TFun TInt TInt) $ CClosF "lam'1")
+                (mkTypedCC TInt $ CAppF
+                  (mkTypedCC (TFun TInt TInt) $ CAppF
+                    (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PAdd))
+                    (mkTypedCC TInt $ CVarF "x")
+                  )
+                  (mkTypedCC TInt $ CLitF $ LInt 1)
+                )
+              )
+          }
       )
     , ( "lam'3"
-      , CCFun ["'env", "z"] $ ECApp (ECFun "+")
-                                    [ ECApp (ECFun "env'lam'3::a")
-                                            [ECVar "'env"]
-                                    , ECVar "z"
-                                    ]
+      , CCFun
+          { funArg = "a"
+          , funEnv = M.empty
+          , funExp =
+              (mkTypedCC TInt $ CAppF
+                (mkTypedCC (TFun TInt TInt) $ CClosF "lam'2")
+                (mkTypedCC TInt $ CLitF $ LInt 1)
+              )
+          }
       )
     ]
   )
@@ -294,7 +309,7 @@ so instead of
 \a -> {
   \x y z -> {
     a + x + y + z
-  }(2*a, 3*a, 4*a)
+  }(a*2, a*3, a*4)
 }
 
 we have
@@ -304,71 +319,101 @@ we have
     \y -> {
       \z -> {
         a + x + y + z
-      }(4*a)
-    }(3*a)
-  }(2*a)
+      }(a*4)
+    }(a*3)
+  }(a*2)
 }
 
-lam'0 = \a -> { lam'1(env'lam'1(a), 2*a) }
-lam'1 = \env x -> { lam'2(env'lam'2(env::a, x), 3*env::a) }
-lam'2 = \env y -> { lam'3(env'lam'3(env::a, env::x, y), 4*env::a) }
+lam'0 = \a -> { lam'1(env'lam'1(a), a*2) }
+lam'1 = \env x -> { lam'2(env'lam'2(env::a, x), env::a*3) }
+lam'2 = \env y -> { lam'3(env'lam'3(env::a, env::x, y), env::a*4) }
 lam'3 = \env z -> { env::a + env::x + env::y + z }
 -}
-nestedLetsNoDepends :: (Text, ExCC, [(Text, CCFun)])
+nestedLetsNoDepends :: (Text, TypedCC, [(Text, CCFun)])
 nestedLetsNoDepends = (pack [raw|
   \a -> {
-    x = 2 * a;
-    y = 3 * a;
-    z = 4 * a;
+    x = a * 2;
+    y = a * 3;
+    z = a * 4;
     a + x + y + z
   }
-|], ECFun "lam'0"
+|], mkTypedCC (TFun TInt TInt) $ CClosF "lam'3"
   , [ ( "lam'0"
-      , CCFun ["a"] $ ECApp (ECClos "lam'1" $ (ECApp (ECFun "env'lam'1")
-                                                     [ECVar "a"]
-                                              )
-                            )
-                            [ ECApp (ECFun "*") [ECInt 2, ECVar "a"]
-                            ]
+      , CCFun
+          { funArg = "z"
+          , funEnv = M.fromList [("a", TInt), ("x", TInt), ("y", TInt)]
+          , funExp =
+              (mkTypedCC TInt $ CAppF -- ((a+x)+y) + z
+                (mkTypedCC (TFun TInt TInt) $ CAppF
+                  (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PAdd))
+                  (mkTypedCC TInt $ CAppF -- (a+x) + y
+                    (mkTypedCC (TFun TInt TInt) $ CAppF
+                      (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PAdd))
+                      (mkTypedCC TInt $ CAppF -- a + x
+                        (mkTypedCC (TFun TInt TInt) $ CAppF
+                          (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PAdd))
+                          (mkTypedCC TInt $ CVarF "a")
+                        )
+                        (mkTypedCC TInt $ CVarF "x")
+                      )
+                    )
+                    (mkTypedCC TInt $ CVarF "y")
+                  )
+                )
+                (mkTypedCC TInt $ CVarF "z")
+              )
+          }
       )
     , ( "lam'1"
-      , CCFun ["'env", "x"] $ ECApp (ECClos "lam'2" $ (ECApp (ECFun "env'lam'2")
-                                                             [ ECApp (ECFun "env'lam'1::a") [ECVar "'env"]
-                                                             , ECVar "x"
-                                                             ]
-                                                      )
-                                    )
-                                    [ ECApp (ECFun "*")
-                                            [ ECInt 3
-                                            , ECApp (ECFun "env'lam'1::a") [ECVar "'env"]
-                                            ]
-                                    ]
+      , CCFun
+          { funArg = "y"
+          , funEnv = M.fromList [("a", TInt), ("x", TInt)]
+          , funExp =
+              (mkTypedCC TInt $ CAppF
+                (mkTypedCC (TFun TInt TInt) $ CClosF "lam'0")
+                (mkTypedCC TInt $ CAppF
+                  (mkTypedCC (TFun TInt TInt) $ CAppF
+                    (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PTimes))
+                    (mkTypedCC TInt $ CVarF "a")
+                  )
+                  (mkTypedCC TInt $ CLitF $ LInt 4)
+                )
+              )
+          }
       )
     , ( "lam'2"
-      , CCFun ["'env", "y"] $ ECApp (ECClos "lam'3" $ (ECApp (ECFun "env'lam'3")
-                                                             [ ECApp (ECFun "env'lam'2::a") [ECVar "'env"]
-                                                             , ECApp (ECFun "env'lam'2::x") [ECVar "'env"]
-                                                             , ECVar "y"
-                                                             ]
-                                                      )
-                                    )
-                                    [ ECApp (ECFun "*")
-                                            [ ECInt 4
-                                            , ECApp (ECFun "env'lam'2::a") [ECVar "'env"]
-                                            ]
-                                    ]
+      , CCFun
+          { funArg = "x"
+          , funEnv = M.fromList [("a", TInt)]
+          , funExp =
+              (mkTypedCC TInt $ CAppF
+                (mkTypedCC (TFun TInt TInt) $ CClosF "lam'1")
+                (mkTypedCC TInt $ CAppF
+                  (mkTypedCC (TFun TInt TInt) $ CAppF
+                    (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PTimes))
+                    (mkTypedCC TInt $ CVarF "a")
+                  )
+                  (mkTypedCC TInt $ CLitF $ LInt 3)
+                )
+              )
+          }
       )
     , ( "lam'3"
-      , CCFun ["'env", "z"] $ ECApp (ECFun "+")
-                                    [ ECApp (ECFun "+")
-                                            [ ECApp (ECFun "+")
-                                                    [ ECApp (ECFun "env'lam'3::a") [ECVar "'env"]
-                                                    , ECApp (ECFun "env'lam'3::x") [ECVar "'env"]
-                                                    ]
-                                            , ECApp (ECFun "env'lam'3::y") [ECVar "'env"]
-                                            ]
-                                    , ECVar "z"
-                                    ]
+      , CCFun
+          { funArg = "a"
+          , funEnv = M.empty
+          , funExp =
+              (mkTypedCC TInt $ CAppF
+                (mkTypedCC (TFun TInt TInt) $ CClosF "lam'2")
+                (mkTypedCC TInt $ CAppF
+                  (mkTypedCC (TFun TInt TInt) $ CAppF
+                    (mkTypedCC (TFun TInt (TFun TInt TInt)) (CPrmF PTimes))
+                    (mkTypedCC TInt $ CVarF "a")
+                  )
+                  (mkTypedCC TInt $ CLitF $ LInt 2)
+                )
+              )
+          }
       )
     ]
   )
@@ -379,7 +424,7 @@ of the branches are the same. The environments after closure conversion will
 be different, but this should still be valid. See "Typed Closure Conversion"
 by Minamide, Morrisett, and Harper
 -}
-differentEnvs :: (Text, ExCC, [(Text, CCFun)])
+differentEnvs :: (Text, TypedCC, [(Text, CCFun)])
 differentEnvs = (pack [raw|
   \a b -> {
     if b {
@@ -388,24 +433,65 @@ differentEnvs = (pack [raw|
       \x -> { x }
     }
   }
-|], ECFun "lam'0"
+|], mkTypedCC (TFun (TVar "a") (TFun TBool (TFun (TVar "a") (TVar "a")))) $ CClosF "lam'3"
   , [ ( "lam'0"
-      , CCFun ["a", "b"] $
-              ECApp (ECFun "if")
-                    [ ECVar "b"
-                    , ECClos "lam'1" $ ECApp (ECFun "env'lam'1") [ECVar "a"]
-                    , ECFun "lam'2"
-                    ]
+      , CCFun
+          { funArg = "x"
+          , funEnv = M.fromList [("a", TVar "a")]
+          , funExp =
+              (mkTypedCC (TVar "a") $ CAppF
+                (mkTypedCC (TFun (TVar "a") (TVar "a")) $ CAppF
+                  (mkTypedCC (TFun (TVar "a") (TFun (TVar "a") (TVar "a"))) $ CPrmF PAdd)
+                  (mkTypedCC (TVar "a") $ CVarF "a")
+                )
+                (mkTypedCC (TVar "a") $ CVarF "x")
+              )
+          }
       )
     , ( "lam'1"
-      , CCFun ["'env", "x"] $
-              ECApp (ECFun "+")
-                    [ ECApp (ECFun "env'lam'1::a") [ECVar "'env"]
-                    , ECVar "x"
-                    ]
+      , CCFun
+          { funArg = "x"
+          , funEnv = M.empty
+          , funExp =
+              (mkTypedCC (TVar "a") $ CVarF "x")
+          }
       )
     , ( "lam'2"
-      , CCFun ["x"] $ ECVar "x"
+      , CCFun
+          { funArg = "b"
+          , funEnv = M.fromList [("a", TVar "a")]
+          , funExp =
+              (mkTypedCC (TFun (TVar "a") (TVar "a")) $ CAppF
+                (mkTypedCC (TFun (TFun (TVar "a") (TVar "a"))
+                               (TFun (TVar "a") (TVar "a"))
+                         ) $ CAppF
+                  (mkTypedCC (TFun (TFun (TVar "a") (TVar "a"))
+                                   (TFun (TFun (TVar "a") (TVar "a"))
+                                         (TFun (TVar "a") (TVar "a"))
+                                   )
+                             ) $ CAppF
+                    (mkTypedCC (TFun (TBool)
+                                     (TFun (TFun (TVar "a") (TVar "a"))
+                                           (TFun (TFun (TVar "a") (TVar "a"))
+                                                 (TFun (TVar "a") (TVar "a"))
+                                           )
+                                     )
+                               ) $ CPrmF PIf)
+                    (mkTypedCC TBool $ CVarF "b")
+                  )
+                  (mkTypedCC (TFun (TVar "a") (TVar "a")) $ CClosF "lam'0")
+                )
+                (mkTypedCC (TFun (TVar "a") (TVar "a")) $ CClosF "lam'1")
+              )
+          }
+      )
+    , ( "lam'3"
+      , CCFun
+          { funArg = "a"
+          , funEnv = M.empty
+          , funExp =
+              (mkTypedCC (TFun TBool (TFun (TVar "a") (TVar "a"))) (CClosF "lam'2"))
+          }
       )
     ]
   )

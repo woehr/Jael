@@ -42,35 +42,37 @@ applyArgs e (GEAppArg a :| as) = case NE.nonEmpty as of
                                       Nothing -> EApp e (gToEx a)
                                       Just ne -> applyArgs (EApp e (gToEx a)) ne
 
-unaryOp :: Text -> GExpr -> Ex
-unaryOp op e = EApp (EVar op) (gToEx e)
+unaryPrm :: Prm -> GExpr -> Ex
+unaryPrm p e = EApp (EPrm p) (gToEx e)
 
--- Helper for creating an Ex for binary operators
+binPrm :: Prm -> GExpr -> GExpr -> Ex
+binPrm p l r = EApp (EApp (EPrm p) (gToEx l)) (gToEx r)
+
 binOp :: Text -> GExpr -> GExpr -> Ex
 binOp op l r = EApp (EApp (EVar op) (gToEx l)) (gToEx r)
 
--- Converts grammar to AST but does not verify its correctness
+-- Converts grammar to AST but no type checking yet
 gToEx :: GExpr -> Ex
 gToEx (GELeftApp   e1 e2) = binOp   "<$" e1 e2
 gToEx (GERightApp  e1 e2) = binOp   "$>" e1 e2
-gToEx (GELogOr     e1 e2) = binOp   "||" e1 e2
-gToEx (GELogAnd    e1 e2) = binOp   "&&" e1 e2
-gToEx (GEEq        e1 e2) = binOp   "==" e1 e2
-gToEx (GENotEq     e1 e2) = binOp   "!=" e1 e2
-gToEx (GEGtEq      e1 e2) = binOp   ">=" e1 e2
-gToEx (GELtEq      e1 e2) = binOp   "<=" e1 e2
-gToEx (GEGt        e1 e2) = binOp   ">"  e1 e2
-gToEx (GELt        e1 e2) = binOp   "<"  e1 e2
-gToEx (GEPlus      e1 e2) = binOp   "+"  e1 e2
-gToEx (GEMinus     e1 e2) = binOp   "-"  e1 e2
-gToEx (GETimes     e1 e2) = binOp   "*"  e1 e2
-gToEx (GEDiv       e1 e2) = binOp   "/"  e1 e2
-gToEx (GEMod       e1 e2) = binOp   "%"  e1 e2
+gToEx (GELogOr     e1 e2) = binPrm  POr e1 e2
+gToEx (GELogAnd    e1 e2) = binPrm  PAnd e1 e2
+gToEx (GEEq        e1 e2) = binPrm  PEq e1 e2
+gToEx (GENotEq     e1 e2) = binPrm  PNeq e1 e2
+gToEx (GEGtEq      e1 e2) = binPrm  PGeq e1 e2
+gToEx (GELtEq      e1 e2) = binPrm  PLeq e1 e2
+gToEx (GEGt        e1 e2) = binPrm  PGt  e1 e2
+gToEx (GELt        e1 e2) = binPrm  PLt  e1 e2
+gToEx (GEPlus      e1 e2) = binPrm  PAdd  e1 e2
+gToEx (GEMinus     e1 e2) = binPrm  PSub  e1 e2
+gToEx (GETimes     e1 e2) = binPrm  PTimes  e1 e2
+gToEx (GEDiv       e1 e2) = binPrm  PDiv  e1 e2
+gToEx (GEMod       e1 e2) = binPrm  PMod  e1 e2
 gToEx (GELeftComp  e1 e2) = binOp   "<o" e1 e2
 gToEx (GERightComp e1 e2) = binOp   "o>" e1 e2
-gToEx (GELogNot    e    ) = unaryOp "!"  e
+gToEx (GELogNot    e    ) = unaryPrm PNot  e
 
-gToEx (GEIf b e1 e2) = EApp (EApp (EApp (EVar "if") (gToEx b)) (letExprToEx e1)) (letExprToEx e2)
+gToEx (GEIf b e1 e2) = EApp (EApp (EApp (EPrm PIf) (gToEx b)) (letExprToEx e1)) (letExprToEx e2)
 
 gToEx (GEApp _ []) = notEnoughElements 1 "GEAppArg" "GEApp"
 gToEx (GEApp e as) = applyArgs (gToEx e) (NE.fromList as)
@@ -79,13 +81,13 @@ gToEx (GEAbs [] _) = notEnoughElements 1 "GEAbsArg" "GEAbs"
 gToEx (GEAbs [GEAbsArg (LIdent i)]      le) = EAbs (pack i) (letExprToEx le)
 gToEx (GEAbs (GEAbsArg (LIdent i) : xs) le) = EAbs (pack i) (gToEx $ GEAbs xs le)
 
-gToEx (GEInt i) = EInt $ parseInt i
-gToEx (GETrue)  = EBool True
-gToEx (GEFalse) = EBool False
+gToEx (GEInt i) = ELit . LInt $ parseInt i
+gToEx (GETrue)  = ELit $ LBool True
+gToEx (GEFalse) = ELit $ LBool False
 gToEx (GETup xs) = case NE.nonEmpty (map tupArgToEx xs) of
                         Nothing -> notEnoughElements 1 "GETupArg" "GETup"
                         Just (y:|ys) -> foldl' EApp (EApp (EVar $ "tup" ++ tshow (length xs)) y) ys
-gToEx (GEUnit GUnit)  = EUnit
+gToEx (GEUnit GUnit)  = ELit LUnit
 gToEx (GEVar (LIdent i)) = EVar (pack i)
 gToEx (GEScopedFn (UIdent t) (GEScopeIdent (LIdent f))) = (EVar . pack $ t ++ "::" ++ f)
 gToEx (GEScopedFn (UIdent t) (GEScopeIndex (IntTok n))) = (EVar . pack $ t ++ "::" ++ n)

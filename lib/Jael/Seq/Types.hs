@@ -12,17 +12,19 @@ data Ty = TVar Text
         | TUnit
         | TInt
         | TBool
+        | TBit
         | TNamed Text [Ty]
         | TFun Ty Ty
-          deriving (Show)
+        deriving (Show)
 
 data TyF a = TVarF Text
            | TUnitF
            | TIntF
            | TBoolF
+           | TBitF
            | TNamedF Text [a]
            | TFunF a a
-             deriving (Show, Functor)
+           deriving (Show, Functor)
 
 type instance Base Ty = TyF
 
@@ -31,6 +33,7 @@ instance Foldable Ty where
   project (TUnit) = TUnitF
   project (TInt) = TIntF
   project (TBool) = TBoolF
+  project (TBit) = TBitF
   project (TNamed x y) = TNamedF x y
   project (TFun x y) = TFunF x y
 
@@ -39,6 +42,7 @@ instance Unfoldable Ty where
   embed (TUnitF) = TUnit
   embed (TIntF) = TInt
   embed (TBoolF) = TBool
+  embed (TBitF) = TBit
   embed (TNamedF x y) = TNamed x y
   embed (TFunF x y) = TFun x y
 
@@ -113,6 +117,7 @@ tyEquiv t u =
           identical (TUnit) (TUnit) = True
           identical (TInt) (TInt) = True
           identical (TBool) (TBool) = True
+          identical (TBit) (TBit) = True
           identical (TNamed n ts) (TNamed m us) = n == m &&
                                                   length ts == length us &&
                                                   and (zipWith identical ts us)

@@ -4,81 +4,72 @@ module Jael.Seq.Closure where
 
 import ClassyPrelude hiding (Foldable)
 import Data.Functor.Foldable
-import Data.List.NonEmpty as NE (NonEmpty((:|)), (<|), fromList)
+import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Seq.AST
-import Jael.Seq.UserDefTy
 import Jael.Seq.Types
 
-data CCFun = CCFun [Text] ExCC
-             deriving (Eq, Show)
+data ExCC = CVar Text
+          | CPrm Prm
+          | CLit Lit
+          | CApp ExCC
+          | CClos Text
+          deriving (Eq, Show)
 
-data ExCC = ECVar Text
-          | ECFun Text
-          | ECUnit
-          | ECInt Integer
-          | ECBool Bool
-          | ECApp ExCC [ExCC]
-          | ECClos Text ExCC -- code and an environment
-            deriving (Eq, Show)
-
-data ExCCF a = ECVarF Text
-             | ECFunF Text
-             | ECUnitF
-             | ECIntF Integer
-             | ECBoolF Bool
-             | ECAppF a [a]
-             | ECClosF Text a
-             deriving (Show, Functor)
+data ExCCF a = CVarF Text
+             | CPrmF Prm
+             | CLitF Lit
+             | CAppF a a
+             | CClosF Text
+             deriving (Eq, Functor, Show)
 
 type instance Base ExCC = ExCCF
 
-instance Foldable ExCC where
-  project (ECVar x)    = ECVarF x
-  project (ECFun x)    = ECFunF x
-  project (ECUnit)     = ECUnitF
-  project (ECInt x)    = ECIntF x
-  project (ECBool x)   = ECBoolF x
-  project (ECApp x y)  = ECAppF x y
-  project (ECClos x y) = ECClosF x y
+data TypedCC = TypedCC (Ann Ty ExCCF TypedCC)
+  deriving (Show)
 
-instance Unfoldable ExCC where
-  embed (ECVarF x)    = ECVar x
-  embed (ECFunF x)    = ECFun x
-  embed (ECUnitF)     = ECUnit
-  embed (ECIntF x)    = ECInt x
-  embed (ECBoolF x)   = ECBool x
-  embed (ECAppF x y)  = ECApp x y
-  embed (ECClosF x y) = ECClos x y
+data TypedCCF a = TypedCCF (Ann Ty ExCCF a)
+  deriving (Functor, Show)
+
+type instance Base TypedCC = TypedCCF
+
+instance Foldable TypedCC where
+  project (TypedCC (Ann {ann=t, unAnn=e})) = TypedCCF (Ann {ann=t, unAnn=e})
+
+instance Unfoldable TypedCC where
+  embed (TypedCCF (Ann {ann=t, unAnn=e})) = TypedCC (Ann {ann=t, unAnn=e})
+
+mkTypedCC :: Ty -> ExCCF TypedCC -> TypedCC
+mkTypedCC t e = TypedCC $ Ann {ann=t, unAnn=e}
+
+data CCFun = CCFun
+  { funArg :: Text
+  , funEnv :: M.Map Text Ty
+  , funExp :: TypedCC
+  }
+  deriving (Show)
 
 data CConvR = CConvR
   { ccrGlobals :: S.Set Text
-  , ccrEnvPrefix :: Text
   , ccrLiftLabel :: Text
   }
   deriving (Show)
 
-data CConvW = CConvW
-  { ccwFns :: [(Text, CCFun)]
-  , ccwEnvs :: [UserDefTy]
-  }
-  deriving (Show)
-
 data CConvS = CConvS
-  { ccsBoundVars :: NonEmpty (S.Set Text)
-  , ccsCount :: Integer
+  { ccsCount :: Integer
+  , ccsFns :: M.Map Text CCFun
   }
   deriving (Show)
 
-newtype CConvM a = CConvM ((CConvR, CConvW, CConvS) -> (a, CConvW, CConvS))
+newtype CConvM a = CConvM ((CConvR, CConvS) -> (a, CConvS))
 
 instance Monad CConvM where
-  (CConvM p) >>= f = CConvM $ \x@(r, _, _) ->
-    let (v, w', s') = p x
+  (CConvM p) >>= f = CConvM $ \x@(r, _) ->
+    let (v, s') = p x
         (CConvM n) = f v
-     in n (r, w', s')
+     in n (r, s')
 
-  return v = CConvM $ \(_, w, s) -> (v, w, s)
+  return v = CConvM $ \(_, s) -> (v, s)
 
 instance Applicative CConvM where
   pure = return
@@ -87,62 +78,34 @@ instance Applicative CConvM where
 instance Functor CConvM where
   fmap = liftM
 
-runCC :: CConvR -> CConvM ExCC -> (ExCC, [(Text, CCFun)], [UserDefTy])
+runCC :: CConvR -> CConvM TypedCC -> (TypedCC, M.Map Text CCFun)
 runCC r m = let (CConvM f) = m
-                (v, w, _) = f ( r
-                              , CConvW{ccwFns=[], ccwEnvs=[]}
-                              , CConvS{ccsBoundVars=S.empty:|[], ccsCount=(-1)})
-
-             in (v, ccwFns w, ccwEnvs w)
+                (v, s) = f ( r
+                           , CConvS{ccsCount=(-1), ccsFns=M.empty}
+                           )
+             in (v, ccsFns s)
 
 cconvRead :: CConvM CConvR
 cconvRead = CConvM id
 
 cconvState :: CConvM CConvS
-cconvState = CConvM $ \(_, w, s) -> (s, w, s)
+cconvState = CConvM $ \(_, s) -> (s, s)
 
 -- Increments the state's count. Returns the new value.
 cconvInc :: CConvM Integer
-cconvInc = CConvM $ \(_, w, s@(CConvS{ccsCount=c})) -> (c+1, w, s{ccsCount=c+1})
+cconvInc = CConvM $ \(_, s@(CConvS{ccsCount=c})) -> (c+1, s{ccsCount=c+1})
 
 tellFn :: (Text, CCFun) -> CConvM ()
-tellFn x = CConvM $ \(_, w@(CConvW{ccwFns=fs}), s) -> ((), w{ccwFns=x:fs}, s)
+tellFn (k, v) = CConvM $ \(_, s@CConvS{ccsFns=fs}) -> ((), s{ccsFns=M.insert k v fs})
+
+getEnvs :: CConvM (M.Map Text (M.Map Text Ty))
+getEnvs = cconvState >>= return . M.map funEnv . ccsFns
 
 genLamName :: CConvM Text
 genLamName = do
   c <- cconvInc
   r <- cconvRead
   return $ ccrLiftLabel r ++ tshow c
-
-getLamName :: CConvM Text
-getLamName = do
-  s <- cconvState
-  r <- cconvRead
-  return $ ccrLiftLabel r ++ tshow (ccsCount s)
-
--- Make the environment name from the lambda name
-mkEnvName :: Text -> CConvM Text
-mkEnvName lamName = cconvRead >>= \x -> return $ ccrEnvPrefix x ++ lamName
-
--- Make an accessor for the given lambda and variable
-mkAccessor :: Text -> Text -> CConvM Text
-mkAccessor lamName var = mkEnvName lamName >>= \x -> return $ (lowerFirst x) ++ "::" ++ var
-
-newEnv :: S.Set Text -> CConvM Text
-newEnv fields = do
-  envName <- getLamName >>= mkEnvName
-  CConvM $ \(_, w@(CConvW{ccwEnvs=envs}), s) -> (envName, w{ccwEnvs=envs}, s)
-
-pushArgs :: S.Set Text -> CConvM ()
-pushArgs x = CConvM $ \(_, w, s@(CConvS{ccsBoundVars=xs})) -> ((), w, s{ccsBoundVars=x<|xs})
-
--- Partial function. It's an error to pop more times than pushed and doing so
--- will result in NE.fromList raising an error iff xs==[]
-popArgs :: CConvM (S.Set Text)
-popArgs = CConvM $ \(_, w, s@(CConvS{ccsBoundVars=x:|xs})) -> (x, w, s{ccsBoundVars=NE.fromList xs})
-
-isBound :: Text -> CConvM Bool
-isBound x = CConvM $ \(_, w, s@(CConvS{ccsBoundVars=(v:|_)})) -> (x `S.member` v, w, s)
 
 letConversion :: TypedEx -> TypedEx
 letConversion = cata alg
@@ -153,100 +116,41 @@ letConversion = cata alg
                             e1
         alg x = embed x
 
--- remove from x the elements of y
-remove :: Ord a => Set a -> Set a -> Set a
-remove x y = S.foldr S.delete x y
-
 -- Return the set of free variables of the expression (types don't matter).
 -- In the case of an application, if the first expression is a variable, it is
 -- not considered free since to type check it would have had to be in the type
 -- environment, that is, it's global and doesn't have to be captured
-freeVars :: TypedEx -> S.Set Text
-freeVars = para alg
-  where alg (TypedExF (Ann {unAnn=(EAbsF x (_, e))})) = e `remove` S.singleton x
-        alg (TypedExF (Ann {unAnn=(EVarF x)})) = S.singleton x
-        alg (TypedExF (Ann {unAnn=(EAppF (p, e1) (_, e2))})) =
-          case p of
-               (TypedEx (Ann {unAnn=(EVarF _)})) -> e2
-               _                                 -> e1 `S.union` e2
-        alg (TypedExF (Ann {unAnn=(ELetF x (_, e1) (_, e2))})) = e1 `S.union` (e2 `remove` S.singleton x)
-        alg _ = S.empty
+freeVars :: M.Map Text (M.Map Text Ty) -> TypedCC -> M.Map Text Ty
+freeVars envs = cata (alg envs)
+  where alg :: M.Map Text (M.Map Text Ty) -> TypedCCF (M.Map Text Ty) -> M.Map Text Ty
+        alg _ (TypedCCF (Ann {ann=t, unAnn=(CVarF x)})) = M.singleton x t
+        alg _ (TypedCCF (Ann {unAnn=(CAppF f e )})) = f `M.union` e
+        alg e (TypedCCF (Ann {unAnn=(CClosF n)})) = M.findWithDefault M.empty n e
+        alg _ _ = M.empty
 
-collectArgs :: TypedEx -> [TypedEx] -> (TypedEx, [TypedEx])
-collectArgs (TypedEx (Ann {unAnn=(EAppF f e)})) as = collectArgs f (e:as)
-collectArgs f as = (f, as)
+doCc :: TypedEx -> CConvM TypedCC
+doCc = cata alg
+  where alg :: TypedExF (CConvM TypedCC) -> CConvM TypedCC
+        alg (TypedExF (Ann {ann=t, unAnn=(EAbsF a e)})) = do
+          ccEx <- e
+          globals <- cconvRead >>= \x -> return (ccrGlobals x)
+          lamName <- genLamName
+          envs <- getEnvs
+          let fvs = foldr M.delete (freeVars envs ccEx) $ (S.insert a globals)
+          tellFn (lamName, CCFun { funArg=a
+                                 , funEnv=fvs
+                                 , funExp=ccEx
+                                 })
+          return $ mkTypedCC t (CClosF lamName)
+        alg (TypedExF (Ann {ann=t, unAnn=(EAppF f e)})) = liftM2 (\x y -> mkTypedCC t $ CAppF x y) f e
+        alg (TypedExF (Ann {ann=t, unAnn=(EVarF x)})) = return $ mkTypedCC t $ CVarF x
+        alg (TypedExF (Ann {ann=t, unAnn=(EPrmF x)})) = return $ mkTypedCC t $ CPrmF x
+        alg (TypedExF (Ann {ann=t, unAnn=(ELitF x)})) = return $ mkTypedCC t $ CLitF x
+        alg (TypedExF (Ann {ann=_, unAnn=(ELetF _ _ _)})) = error "Should have been let converted"
 
-mashLams :: TypedEx -> [Text] -> ([Text], TypedEx)
-mashLams (TypedEx (Ann {unAnn=(EAbsF x e)})) as = let (as', e') = mashLams e as
-                                                   in (x:as', e')
-mashLams e as = (as, e)
-
--- Lifts lambda with args as and expression e to the top level and returns the
--- expression that replaces it
-liftLam :: ([Text], TypedEx) -> CConvM ExCC
-liftLam (as, e) = do
-  -- The name of the lambda whose scope contains the lambda being processed
-  curName <- getLamName
-  -- New name for the lambda being processed
-  newName <- genLamName
-  fvs <- cconvRead >>= (\r -> return $ freeVars e `remove` (ccrGlobals r `S.union` S.fromList as))
-  if S.size fvs == 0
-     then do
-       pushArgs $ S.fromList as
-       ccExpr <- doCc e
-       _ <- popArgs
-       tellFn (newName, CCFun as ccExpr)
-       CConvM $ \(_, w, s) -> (ECFun newName, w, s)
-     else do
-       -- Create an environment for this lambda. The values of the free
-       -- variables come from either the outer lambda's arguments or environment
-       curArgs <- popArgs
-       pushArgs curArgs
-       pushArgs $ S.fromList as
-       -- The name of the environment
-       envName <- newEnv fvs
-       -- The expression that constructs the enironment
-       -- The generated structure has a constructor function of the same name
-       -- but with the first letter lowered
-       -- Its fields are the names of the free variables in ascending order
-       env <- (mapM (\x ->
-                      if x `S.member` curArgs
-                         then return $ ECVar x
-                         else mkAccessor curName x >>= \y -> return $ ECApp (ECFun y) [ECVar "'env"]
-                    )
-                    (S.toAscList fvs)
-              ) >>= return . ECApp (ECFun $ lowerFirst envName)
-       ccExpr <- doCc e
-       tellFn (newName, CCFun ("'env":as) ccExpr)
-       CConvM $ \(_, w, s) -> (ECClos newName env, w, s)
-
-doCc :: TypedEx -> CConvM ExCC
-doCc (TypedEx (Ann {unAnn=(EVarF v)})) = do
-  x <- isBound v
-  if x
-     then return $ ECVar v
-     else getLamName >>= flip mkAccessor v >>= \n -> return $ ECApp (ECFun n) [ECVar "'env"]
-
-doCc (TypedEx (Ann {unAnn=(EUnitF)}))   = return $ ECUnit
-doCc (TypedEx (Ann {unAnn=(EIntF i)}))  = return $ ECInt i
-doCc (TypedEx (Ann {unAnn=(EBoolF b)})) = return $ ECBool b
-
-doCc x@(TypedEx (Ann {unAnn=(EAppF _ _)})) =
-  let (f, as) = collectArgs x []
-   in do as' <- mapM doCc as
-         f' <- case f of
-                    (TypedEx (Ann {unAnn=(EVarF n)})) -> return $ ECFun n
-                    _ -> doCc f
-         return $ ECApp f' as'
-
-doCc x@(TypedEx (Ann {unAnn=(EAbsF _ _)})) = liftLam $ mashLams x []
-
-doCc x@(TypedEx (Ann {unAnn=(ELetF _ _ _)})) = doCc (letConversion x)
-
-closureConversion :: S.Set Text -> Text -> Text -> TypedEx -> (ExCC, [(Text, CCFun)], [UserDefTy])
-closureConversion globals envPref liftLabel e =
+closureConversion :: S.Set Text -> Text -> TypedEx -> (TypedCC, M.Map Text CCFun)
+closureConversion globals liftLabel e =
    runCC CConvR { ccrGlobals = globals
-                , ccrEnvPrefix = envPref
                 , ccrLiftLabel = liftLabel
-                } $ doCc e
+                } $ doCc . letConversion $ e
 
