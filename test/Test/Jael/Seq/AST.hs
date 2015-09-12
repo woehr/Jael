@@ -11,13 +11,14 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit
 
 astTests :: [T.Test]
-astTests = [ testCase "tyEquiv (1)" $ assertTyEquiv tyEq1
-           , testCase "tyEquiv (2)" $ assertTyEquiv tyEq2
-           , testCase "tyEquiv (3)" $ assertTyEquiv tyEq3
-           , testCase "tyEquiv (4)" $ assertTyEquiv tyEq4
-           , testCase "tyEquiv (5)" $ assertTyEquiv tyEq5
-           , testCase "tyEquiv (6)" $ assertTyEquiv tyEq6
-           ]
+astTests =
+  [ testCase "tyEquiv (1)" $ assertTyEquiv tyEq1
+  , testCase "tyEquiv (2)" $ assertTyEquiv tyEq2
+  , testCase "tyEquiv (3)" $ assertTyEquiv tyEq3
+  , testCase "tyEquiv (4)" $ assertTyEquiv tyEq4
+  , testCase "tyEquiv (5)" $ assertTyEquiv tyEq5
+  , testCase "tyEquiv (6)" $ assertTyEquiv tyEq6
+  ]
 
 assertTyEquiv :: (Ty, Ty) -> Assertion
 assertTyEquiv ts@(t1, t2) =

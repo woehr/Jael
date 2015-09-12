@@ -39,14 +39,12 @@ GTStructElement.   GTStructElement   ::= GTStructFieldName "::" GType ;
 separator          nonempty GTStructElement "," ;
 
 GTStructDef.    GTStructDef ::= UIdent [GTVars] "{" [GTStructElement] "}" ;
-GTDefStruct.    GTypeDef ::= "stuct" GTStructDef ;
 
 GTEnumElemNoTy.   GTEnumElem ::= LIdent ;
 GTEnumElemWithTy. GTEnumElem ::= LIdent GType ;
 separator      nonempty GTEnumElem "," ;
 
 GTEnumDef.     GTEnumDef ::= UIdent [GTVars] "{" [GTEnumElem] "}" ;
-GTDefEnum.     GTypeDef ::= "enum" GTEnumDef ;
 
 GELetIdent.  GELetIdent ::= LIdent "=" GExpr ;
 terminator   GELetIdent ";" ;
@@ -144,13 +142,20 @@ terminator  GHwChan ";" ;
 GHwInit.    GHwInit ::= "init" ;
 GHwHandler. GHwHandler ::= "handler" ;
 
--- Combine the three
+-- Top level grammar
 
-GFunc.      GFunc ::= "func" Ident ;
-GProc.      GProc ::= "proc" Ident ;
-GHwproc.    GHwproc ::= "hwproc" Ident "{" [GHwArea] GHwState [GHwChan] GHwInit GHwHandler "}" ;
+GTDefStruct. GTypeDef ::= "struct" GTStructDef ;
+GTDefEnum.   GTypeDef ::= "enum" GTEnumDef ;
 
-rules GTopDef ::= GFunc | GProc | GHwproc ;
+GFuncArg.   GFuncArg ::= LIdent ;
+separator nonempty GFuncArg "," ;
+
+GGlobal.    GGlobal ::= LIdent "=" GExpr ";" ;
+GFunc.      GFunc ::= "func" LIdent "(" [GFuncArg] ")" "{" GExpr "}" ;
+GProc.      GProc ::= "proc" LIdent "(" ")" "{" "}" ;
+GHwproc.    GHwproc ::= "hwproc" LIdent "{" [GHwArea] GHwState [GHwChan] GHwInit GHwHandler "}" ;
+
+rules GTopDef ::= GTypeDef | GGlobal | GFunc | GProc | GHwproc ;
 terminator  GTopDef "" ;
 
 GProg.      GProg ::= [GTopDef] ;
@@ -158,7 +163,5 @@ GProg.      GProg ::= [GTopDef] ;
 comment "//" ;
 
 -- Only export nessecary top level parsers
-entrypoints GProg, GFunc, GProc, GHwproc,
-            GType, GTypeDef, GTStructDef, GTEnumDef,
-            GExpr ;
+entrypoints GProg, GType, GTStructDef, GTEnumDef, GExpr ;
 

@@ -6,7 +6,6 @@ module Jael.Seq.Env
 ) where
 
 import ClassyPrelude
-import Jael.Seq.AST
 import Jael.Seq.Builtin
 import Jael.Seq.Types
 import Jael.Seq.UserDefTy

@@ -50,6 +50,7 @@ data PolyTy = PolyTy [Text] Ty
               deriving (Show)
 
 data TyEnv = TyEnv (M.Map Text PolyTy)
+  deriving (Show)
 
 type TySub = M.Map Text Ty
 

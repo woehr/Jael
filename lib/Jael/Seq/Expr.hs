@@ -1,16 +1,28 @@
 {-# Language NoImplicitPrelude #-}
 -- Module for handling sequential specific grammar
 module Jael.Seq.Expr
-( gToEx
+( freeVars
+, gToEx
 ) where
 
-import ClassyPrelude
+import ClassyPrelude hiding (Foldable)
+import Data.Functor.Foldable
 import Data.List.NonEmpty ( NonEmpty( (:|) ))
 import qualified Data.List.NonEmpty as NE
+import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Seq.AST
 import Jael.Util
 import Text.Read (reads)
+
+freeVars :: Ex -> S.Set Text
+freeVars = cata alg
+  where alg :: ExF (S.Set Text) -> S.Set Text
+        alg (EVarF x) = S.singleton x
+        alg (EAppF f e) = f `S.union` e
+        alg (EAbsF x e) = S.delete x e
+        alg (ELetF x e1 e2) = e1 `S.union` (S.delete x e2)
+        alg _ = S.empty
 
 -- The LetExpr grammar is only allowed in certain places so it isn't of the GExpr type
 letExprToEx :: GELetExpr -> Ex

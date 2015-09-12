@@ -11,8 +11,13 @@ category:            Language
 build-type:          Custom
 cabal-version:       >=1.18
 
+source-repository head
+  type: git
+  location: git://github.com/woehr/jael
+
 library
-  exposed-modules:     Jael.Grammar
+  exposed-modules:     Jael.Compile
+                       Jael.Grammar
                        Jael.Grammar.ErrM
                        Jael.Grammar.Lex
                        Jael.Grammar.Abs
@@ -50,7 +55,6 @@ executable jael
 
   build-depends:       base >=4.7 && <5,
                        classy-prelude,
-                       containers,
                        jael
 
   default-extensions:  OverloadedStrings

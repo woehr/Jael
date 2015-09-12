@@ -7,7 +7,6 @@ import ClassyPrelude
 import Data.List (genericTake)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
-import Jael.Seq.AST
 import Jael.Seq.Types
 import Jael.Seq.UserDefTy
 

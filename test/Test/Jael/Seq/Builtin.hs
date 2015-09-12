@@ -6,7 +6,6 @@ module Test.Jael.Seq.Builtin
 
 import ClassyPrelude
 import qualified Data.Map as M
-import Jael.Seq.AST
 import Jael.Seq.Env
 import Jael.Seq.Types
 import Test.Framework as T

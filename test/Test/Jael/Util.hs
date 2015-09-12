@@ -17,18 +17,17 @@ import Language.Haskell.TH.Quote
 import Test.HUnit
 
 -- https://hackage.haskell.org/package/raw-strings-qq
+-- Extracted from dead-simple-json.
 raw :: QuasiQuoter
-raw = QuasiQuoter {
-    -- Extracted from dead-simple-json.
-    quoteExp  = return . LitE . StringL,
-
-    quotePat  = \_ -> fail "illegal raw string QuasiQuote \
-                           \(allowed as expression only, used as a pattern)",
-    quoteType = \_ -> fail "illegal raw string QuasiQuote \
-                           \(allowed as expression only, used as a type)",
-    quoteDec  = \_ -> fail "illegal raw string QuasiQuote \
+raw = QuasiQuoter
+  { quoteExp  = return . LitE . StringL
+  , quotePat  = \_ -> fail "illegal raw string QuasiQuote \
+                           \(allowed as expression only, used as a pattern)"
+  , quoteType = \_ -> fail "illegal raw string QuasiQuote \
+                           \(allowed as expression only, used as a type)"
+  , quoteDec  = \_ -> fail "illegal raw string QuasiQuote \
                            \(allowed as expression only, used as a declaration)"
-}
+  }
 
 shouldNotParse :: ParseFun a -> Text -> Assertion
 shouldNotParse p t = either (\_ -> return ()) (\_ -> assertFailure "Expression parsed successful") (runParser p t)
