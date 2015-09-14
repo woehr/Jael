@@ -66,7 +66,7 @@ instance TyOps Ty where
           ftvFn _              = S.empty
 
   apply s = cata applyFn
-    where applyFn t@(TVarF v)    = fromMaybe (embed t) (M.lookup v s)
+    where applyFn t@(TVarF v)    = M.findWithDefault (embed t) v s
           applyFn t = embed t
 
 instance TyOps PolyTy where
