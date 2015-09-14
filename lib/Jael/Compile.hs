@@ -3,6 +3,7 @@
 module Jael.Compile where
 
 import ClassyPrelude hiding (Foldable, Prim)
+import Data.Foldable (foldrM)
 import Data.Functor.Foldable
 import qualified Data.Array as A
 import qualified Data.Graph as G
@@ -12,16 +13,20 @@ import Jael.Grammar
 import Jael.Parser
 import Jael.Util
 import Jael.Seq.AST
+import Jael.Seq.Env
 import Jael.Seq.Expr
+import Jael.Seq.TI
 import Jael.Seq.Types
 import Jael.Seq.UserDefTy
 
 data CompileErr = ParseErr Text
                 | DupDef [Text]
                 | UndefVar [Text]
+                | UndefType [Text]
                 | CallCycle [Text]
                 | RecType [Text]
                 | TypeDefErr [TDefError]
+                | TypeInfErr [Text]
   deriving (Eq, Show)
 
 data Global = Global Ex TyEnv
@@ -61,8 +66,8 @@ hasUndefined deps =
          else Nothing
 
 -- Given a map of names to their dependencies return either a list of names
--- that are part of cycles or a list of names that specify the order in which
--- the names should be processed
+-- that are part of cycles or a list of names that specify the (reverse) order
+-- in which the names should be processed
 findCycles :: M.Map Text (S.Set Text) -> Either [Text] [Text]
 findCycles m =
   let (dg, vertToNode, _) = G.graphFromEdges $ map (\(a,b)->(a,a,b))
@@ -75,15 +80,33 @@ findCycles m =
                             , G.path dg y x]
    in if length recDeps /= 0
          then Left recDeps
-         else Right . reverse . map nodeName . G.topSort $ dg
+         else Right . map nodeName . G.topSort $ dg
 
-processTypes :: [GTypeDef] -> Either CompileErr Text --TyEnv
+processTypes :: [GTypeDef] -> Either CompileErr TyEnv
 processTypes xs = do
   -- map of type names to their UserDefTy
   userTys <- either (Left . DupDef) Right
                $ insertCollectDups M.empty
                $ map gToUserDefTy xs
-  Right $ tshow userTys
+  let tyDeps = map typeDependencies userTys
+  -- Find use of undefined types or recursive types
+  _ <- case hasUndefined tyDeps of
+            Just x -> (Left . UndefType) x
+            Nothing -> either (Left . RecType) Right $ findCycles tyDeps
+  let (errs, fns) = M.mapEitherWithKey (curry validateType) userTys
+  if M.size errs /= 0
+     then Left $ TypeDefErr $ M.elems errs
+     else either (Left . DupDef)
+                 (Right . TyEnv)
+                 (insertCollectDups (toMap defaultEnv) $ concat . M.elems $ fns)
+
+-- TODO: Cleanup. Fixup env helpers. Handle errors better
+tiGlobal :: TyEnv -> Global -> Either [Text] TypedEx
+tiGlobal env (Global ex gEnv) =
+  let env' = addToEnv env (M.toList . toMap $ gEnv)
+   in case env' of
+           Left es -> Left es
+           Right env'' -> seqInferTypedEx env'' ex
 
 processSeq :: TyEnv
            -> [GGlobal]
@@ -96,7 +119,24 @@ processSeq (TyEnv env) gs fs = do
   globDeps <- (\x -> maybe (Right x) (Left . UndefVar) $ hasUndefined x)
               $ map (\(Global e _) -> freeVars e) globExs
   processOrder <- either (Left . CallCycle) Right (findCycles globDeps)
-  undefined
+  -- Fold over processOrder adding the type of the result to the environment
+  -- for the next inference invocation and collecting the resulting typed
+  -- expressions
+  -- TODO: Cleanup the unwieldiness
+  liftM snd $ foldrM (\n (envAcc, exAcc) ->
+    let ex = M.findWithDefault (error "Should not happen since key is \
+                                  \obtained from the map we're indexing into.")
+                               n
+                               globExs
+        res = tiGlobal (TyEnv envAcc) ex
+     in case res of
+             Left err -> Left $ TypeInfErr err
+             Right typedEx -> Right ( M.insert n (polyTy (tyOf typedEx)) envAcc
+                                    , M.insert n typedEx exAcc
+                                    )
+    )
+    (env, M.empty)
+    processOrder
 
 processConc :: [GProc] -> Either CompileErr a
 processConc ps = undefined
@@ -111,7 +151,11 @@ compile p = do
   -- The map of global names to their expressions and type environments
   -- resulting from type annotations
   progTyEnv <- processTypes types
-  Right progTyEnv
-  --seqTys <- processSeq progTyEnv globs funcs
-  --Right $ tshow seqTys
+  -- TODO: Extract sequential fragments embedded within processes and hardware
+  -- processes. Give them names and include them in the following processing
+  seqTys <- processSeq progTyEnv globs funcs
+  Right $ tshow seqTys
+  -- Now that all the sequential bits are named and typed, closure convert
+  -- Now take the closure converted fragments and generate llvm IR (or asm if
+  -- necessary) annotated with worst case stack and execution usage
 

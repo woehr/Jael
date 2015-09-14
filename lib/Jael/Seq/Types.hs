@@ -49,7 +49,7 @@ instance Unfoldable Ty where
 data PolyTy = PolyTy [Text] Ty
               deriving (Show)
 
-data TyEnv = TyEnv (M.Map Text PolyTy)
+newtype TyEnv = TyEnv { toMap :: (M.Map Text PolyTy) }
   deriving (Show)
 
 type TySub = M.Map Text Ty
@@ -146,4 +146,7 @@ typeVars = cata alg
         alg (TVarF x)   = S.singleton x
         alg (TFunF x y) = x `S.union` y
         alg _           = S.empty
+
+polyTy :: Ty -> PolyTy
+polyTy t = PolyTy (S.toList . typeVars $ t) t
 

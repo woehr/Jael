@@ -16,7 +16,8 @@ compileTests =
   [ testCase "duplicate def" $ assertCompErr dupDef
   , testCase "undefined var" $ assertCompErr undefinedVar
   , testCase "call cycle" $ assertCompErr callCycle
-  , testCase "rec type" $ assertCompErr recType
+  , testCase "recursive type" $ assertCompErr recType
+  , testCase "undefined type" $ assertCompErr undefType
   ]
 
 assertCompErr :: (Text, CompileErr) -> Assertion
@@ -51,5 +52,11 @@ recType = (pack [raw|
     f1 :: S
   }
 |], RecType ["S"]
+  )
+
+undefType :: (Text, CompileErr)
+undefType = (pack [raw|
+  enum E { f1 T }
+|], UndefType ["T"]
   )
 

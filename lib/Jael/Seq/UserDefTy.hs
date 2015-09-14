@@ -59,6 +59,22 @@ validateType (n, (Struct tvs fs)) =
                  \(f, t) -> (n ++ "::" ++ f, PolyTy tvs $ TFun structTy t)
                ) (NE.toList fs)
 
+typeDependencies :: UserDefTy -> S.Set Text
+typeDependencies (Struct _ fs) = S.fromList
+  (mapMaybe (\(_, ty) -> case ty of
+                              TNamed n _ -> Just n
+                              _ -> Nothing
+            )
+            $ NE.toList fs
+  )
+typeDependencies (Enumer _ fs) = S.fromList
+  (mapMaybe (\(TagWithTy _ ty) -> case ty of
+                                       TNamed n _ -> Just n
+                                       _ -> Nothing
+            )
+            $ NE.toList fs
+  )
+
 lowerFirst :: Text -> Text
 lowerFirst xs = case uncons xs of
                      Just (x, xs') -> (toLower . singleton $ x) ++ xs'
