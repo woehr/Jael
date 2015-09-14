@@ -38,13 +38,13 @@ GTStructFieldName. GTStructFieldName ::= LIdent ;
 GTStructElement.   GTStructElement   ::= GTStructFieldName "::" GType ;
 separator          nonempty GTStructElement "," ;
 
-GTStructDef.    GTStructDef ::= UIdent [GTVars] "{" [GTStructElement] "}" ;
+GTStructDef.    GTStructDef ::= [GTVars] "{" [GTStructElement] "}" ;
 
 GTEnumElemNoTy.   GTEnumElem ::= LIdent ;
 GTEnumElemWithTy. GTEnumElem ::= LIdent GType ;
 separator      nonempty GTEnumElem "," ;
 
-GTEnumDef.     GTEnumDef ::= UIdent [GTVars] "{" [GTEnumElem] "}" ;
+GTEnumDef.     GTEnumDef ::= [GTVars] "{" [GTEnumElem] "}" ;
 
 GELetIdent.  GELetIdent ::= LIdent "=" GExpr ;
 terminator   GELetIdent ";" ;
@@ -144,8 +144,9 @@ GHwHandler. GHwHandler ::= "handler" ;
 
 -- Top level grammar
 
-GTDefStruct. GTypeDef ::= "struct" GTStructDef ;
-GTDefEnum.   GTypeDef ::= "enum" GTEnumDef ;
+GTDefStruct. GTypeDef ::= "struct" UIdent GTStructDef ;
+GTDefEnum.   GTypeDef ::= "enum" UIdent GTEnumDef ;
+--GTDefAlias. GTypeDef ::= "alias" UIdent [GTVars] "=" GType ;
 
 GFuncArg.   GFuncArg ::= LIdent ;
 separator nonempty GFuncArg "," ;
@@ -162,6 +163,6 @@ GProg.      GProg ::= [GTopDef] ;
 
 comment "//" ;
 
--- Only export nessecary top level parsers
-entrypoints GProg, GType, GTStructDef, GTEnumDef, GExpr ;
+-- Only export nessecary parsers.
+entrypoints GProg, GTypeDef, GType, GExpr ;
 

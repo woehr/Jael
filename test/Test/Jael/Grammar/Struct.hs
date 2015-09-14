@@ -12,24 +12,24 @@ import Test.Jael.Util
 
 gStructTests :: [T.Test]
 gStructTests =
-  [ testCase "simple monomorphic" $ checkParsedTree pGTStructDef simpleMono 
-  , testCase "simple polymorphic" $ checkParsedTree pGTStructDef simplePoly
+  [ testCase "simple monomorphic" $ checkParsedTree pGTypeDef simpleMono
+  , testCase "simple polymorphic" $ checkParsedTree pGTypeDef simplePoly
   ]
 
-simpleMono :: (Text, GTStructDef)
+simpleMono :: (Text, GTypeDef)
 simpleMono = (pack [raw|
-  X { f0 :: Int }
-|], GTStructDef (UIdent "X")
+  struct X { f0 :: Int }
+|], GTDefStruct (UIdent "X") $ GTStructDef
                 []
                 [ GTStructElement (GTStructFieldName (LIdent "f0"))
                                   GTInt
                 ]
   )
 
-simplePoly :: (Text, GTStructDef)
+simplePoly :: (Text, GTypeDef)
 simplePoly = (pack [raw|
-  X a { f0 :: a }
-|], GTStructDef (UIdent "X")
+  struct X a { f0 :: a }
+|], GTDefStruct (UIdent "X") $ GTStructDef
                 [ GTVars (LIdent "a")
                 ]
                 [ GTStructElement (GTStructFieldName (LIdent "f0"))

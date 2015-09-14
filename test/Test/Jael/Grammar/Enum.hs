@@ -12,21 +12,25 @@ import Test.Jael.Util
 
 gEnumTests :: [T.Test]
 gEnumTests =
-  [ testCase "one element enum, no type" $ checkParsedTree pGTEnumDef tagNoType
-  , testCase "one element enum, with type" $ checkParsedTree pGTEnumDef tagWithType
+  [ testCase "one element enum, no type" $ checkParsedTree pGTypeDef tagNoType
+  , testCase "one element enum, with type" $ checkParsedTree pGTypeDef tagWithType
   ]
 
-tagNoType :: (Text, GTEnumDef)
+tagNoType :: (Text, GTypeDef)
 tagNoType = (pack [raw|
-  X { a }
-|], GTEnumDef (UIdent "X") [] [ GTEnumElemNoTy (LIdent "a")
-                              ]
+  enum X { a }
+|], GTDefEnum (UIdent "X") $ GTEnumDef
+              []
+              [ GTEnumElemNoTy (LIdent "a")
+              ]
   )
 
-tagWithType :: (Text, GTEnumDef)
+tagWithType :: (Text, GTypeDef)
 tagWithType = (pack [raw|
-  X { a Int }
-|], GTEnumDef (UIdent "X") [] [ GTEnumElemWithTy (LIdent "a") GTInt
-                              ]
+  enum X { a Int }
+|], GTDefEnum (UIdent "X") $ GTEnumDef
+              []
+              [ GTEnumElemWithTy (LIdent "a") GTInt
+              ]
   )
 

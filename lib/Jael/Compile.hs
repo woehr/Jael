@@ -14,12 +14,14 @@ import Jael.Util
 import Jael.Seq.AST
 import Jael.Seq.Expr
 import Jael.Seq.Types
+import Jael.Seq.UserDefTy
 
 data CompileErr = ParseErr Text
                 | DupDef [Text]
                 | UndefVar [Text]
                 | CallCycle [Text]
                 | RecType [Text]
+                | TypeDefErr [TDefError]
   deriving (Eq, Show)
 
 data Global = Global Ex TyEnv
@@ -75,17 +77,41 @@ findCycles m =
          then Left recDeps
          else Right . reverse . map nodeName . G.topSort $ dg
 
+processTypes :: [GTypeDef] -> Either CompileErr Text --TyEnv
+processTypes xs = do
+  -- map of type names to their UserDefTy
+  userTys <- either (Left . DupDef) Right
+               $ insertCollectDups M.empty
+               $ map gToUserDefTy xs
+  Right $ tshow userTys
+
+processSeq :: TyEnv
+           -> [GGlobal]
+           -> [GFunc]
+           -> Either CompileErr (M.Map Text TypedEx)
+processSeq (TyEnv env) gs fs = do
+  globExs <- either (Left . DupDef) Right $
+    insertCollectDups M.empty (map gglobToGlob gs ++ map gfuncToGlob fs)
+  -- Convert the global map to a map of names to deps
+  globDeps <- (\x -> maybe (Right x) (Left . UndefVar) $ hasUndefined x)
+              $ map (\(Global e _) -> freeVars e) globExs
+  processOrder <- either (Left . CallCycle) Right (findCycles globDeps)
+  undefined
+
+processConc :: [GProc] -> Either CompileErr a
+processConc ps = undefined
+
+processHw :: [GHwproc] -> Either CompileErr a
+processHw hs = undefined
+
 compile :: Text -> Either CompileErr Text
 compile p = do
   prog <- either (Left . ParseErr) Right $ parseProgram p
   let (types, globs, funcs, procs, hwprocs) = splitTop prog
   -- The map of global names to their expressions and type environments
   -- resulting from type annotations
-  globExs <- either (Left . DupDef) Right $
-    insertCollectDups M.empty (map gglobToGlob globs ++ map gfuncToGlob funcs)
-  -- Convert the global map to a list mapping names to deps
-  globDeps <- (\x -> maybe (Right x) (Left . UndefVar) $ hasUndefined x)
-              $ map (\(Global e _) -> freeVars e) globExs
-  processOrder <- either (Left . CallCycle) Right (findCycles globDeps)
-  Right $ tshow processOrder
+  progTyEnv <- processTypes types
+  Right progTyEnv
+  --seqTys <- processSeq progTyEnv globs funcs
+  --Right $ tshow seqTys
 

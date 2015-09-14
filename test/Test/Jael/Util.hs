@@ -1,7 +1,6 @@
 {-# Language NoImplicitPrelude #-}
 
-module Test.Jael.Util
-where
+module Test.Jael.Util where
 
 import ClassyPrelude
 import qualified Data.Map as M
@@ -30,12 +29,19 @@ raw = QuasiQuoter
   }
 
 shouldNotParse :: ParseFun a -> Text -> Assertion
-shouldNotParse p t = either (\_ -> return ()) (\_ -> assertFailure "Expression parsed successful") (runParser p t)
+shouldNotParse p t = either (\_ -> return ())
+                            (\_ -> assertFailure "Expression parsed successful")
+                            (runParser p t)
 
 checkParsedTree :: (Eq a, Show a) => ParseFun a -> (Text, a) -> Assertion
-checkParsedTree p (tx, tr) = either (assertFailure . unpack) (tr @=?) (runParser p tx)
+checkParsedTree p (tx, tr) = either (assertFailure . unpack)
+                                    (tr @=?)
+                                    (runParser p tx)
 
-checkTDefErr :: ParseFun a -> (a -> Either TDefError b) -> (Text, TDefError) -> Assertion
+checkTDefErr :: ParseFun a
+             -> (a -> Either TDefError b)
+             -> (Text, TDefError)
+             -> Assertion
 checkTDefErr p validator (def, TDefError { dupTv = ets
                                          , dupField = efs
                                          , freeTv = eftvs
@@ -49,8 +55,8 @@ checkTDefErr p validator (def, TDefError { dupTv = ets
                               , dupField = fs
                               , freeTv = ftvs
                               , unusedTv = utvs})-> do
-                   assertEqual "Duplicate type variables wrong" (sort ets) (sort ts)
-                   assertEqual "Duplicate fields wrong" (sort efs) (sort fs)
+                   assertEqual "Duplicate type variables wrong" ets ts
+                   assertEqual "Duplicate fields wrong" efs fs
                    assertEqual "Free type variables wrong" eftvs ftvs
                    assertEqual "Unused type variables wrong" eutvs utvs
               Right _ -> assertFailure "Expected struct error"
@@ -61,26 +67,31 @@ checkParsedTypes :: Show b
                  -> (Text, [(Text, PolyTy)])
                  -> Assertion
 checkParsedTypes p validator (def, expected) =
-  case runParser p def of
-       Left err -> assertFailure (show err)
-       Right gDef ->
-         case validator gDef of
-              Left sErr -> assertFailure (show sErr)
-              Right tys -> expected `envListEq` tys
-
-checkInference :: Text -> Text -> (Text, Ty) -> Assertion
-checkInference testStruct testEnum (tx, expected) =
   either (assertFailure . unpack) id $ do
-    sdef <- runParser pGTStructDef testStruct
-    edef <- runParser pGTEnumDef testEnum
-    sfuns <- either (Left . tshow) Right $ validateType (gToStruct sdef)
-    efuns <- either (Left . tshow) Right $ validateType (gToEnumer edef)
+    gDef <- runParser p def
+    tys <- either (Left . tshow) Right $ validator gDef
+    Right $ expected `envListEq` tys
+
+checkInference :: Text -> (Text, Ty) -> Assertion
+checkInference testTypes (tx, expected) =
+  either (assertFailure . unpack) id $ do
+    (GProg prog) <- runParser pGProg testTypes
+    tDefs <- mapM (\xs -> case xs of
+                               GTopDefGTypeDef t -> Right t
+                               y -> Left ("Parsed non-type: " ++ tshow y)
+                  )
+                  prog
+    funs <- either (Left . tshow)
+                   (Right . concat)
+                   (mapM (validateType . gToUserDefTy) $ tDefs)
     env <- either
-              (\x -> Left . intercalate "\n" $ "Duplicates in env: " : x)
-              Right
-              $ join $ liftA (flip addToEnv efuns) (addToEnv defaultEnv sfuns)
+             (\x -> Left . intercalate "\n" $ "Duplicates in env: " : x)
+             (Right)
+             (addToEnv defaultEnv funs)
     ex <- runParser pGExpr tx
-    ty <- either (\x -> Left . intercalate "\n" $ x) Right $ seqInfer env (gToEx ex)
+    ty <- either (\x -> Left . intercalate "\n" $ x)
+                 Right
+                 (seqInfer env $ gToEx ex)
     return $ assertBool ("Expected:\n" ++
                         show expected ++
                         "\n    and:\n" ++

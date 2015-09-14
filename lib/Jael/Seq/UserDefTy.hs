@@ -15,16 +15,16 @@ data Tag = Tag Text
          | TagWithTy Text Ty
            deriving Show
 
-data UserDefTy = Struct Text [Text] (NE.NonEmpty Field)
-               | Enumer Text [Text] (NE.NonEmpty Tag)
+data UserDefTy = Struct [Text] (NE.NonEmpty Field)
+               | Enumer [Text] (NE.NonEmpty Tag)
                deriving (Show)
 
 data TDefError = TDefError
-  { dupTv    :: [Text]
-  , dupField :: [Text]
-  , freeTv   :: [Text]
-  , unusedTv :: [Text]
-  } deriving (Show)
+  { dupTv    :: S.Set Text
+  , dupField :: S.Set Text
+  , freeTv   :: S.Set Text
+  , unusedTv :: S.Set Text
+  } deriving (Eq, Show)
 
 splitTags :: [Tag] -> ([Text], [Ty])
 splitTags ts = let xs = map splitTag ts
@@ -35,8 +35,8 @@ splitTag t = case t of
                   Tag tn -> (tn, Nothing)
                   TagWithTy tn ty -> (tn, Just ty)
 
-validateType :: UserDefTy -> Either TDefError [(Text, PolyTy)]
-validateType (Enumer n tvs fs) =
+validateType :: (Text, UserDefTy) -> Either TDefError [(Text, PolyTy)]
+validateType (n, (Enumer tvs fs)) =
   let enumTy = TNamed n $ map TVar tvs
    in case uncurry (checkDefErr tvs) (splitTags . NE.toList $ fs) of
            Just err -> Left err
@@ -48,7 +48,7 @@ validateType (Enumer n tvs fs) =
                                                      , PolyTy tvs $ TFun ty enumTy)
                      ) (NE.toList fs)
 
-validateType (Struct n tvs fs) =
+validateType (n, (Struct tvs fs)) =
   let structTy = TNamed n (map TVar tvs)
       consTy = (foldr (\(_, ft) t -> TFun ft t) structTy fs)
    in case uncurry (checkDefErr tvs) (unzip . NE.toList $ fs) of
@@ -66,22 +66,16 @@ lowerFirst xs = case uncons xs of
                        error "Compiler error. Struct name should not be empty."
 
 
-tysToTyVars :: [Ty] -> [Text]
-tysToTyVars [] = []
-tysToTyVars (t:ts) = case t of
-                          (TVar x) -> x:tysToTyVars ts
-                          _        -> tysToTyVars ts
-
 -- Given a list of text representing ty vars and a list representing field names
 -- and their associated type, check for type definition errors
 checkDefErr :: [Text] -> [Text] -> [Ty] -> Maybe TDefError
 checkDefErr tvs fs ts =
-  let dupTVs = repeated tvs
-      dupFields = repeated fs
+  let dupTVs = S.fromList $ repeated tvs
+      dupFields = S.fromList $ repeated fs
       declaredTVs = S.fromList tvs
-      usedTVs = S.fromList . tysToTyVars $ ts
-      freeTVs = S.toList $ usedTVs `S.difference` declaredTVs
-      unusedTVs = S.toList $ declaredTVs `S.difference` usedTVs
+      usedTVs = S.unions . map typeVars $ ts
+      freeTVs = usedTVs `S.difference` declaredTVs
+      unusedTVs = declaredTVs `S.difference` usedTVs
    in if (not . null $ dupTVs) ||
          (not . null $ dupFields) ||
          (not . null $ freeTVs) ||
@@ -101,19 +95,23 @@ gToField :: GTStructElement -> Field
 gToField (GTStructElement (GTStructFieldName (LIdent gfn)) gt) =
                                      (pack gfn, gToType gt)
 
-gToStruct :: GTStructDef -> UserDefTy
-gToStruct (GTStructDef (UIdent n) tvs fields) =
-  case NE.nonEmpty fields of
-    Nothing -> notEnoughElements 1 "GTStructElement" "GTStructDef"
-    Just xs -> Struct (pack n) (gToTVars tvs) (map gToField xs)
-
 gToTag :: GTEnumElem -> Tag
 gToTag (GTEnumElemNoTy (LIdent t)) = Tag (pack t)
 gToTag (GTEnumElemWithTy (LIdent t) ty) = TagWithTy (pack t) (gToType ty)
 
+gToStruct :: GTStructDef -> UserDefTy
+gToStruct (GTStructDef tvs fields) =
+  case NE.nonEmpty fields of
+    Nothing -> notEnoughElements 1 "GTStructElement" "GTStructDef"
+    Just xs -> Struct (gToTVars tvs) (map gToField xs)
+
 gToEnumer :: GTEnumDef -> UserDefTy
-gToEnumer (GTEnumDef (UIdent n) tvs elems) =
+gToEnumer (GTEnumDef tvs elems) =
   case NE.nonEmpty elems of
        Nothing -> notEnoughElements 1 "GTEnumDef" "GTEnumElem"
-       Just xs -> Enumer (pack n) (gToTVars tvs) (map gToTag xs)
+       Just xs -> Enumer (gToTVars tvs) (map gToTag xs)
+
+gToUserDefTy :: GTypeDef -> (Text, UserDefTy)
+gToUserDefTy (GTDefStruct (UIdent i) s) = (pack i, gToStruct s)
+gToUserDefTy (GTDefEnum   (UIdent i) e) = (pack i, gToEnumer e)
 

@@ -13,22 +13,22 @@ import Jael.Seq.UserDefTy
 maxBuiltinTupSize :: Integer
 maxBuiltinTupSize = 10
 
-buildTup :: Integer -> UserDefTy
+buildTup :: Integer -> (Text, UserDefTy)
 buildTup i = let tvs = genericTake i . map (\v -> "a" ++ tshow v) $ ([0..]::[Integer])
-              in Struct ("Tup" ++ tshow i) tvs $ NE.fromList
+              in ("Tup" ++ tshow i, Struct tvs $ NE.fromList
                                                $ map (tshow *** TVar)
                                                $ zip ([0..]::[Integer]) tvs
+                 )
 
-builtinTypes :: [UserDefTy]
-builtinTypes = Struct "IntDivRes" [] ( NE.fromList [ ("quot", TInt)
-                                                     , ("rem", TInt)
-                                                     ]
-                                       )
-               : [ Enumer "Maybe" ["a"] $ NE.fromList [ TagWithTy "just" (TVar "a")
+builtinTypes :: [(Text, UserDefTy)]
+builtinTypes = ( "IntDivRes", Struct [] ( NE.fromList [ ("quot", TInt)
+                                                      , ("rem", TInt)
+                                                      ]
+                                        )
+               ) : ("Maybe", Enumer ["a"] $ NE.fromList [ TagWithTy "just" (TVar "a")
                                                       , Tag "nothing"
                                                       ]
-                 ]
-               ++ map buildTup [1..maxBuiltinTupSize]
+               ) : map buildTup [1..maxBuiltinTupSize]
 
 builtinFuncs :: TyEnv
 builtinFuncs = TyEnv $ M.fromList

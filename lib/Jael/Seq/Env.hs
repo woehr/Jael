@@ -14,18 +14,18 @@ import Jael.Util
 defaultEnv :: TyEnv
 defaultEnv = mkBuiltinEnv builtinFuncs builtinTypes
 
-validateBuiltins :: [UserDefTy] -> [(Text, PolyTy)]
+validateBuiltins :: [(Text, UserDefTy)] -> [(Text, PolyTy)]
 validateBuiltins =
-  concatMap (\s -> case validateType s of
-                        Left errs -> validationError s (tshow errs)
+  concatMap (\x -> case validateType x of
+                        Left errs -> validationError x (tshow errs)
                         Right xs -> xs
             )
 
-validationError :: UserDefTy -> Text -> b
+validationError :: (Text, UserDefTy) -> Text -> b
 validationError n xs = error . unpack $ "Builtin struct `" ++ tshow n
                                      ++ "` did not validate:\n" ++ xs
 
-mkBuiltinEnv :: TyEnv -> [UserDefTy] -> TyEnv
+mkBuiltinEnv :: TyEnv -> [(Text, UserDefTy)] -> TyEnv
 mkBuiltinEnv env ts =
   let fns = validateBuiltins ts
    in case addToEnv env fns of

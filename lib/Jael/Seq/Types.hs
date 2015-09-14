@@ -139,3 +139,11 @@ gToType (GTTVar (LIdent s)) = TVar (pack s)
 gToType (GTTup xs) = TNamed ("Tup" ++ tshow (length xs+1))
                             (map (\(GTTupArg x) -> gToType x) xs)
 
+-- Return the type variables of a type
+typeVars :: Ty -> S.Set Text
+typeVars = cata alg
+  where alg :: TyF (S.Set Text) -> S.Set Text
+        alg (TVarF x)   = S.singleton x
+        alg (TFunF x y) = x `S.union` y
+        alg _           = S.empty
+

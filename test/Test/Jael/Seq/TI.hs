@@ -20,7 +20,7 @@ seqInfTests =
   , testCase "let" $ checkInferredType exprLet
   , testCase "let polymorphism" $ checkInferredType exprLetPoly
   , testCase "int div result type" $ checkInferredType exprIntDiv
-  , testCase "type of int div result constructor" $ checkInferredType exprConstrIntDivRes 
+  , testCase "type of int div result constructor" $ checkInferredType exprConstrIntDivRes
   , testCase "accessors, first field" $ checkInferredType exprAccessor0
   , testCase "accessors, second field" $ checkInferredType exprAccessor1
   , testCase "struct, polymorphic field" $ checkInferredType exprAccessor2
@@ -29,16 +29,12 @@ seqInfTests =
   ]
 
 checkInferredType :: (Text, Ty) -> Assertion
-checkInferredType = checkInference testStruct testEnum
+checkInferredType = checkInference testTypes
 
-testStruct :: Text
-testStruct = pack [raw|
-  S a { f0 :: Bool , f1 :: Int , f2 :: a }
-|]
-
-testEnum :: Text
-testEnum = pack [raw|
-  E a { t0 Bool , t1 Int , t2 a , t3 }
+testTypes :: Text
+testTypes = pack [raw|
+  struct S a { f0 :: Bool , f1 :: Int , f2 :: a }
+  enum   E a { t0 Bool    , t1 Int    , t2 a    , t3 }
 |]
 
 exprPlus :: (Text, Ty)
