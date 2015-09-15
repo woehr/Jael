@@ -4,9 +4,13 @@
 
 -- tokens
 
-token UIdent      (upper (letter | digit | '_')*) ;
-token LIdent      (lower (letter | digit | '_')*) ;
-token IntTok      ('0' | ('~'? ["123456789"] digit*)) ;
+token UIdent (upper (letter | digit | '_')*) ;
+token LIdent (lower (letter | digit | '_')*) ;
+token IntTok ('0' | ('~'? ["123456789"] digit*)) ;
+token HexInt ({"0x"} digit+) ;
+token BitPat ('b' ["01"]+) ;
+
+rules GAnyInt ::= IntTok | HexInt | BitPat ;
 
 -- Sequential language
 
@@ -14,8 +18,6 @@ GUnit.       GUnit ::= "{}" ;
 
 GTNamedParam. GTNamedParam ::= GType ;
 separator GTNamedParam "," ;
-
---[]. [GTNamedParams] ::= ;
 
 GTNamedNoParam. GTNamedParams ::= ;
 GTNamedParams.  GTNamedParams ::= "(" [GTNamedParam] ")" ;
@@ -38,12 +40,11 @@ GTStructFieldName. GTStructFieldName ::= LIdent ;
 GTStructElement.   GTStructElement   ::= GTStructFieldName "::" GType ;
 separator          nonempty GTStructElement "," ;
 
-GTStructDef.    GTStructDef ::= [GTVars] "{" [GTStructElement] "}" ;
-
 GTEnumElemNoTy.   GTEnumElem ::= LIdent ;
 GTEnumElemWithTy. GTEnumElem ::= LIdent GType ;
-separator      nonempty GTEnumElem "," ;
+separator         nonempty GTEnumElem "," ;
 
+GTStructDef.      GTStructDef ::= [GTVars] "{" [GTStructElement] "}" ;
 GTEnumDef.     GTEnumDef ::= [GTVars] "{" [GTEnumElem] "}" ;
 
 GELetIdent.  GELetIdent ::= LIdent "=" GExpr ;
@@ -55,7 +56,7 @@ GEAppArg.    GEAppArg ::= GExpr ;
 separator    nonempty GEAppArg "," ;
 
 GEAbsArg.    GEAbsArg ::= LIdent ;
-separator    nonempty GEAbsArg "" ;
+terminator   nonempty GEAbsArg "" ;
 
 -- tuple args can't be empty (GEUnit handles this)
 GETupArg.    GETupArg ::= GExpr ;
@@ -101,6 +102,7 @@ GEMod.       GExpr8 ::= GExpr8 "%" GExpr9 ;
 
 -- Haskell precedence 8
 -- Power operators
+GEBitCat.    GExpr9  ::= GExpr10 "#" GExpr9 ;
 
 -- Haskell precedence 9
 GERightComp. GExpr10 ::= GExpr10  "o>" GExpr11 ;
@@ -116,14 +118,18 @@ GEApp.       GExpr14 ::= GExpr14 "(" [GEAppArg] ")" ;
 
 GEAbs.       GExpr15 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
 
-GEScopeIdent. GEScopeArg ::= LIdent ;
-GEScopeIndex. GEScopeArg ::= IntTok ;
+GEScopeIdent. GEScopeArg ::= "::" LIdent ;
+GEScopeIndex. GEScopeArg ::= "::" IntTok ;
+terminator    GEScopeArg "" ;
+
+GEScopeArgNE. GEScopeArgNE ::= GEScopeArg ;
+terminator nonempty GEScopeArgNE "" ;
 
 GETrue.      GExpr16 ::= "true" ;
 GEFalse.     GExpr16 ::= "false" ;
 GEInt.       GExpr16 ::= IntTok ;
 GEVar.       GExpr16 ::= LIdent ;
-GEScopedFn.  GExpr16 ::= UIdent "::" GEScopeArg ;
+GEScopedFn.  GExpr16 ::= UIdent GEScopeArg ;
 GEUnit.      GExpr16 ::= GUnit ;
 GETup.       GExpr16 ::= "{" [GETupArg] "}" ;
 
@@ -131,16 +137,32 @@ coercions    GExpr 16 ;
 
 -- Hardware language
 
-GHwArea.    GHwArea ::= "area" ;
+GHwArea.    GHwArea ::= "area" UIdent "@" HexInt GTStructDef ;
 terminator  GHwArea "" ;
 
-GHwState.   GHwState ::= "state" GType ;
+-- Defines the type of the special state variable. Either an existing type
+-- or a new structure definition
+GHwStateDefTy. GHwStateDef ::= GType ";" ;
+GHwStateDefSt. GHwStateDef ::= GTStructDef ;
+
+GHwState.   GHwState ::= "state" GHwStateDef ;
 
 GHwChan.    GHwChan ::= "channel" ;
-terminator  GHwChan ";" ;
+terminator nonempty GHwChan ";" ;
 
-GHwInit.    GHwInit ::= "init" ;
-GHwHandler. GHwHandler ::= "handler" ;
+-- Sequences of interaction with memory, either an area or the state
+GHwSeqLocState. GHwSeqLoc ::= "state" [GEScopeArg] ;
+GHwSeqLocArea.  GHwSeqLoc ::= UIdent [GEScopeArgNE] ;
+
+rules GHwVal ::= LIdent | GExpr ;
+
+GHwSeqLet.   GHwSeq ::= LIdent "=" GExpr ;
+GHwSeqRead.  GHwSeq ::= GHwSeqLoc "->" LIdent ;
+GHwSeqWrite. GHwSeq ::= GHwSeqLoc "<-" GHwVal ;
+terminator nonempty GHwSeq ";" ;
+
+GHwInit.    GHwInit ::= "init" "=" "{" [GHwSeq] "}" ;
+GHwHandler. GHwHandler ::= "handler" LIdent "=" "{" [GHwSeq] "}" ;
 
 -- Top level grammar
 
@@ -153,8 +175,9 @@ separator nonempty GFuncArg "," ;
 
 GGlobal.    GGlobal ::= LIdent "=" GExpr ";" ;
 GFunc.      GFunc ::= "func" LIdent "(" [GFuncArg] ")" "{" GExpr "}" ;
-GProc.      GProc ::= "proc" LIdent "(" ")" "{" "}" ;
-GHwproc.    GHwproc ::= "hwproc" LIdent "{" [GHwArea] GHwState [GHwChan] GHwInit GHwHandler "}" ;
+GProc.      GProc ::= "proc" UIdent "(" ")" "{" "}" ;
+GHwproc.    GHwproc ::= "hwproc" UIdent "{" "interrupt" HexInt ";" [GHwArea]
+                        GHwState [GHwChan] GHwInit GHwHandler "}" ;
 
 rules GTopDef ::= GTypeDef | GGlobal | GFunc | GProc | GHwproc ;
 terminator  GTopDef "" ;
@@ -164,5 +187,5 @@ GProg.      GProg ::= [GTopDef] ;
 comment "//" ;
 
 -- Only export nessecary parsers.
-entrypoints GProg, GTypeDef, GType, GExpr ;
+entrypoints GProg, GTypeDef, GType, GExpr, GHwproc ;
 

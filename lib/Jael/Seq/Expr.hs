@@ -83,6 +83,7 @@ gToEx (GEMod       e1 e2) = binPrm  PMod  e1 e2
 gToEx (GELeftComp  e1 e2) = binOp   "<o" e1 e2
 gToEx (GERightComp e1 e2) = binOp   "o>" e1 e2
 gToEx (GELogNot    e    ) = unaryPrm PNot  e
+gToEx (GEBitCat    e1 e2) = binPrm   PBitCat e1 e2
 
 gToEx (GEIf b e1 e2) = EApp (EApp (EApp (EPrm PIf) (gToEx b)) (letExprToEx e1)) (letExprToEx e2)
 
