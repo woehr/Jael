@@ -13,8 +13,9 @@ import Jael.Grammar
 import Jael.Parser
 import Jael.Util
 import Jael.Seq.AST
+import Jael.Seq.Closure hiding (freeVars)
 import Jael.Seq.Env
-import Jael.Seq.Expr
+import Jael.Seq.Expr (freeVars, gToEx)
 import Jael.Seq.TI
 import Jael.Seq.Types
 import Jael.Seq.UserDefTy
@@ -154,8 +155,13 @@ compile p = do
   -- TODO: Extract sequential fragments embedded within processes and hardware
   -- processes. Give them names and include them in the following processing
   seqTys <- processSeq progTyEnv globs funcs
-  Right $ tshow seqTys
   -- Now that all the sequential bits are named and typed, closure convert
+  let globalNames = M.keysSet seqTys
+  let ccSeqEx = M.mapWithKey (\k v -> closureConversion globalNames
+                                                        (k ++ "'lam'")
+                                                        v
+                             ) seqTys
+  Right $ tshow ccSeqEx
   -- Now take the closure converted fragments and generate llvm IR (or asm if
   -- necessary) annotated with worst case stack and execution usage
 
