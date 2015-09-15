@@ -187,5 +187,5 @@ GProg.      GProg ::= [GTopDef] ;
 comment "//" ;
 
 -- Only export nessecary parsers.
-entrypoints GProg, GTypeDef, GType, GExpr, GHwproc ;
+entrypoints GProg, GTypeDef, GType, GExpr, GHwproc, GHwSeq ;
 

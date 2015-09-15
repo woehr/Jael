@@ -9,6 +9,8 @@ import Test.Jael.Grammar.Expr (gExprTests)
 import Test.Jael.Grammar.Hwproc (gHwprocTests)
 import Test.Jael.Grammar.Struct (gStructTests)
 import Test.Jael.Grammar.Type (gTypeTests)
+import Test.Jael.Hw.Area (hwAreaTests)
+import Test.Jael.Hw.Seq (hwSeqTests)
 import Test.Jael.Seq.AST (astTests)
 import Test.Jael.Seq.Builtin (builtinTests)
 import Test.Jael.Seq.Closure (closureTests)
@@ -33,6 +35,9 @@ main = defaultMainWithOpts
   , testGroup "Struct creation" structTests
   -- hw grammar
   , testGroup "Hwproc grammar" gHwprocTests
+  -- hw
+  , testGroup "Hwproc state/area" hwAreaTests
+  , testGroup "Hwproc seq" hwSeqTests
   -- everything else
   , testGroup "Compilation" compileTests
   ] mempty

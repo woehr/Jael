@@ -23,6 +23,8 @@ library
                        Jael.Grammar.Abs
                        Jael.Grammar.Par
                        Jael.Grammar.Print
+                       Jael.Hw.Area
+                       Jael.Hw.Seq
                        Jael.Parser
                        Jael.Seq.AST
                        Jael.Seq.Builtin
