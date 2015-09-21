@@ -12,7 +12,7 @@ data Lit = LUnit
          deriving (Eq, Show)
 
 data Prm = PIf
-         | PAdd 
+         | PAdd
          | PSub
          | PTimes
          | PDiv

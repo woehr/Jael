@@ -17,6 +17,8 @@ source-repository head
 
 library
   exposed-modules:     Jael.Compile
+                       Jael.Conc.Proc
+                       Jael.Conc.Session
                        Jael.Grammar
                        Jael.Grammar.ErrM
                        Jael.Grammar.Lex
@@ -36,7 +38,8 @@ library
                        Jael.Seq.UserDefTy
                        Jael.Util
 
-  default-extensions:  OverloadedStrings
+  default-extensions:  DeriveFunctor,
+                       OverloadedStrings
   other-extensions:    NoImplicitPrelude
 
   build-depends:       base >=4.7 && <5,
