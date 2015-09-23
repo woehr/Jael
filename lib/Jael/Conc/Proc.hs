@@ -6,8 +6,9 @@ import ClassyPrelude hiding (Chan, Foldable)
 import Data.Functor.Foldable
 import qualified Data.Map as M
 import Jael.Seq.AST
+import Jael.Conc.Session
 
-newtype Chan = Chan Text
+newtype Chan = Chan (Text, Session)
   deriving (Show)
 
 type Var  = Text

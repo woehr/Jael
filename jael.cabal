@@ -19,6 +19,7 @@ library
   exposed-modules:     Jael.Compile
                        Jael.Conc.Proc
                        Jael.Conc.Session
+                       Jael.Conc.TyCk
                        Jael.Grammar
                        Jael.Grammar.ErrM
                        Jael.Grammar.Lex
