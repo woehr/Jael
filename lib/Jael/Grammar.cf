@@ -9,6 +9,7 @@ token LIdent (lower (letter | digit | '_')*) ;
 token IntTok ('0' | ('~'? ["123456789"] digit*)) ;
 token HexInt ({"0x"} digit+) ;
 token BitPat ('b' ["01"]+) ;
+token OctInt ({"0o"} digit+) ;
 
 rules GAnyInt ::= IntTok | HexInt | BitPat ;
 
@@ -34,6 +35,25 @@ GTUnit.      GType ::=  GUnit ;
 GTTup.       GType ::= "{" [GTTupArg] "}";
 GTNamed.     GType ::= UIdent GTNamedParams ;
 GTTVar.      GType ::= LIdent ;
+
+-- Session types
+GSessLab. GSessLab ::= LIdent "->" GSession1 ;
+separator GSessLab "," ;
+
+
+GSessRec. GSession1 ::= "rec" UIdent "." GSession2 ;
+
+GSessGet. GSession2 ::= "?" "[" GSession1 "]" GSession1 ;
+GSessPut. GSession2 ::= "!" "[" GSession1 "]" GSession1 ;
+GSessSel. GSession2 ::= "+" "[" [GSessLab] "]" GSession1 ;
+GSessCho. GSession2 ::= "&" "[" [GSessLab] "]" GSession1 ;
+
+
+GSessEnd. GSession3 ::= "end" ;
+GSessTy.  GSession3 ::= GType ;
+GSessVar. GSession3 ::= UIdent ;
+
+coercions GSession 3 ;
 
 -- Struct element is an accessor followed by a type
 GTStructFieldName. GTStructFieldName ::= LIdent ;
@@ -170,6 +190,8 @@ GTDefStruct. GTypeDef ::= "struct" UIdent GTStructDef ;
 GTDefEnum.   GTypeDef ::= "enum" UIdent GTEnumDef ;
 --GTDefAlias. GTypeDef ::= "alias" UIdent [GTVars] "=" GType ;
 
+GTDefProto.  GTypeDef ::= "protocol" UIdent "=" GSession ;
+
 GFuncArg.   GFuncArg ::= LIdent ;
 separator nonempty GFuncArg "," ;
 
@@ -187,5 +209,5 @@ GProg.      GProg ::= [GTopDef] ;
 comment "//" ;
 
 -- Only export nessecary parsers.
-entrypoints GProg, GTypeDef, GType, GExpr, GHwproc, GHwSeq ;
+entrypoints GProg, GTypeDef, GType, GSession, GExpr, GHwproc, GHwSeq ;
 
