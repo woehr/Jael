@@ -40,17 +40,17 @@ GTTVar.      GType ::= LIdent ;
 GSessLab. GSessLab ::= LIdent "->" GSession1 ;
 separator GSessLab "," ;
 
+GSessTy.   GSessOrTy ::= GType ;
+GSessSess. GSessOrTy ::= GSession1 ;
 
 GSessRec. GSession1 ::= "rec" UIdent "." GSession2 ;
 
-GSessGet. GSession2 ::= "?" "[" GSession1 "]" GSession1 ;
-GSessPut. GSession2 ::= "!" "[" GSession1 "]" GSession1 ;
+GSessGet. GSession2 ::= "?" "[" GSessOrTy "]" GSession1 ;
+GSessPut. GSession2 ::= "!" "[" GSessOrTy "]" GSession1 ;
 GSessSel. GSession2 ::= "+" "[" [GSessLab] "]" GSession1 ;
 GSessCho. GSession2 ::= "&" "[" [GSessLab] "]" GSession1 ;
 
-
 GSessEnd. GSession3 ::= "end" ;
-GSessTy.  GSession3 ::= GType ;
 GSessVar. GSession3 ::= UIdent ;
 
 coercions GSession 3 ;
