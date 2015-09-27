@@ -2,7 +2,7 @@
 
 module Jael.Conc.Session where
 
-import ClassyPrelude hiding (Chan, Foldable)
+import ClassyPrelude hiding (Foldable)
 import Data.Functor.Foldable
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -10,12 +10,19 @@ import Jael.Grammar
 import Jael.Util
 import Jael.Seq.Types
 
+data SessDefErr = SessDefErr
+  { sessErrDupInd :: (S.Set Text)
+  , sessErrDupLab :: (S.Set Text)
+  , sessErrFree   :: (S.Set Text)
+  , sessErrUnused :: (S.Set Text)
+  } deriving (Eq, Show)
+
 data Session = SGetTy Ty Session
              | SPutTy Ty Session
              | SGetSess Session Session
              | SPutSess Session Session
-             | SChoice (M.Map Text Session) Session
-             | SSelect (M.Map Text Session) Session
+             | SChoice [(Text, Session)] Session
+             | SSelect [(Text, Session)] Session
              | SRepl Session
              | SCoInd Text Session
              | SIndVar Text
@@ -26,8 +33,8 @@ data SessionF a = SGetTyF Ty a
                 | SPutTyF Ty a
                 | SGetSessF a a
                 | SPutSessF a a
-                | SChoiceF (M.Map Text a) a
-                | SSelectF (M.Map Text a) a
+                | SChoiceF [(Text, a)] a
+                | SSelectF [(Text, a)] a
                 | SReplF a
                 | SCoIndF Text a
                 | SIndVarF Text
@@ -60,16 +67,11 @@ instance Unfoldable Session where
   embed (SIndVarF x) = SIndVar x
   embed (SEndF) = SEnd
 
-gLabelListToMap :: [GSessLab] -> M.Map Text GSession
-gLabelListToMap xs =
-  case insertCollectDups
-          M.empty
-          (map (\(GSessLab (LIdent x) s)-> (pack x, s)) xs) of
-          Left dups -> error "Duplicate labels in session type."
-       Right m   -> m
+convLabelList :: [GSessLab] -> [(Text, GSession)]
+convLabelList = map (\(GSessLab (LIdent x) s)-> (pack x, s))
 
-gToSess :: GSession -> Session
-gToSess = ana coalg
+gToSession :: GSession -> Session
+gToSession = ana coalg
   where coalg :: GSession -> Base Session GSession
         coalg (GSessEnd) = SEndF
         coalg (GSessVar (UIdent var)) = SIndVarF (pack var)
@@ -78,32 +80,73 @@ gToSess = ana coalg
         coalg (GSessGet (GSessSess s) cont) = SGetSessF s cont
         coalg (GSessPut (GSessTy t) cont) = SPutTyF (gToType t) cont
         coalg (GSessPut (GSessSess s) cont) = SPutSessF s cont
-        coalg (GSessSel ss cont) = SSelectF (gLabelListToMap ss) cont
-        coalg (GSessCho ss cont) = SChoiceF (gLabelListToMap ss) cont
+        coalg (GSessSel ss cont) = SSelectF (convLabelList ss) cont
+        coalg (GSessCho ss cont) = SChoiceF (convLabelList ss) cont
 
-varMerge :: Ord a
-         => (S.Set a, S.Set a)
-         -> (S.Set a, S.Set a)
-         -> (S.Set a, S.Set a)
-varMerge (a1, a2) (b1, b2) = (a1 `S.union` b1, a2 `S.union` b2)
+tupListMerge :: ([a], [b]) -> ([a], [b]) -> ([a], [b])
+tupListMerge (as, bs) (a's, b's) = (as ++ a's, bs ++ b's)
 
-defAndUsedIndVars :: Session -> (S.Set Text, S.Set Text)
-defAndUsedIndVars = cata alg
-  where alg :: Base Session (S.Set Text, S.Set Text) -> (S.Set Text, S.Set Text)
-        alg (SEndF) = (S.empty, S.empty)
-        alg (SIndVarF var) = (S.empty, S.singleton var)
-        alg (SCoIndF var cont) = (S.singleton var, S.empty) `varMerge` cont
+varUsage :: Session -> ([Text], [Text])
+varUsage = cata alg
+  where alg :: Base Session ([Text], [Text]) -> ([Text], [Text])
+        alg (SEndF) = ([], [])
+        alg (SIndVarF var) = ([], [var])
+        alg (SCoIndF var (vs, us)) = (var:vs, us)
         alg (SGetTyF _ y) = y
         alg (SPutTyF _ y) = y
-        alg (SGetSessF x y) = x `varMerge` y
-        alg (SPutSessF x y) = x `varMerge` y
-        alg (SChoiceF xs y) = foldr varMerge (S.empty, S.empty) (y:(M.elems xs))
-        alg (SSelectF xs y) = foldr varMerge (S.empty, S.empty) (y:(M.elems xs))
+        alg (SGetSessF xs ys) = xs `tupListMerge` ys
+        alg (SPutSessF xs ys) = xs `tupListMerge` ys
+        alg (SChoiceF xs y) = foldr tupListMerge ([], []) (y:(map snd xs))
+        alg (SSelectF xs y) = foldr tupListMerge ([], []) (y:(map snd xs))
         alg (SReplF x) = x
 
-freeIndVars :: Session -> S.Set Text
-freeIndVars s = uncurry (flip (S.\\)) $ defAndUsedIndVars s
+-- Finds any duplicate labels in a single select or choice. Accross several
+-- select or choice labels can be reused.
+dupLabels :: Session -> S.Set Text
+dupLabels = cata alg
+  where alg :: Base Session (S.Set Text) -> S.Set Text
+        alg (SCoIndF _ cont) = cont
+        alg (SGetTyF _ y) = y
+        alg (SPutTyF _ y) = y
+        alg (SGetSessF xs ys) = xs `S.union` ys
+        alg (SPutSessF xs ys) = xs `S.union` ys
+        alg (SChoiceF xs y) = S.unions $ (S.fromList $ repeated $ map fst xs):y:(map snd xs)
+        alg (SSelectF xs y) = S.unions $ (S.fromList $ repeated $ map fst xs):y:(map snd xs)
+        alg _ = S.empty
 
-unusedIndVars :: Session -> S.Set Text
-unusedIndVars s = uncurry (S.\\) $ defAndUsedIndVars s
+--freeIndVars :: Session -> S.Set Text
+--freeIndVars = freeIndVars' . varUsage
+
+freeIndVars' :: ([Text], [Text]) -> S.Set Text
+freeIndVars' (defd, used) = S.fromList used S.\\ S.fromList defd
+
+--unusedIndVars :: Session -> S.Set Text
+--unusedIndVars = unusedIndVars' . varUsage
+
+unusedIndVars' :: ([Text], [Text]) -> S.Set Text
+unusedIndVars' (defd, used) = S.fromList defd S.\\ S.fromList used
+
+validateSession :: Session -> Maybe SessDefErr
+validateSession s =
+  let usages@(varsDefd, _) = varUsage s
+      dupInd = repeated varsDefd
+      dupLabs = dupLabels s
+      free = freeIndVars' usages
+      unused = unusedIndVars' usages
+   in if (length dupInd /= 0) ||
+         (S.size dupLabs /= 0) ||
+         (S.size free /= 0) ||
+         (S.size unused /= 0)
+        then Just SessDefErr
+              { sessErrDupInd = S.fromList dupInd
+              , sessErrDupLab = dupLabs
+              , sessErrFree   = free
+              , sessErrUnused = unused
+              }
+        else Nothing
+
+validateSessions :: M.Map Text Session -> Maybe (M.Map Text SessDefErr)
+validateSessions ss =
+  let errMap = M.mapMaybe validateSession ss
+   in if M.size errMap == 0 then Nothing else Just errMap
 
