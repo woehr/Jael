@@ -11,7 +11,6 @@ import Test.Jael.Grammar.Struct (gStructTests)
 import Test.Jael.Grammar.Type (gTypeTests)
 import Test.Jael.Conc.Session (sessionTests)
 import Test.Jael.Hw.Area (hwAreaTests)
-import Test.Jael.Hw.Seq (hwSeqTests)
 import Test.Jael.Seq.AST (astTests)
 import Test.Jael.Seq.Builtin (builtinTests)
 import Test.Jael.Seq.Closure (closureTests)
@@ -37,8 +36,7 @@ main = defaultMainWithOpts
   -- hw grammar
   , testGroup "Hwproc grammar" gHwprocTests
   -- hw
-  , testGroup "Hwproc state/area" hwAreaTests
-  , testGroup "Hwproc seq" hwSeqTests
+  , testGroup "Hardware areas" hwAreaTests
   -- session types
   , testGroup "Session types" sessionTests
   -- everything else

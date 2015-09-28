@@ -21,9 +21,9 @@ library
                        Jael.Conc.Session
                        Jael.Conc.TyCk
                        Jael.Grammar
+                       Jael.Grammar.Abs
                        Jael.Grammar.ErrM
                        Jael.Grammar.Lex
-                       Jael.Grammar.Abs
                        Jael.Grammar.Par
                        Jael.Grammar.Print
                        Jael.Hw.Area

@@ -6,16 +6,18 @@
 
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;
+token LIdentWithScope (lower (letter | digit | '_')* ({"::"} (lower (letter | digit | '_'))* )*) ;
 token IntTok ('0' | ('~'? ["123456789"] digit*)) ;
 token HexInt ({"0x"} digit+) ;
+token OctInt ('o' digit+) ;
 token BitPat ('b' ["01"]+) ;
-token OctInt ({"0o"} digit+) ;
 
-rules GAnyInt ::= IntTok | HexInt | BitPat ;
+rules GAnyInt ::= IntTok | HexInt | OctInt | BitPat ;
 
--- Sequential language
+-- Sequential grammar
 
 GUnit.       GUnit ::= "{}" ;
+GChoiceLabel. GChoiceLabel ::= LIdent ;
 
 GTNamedParam. GTNamedParam ::= GType ;
 separator GTNamedParam "," ;
@@ -37,8 +39,8 @@ GTNamed.     GType ::= UIdent GTNamedParams ;
 GTTVar.      GType ::= LIdent ;
 
 -- Session types
-GSessLab. GSessLab ::= LIdent "->" GSession1 ;
-separator GSessLab "," ;
+GSessChoice. GSessChoice ::= GChoiceLabel "=>" GSession1 ;
+separator nonempty GSessChoice "," ;
 
 GSessTy.   GSessOrTy ::= GType ;
 GSessSess. GSessOrTy ::= GSession1 ;
@@ -47,8 +49,8 @@ GSessRec. GSession1 ::= "rec" UIdent "." GSession2 ;
 
 GSessGet. GSession2 ::= "?" "[" GSessOrTy "]" GSession1 ;
 GSessPut. GSession2 ::= "!" "[" GSessOrTy "]" GSession1 ;
-GSessSel. GSession2 ::= "+" "[" [GSessLab] "]" GSession1 ;
-GSessCho. GSession2 ::= "&" "[" [GSessLab] "]" GSession1 ;
+GSessSel. GSession2 ::= "+" "[" [GSessChoice] "]" GSession1 ;
+GSessCho. GSession2 ::= "&" "[" [GSessChoice] "]" GSession1 ;
 
 GSessEnd. GSession3 ::= "end" ;
 GSessVar. GSession3 ::= UIdent ;
@@ -64,8 +66,22 @@ GTEnumElemNoTy.   GTEnumElem ::= LIdent ;
 GTEnumElemWithTy. GTEnumElem ::= LIdent GType ;
 separator         nonempty GTEnumElem "," ;
 
-GTStructDef.      GTStructDef ::= [GTVars] "{" [GTStructElement] "}" ;
-GTEnumDef.     GTEnumDef ::= [GTVars] "{" [GTEnumElem] "}" ;
+GTStructDef. GTStructDef ::= [GTVars] "{" [GTStructElement] "}" ;
+GTEnumDef.   GTEnumDef ::= [GTVars] "{" [GTEnumElem] "}" ;
+
+-- Annotations for the fields of hardware areas
+GTAreaAnnPad. GTAreaAnn ::= "pad" GAnyInt ;
+separator nonempty GTAreaAnn "," ;
+
+-- A single element list collecting several annotations
+GTAreaAnnCol. GTAreaAnnCol ::= "[" [GTAreaAnn] "]" ;
+(:[]). [GTAreaAnnCol] ::= GTAreaAnnCol ;
+
+GTAreaElementPlain. GTAreaElement ::= GTStructElement ;
+GTAreaElementAnn.   GTAreaElement ::= [GTAreaAnnCol] GTStructElement ;
+separator nonempty GTAreaElement "," ;
+
+GTAreaDef.   GTAreaDef ::= "{" [GTAreaElement] "}" ;
 
 GELetIdent.  GELetIdent ::= LIdent "=" GExpr ;
 terminator   GELetIdent ";" ;
@@ -155,53 +171,78 @@ GETup.       GExpr16 ::= "{" [GETupArg] "}" ;
 
 coercions    GExpr 16 ;
 
--- Hardware language
+-- Process grammar
 
-GHwArea.    GHwArea ::= "area" UIdent "@" HexInt GTStructDef ;
-terminator  GHwArea "" ;
+GProcName. GProcName ::= UIdent ;
 
--- Defines the type of the special state variable. Either an existing type
--- or a new structure definition
-GHwStateDefTy. GHwStateDef ::= GType ";" ;
-GHwStateDefSt. GHwStateDef ::= GTStructDef ;
+-- Builtin channels can have "::" in their name
+GChan.     GChan ::= LIdentWithScope ;
 
-GHwState.   GHwState ::= "state" GHwStateDef ;
+-- User created channels can't have "::" in their name
+GUserChan. GUserChan ::= LIdent ;
 
-GHwChan.    GHwChan ::= "channel" ;
-terminator nonempty GHwChan ";" ;
+GConcChoice. GConcChoice ::= GChoiceLabel "=>" GProc ;
+separator nonempty GConcChoice "," ;
 
--- Sequences of interaction with memory, either an area or the state
-GHwSeqLocState. GHwSeqLoc ::= "state" [GEScopeArg] ;
-GHwSeqLocArea.  GHwSeqLoc ::= UIdent [GEScopeArgNE] ;
+-- Processes that have continuations
+GProcNew.   GProcC ::= "new" GUserChan ":" UIdent ;
+GProcLet.   GProcC ::= LIdent "="  GExpr ;
+GProcGet.   GProcC ::= GChan  "->" LIdent ;
+-- The definition of an expression contains an LIdent as a var, so rather than
+-- creating a rule for (LIdent | GExpr) just look for single variable
+-- expressions that are channel names when parsing the grammar tree.
+GProcPut.   GProcC ::= GChan  "<-" GExpr ;
+GProcSel.   GProcC ::= GChan  "."  GChoiceLabel ;
 
-rules GHwVal ::= LIdent | GExpr ;
+terminator GProcC ";" ;
 
-GHwSeqLet.   GHwSeq ::= LIdent "=" GExpr ;
-GHwSeqRead.  GHwSeq ::= GHwSeqLoc "->" LIdent ;
-GHwSeqWrite. GHwSeq ::= GHwSeqLoc "<-" GHwVal ;
-terminator nonempty GHwSeq ";" ;
+GProcPar.   GProc0 ::= GProc0 "|" GProc1 ;
 
-GHwInit.    GHwInit ::= "init" "=" "{" [GHwSeq] "}" ;
-GHwHandler. GHwHandler ::= "handler" LIdent "=" "{" [GHwSeq] "}" ;
+GProcSeq.   GProc1 ::= [GProcC] ;
+GProcCho.   GProc1 ::= [GProcC] GChan "." "case"
+  "{"
+    [ GConcChoice ]
+  "}" ;
+
+-- See comment for GProcPut for why GExpr is used.
+GProcParam. GProcParam ::= GExpr ;
+separator GProcParam "," ;
+GProcNamed. GProc2 ::= GProcName "(" [GProcParam] ")" ;
+
+coercions GProc 2 ;
 
 -- Top level grammar
 
 GTDefStruct. GTypeDef ::= "struct" UIdent GTStructDef ;
 GTDefEnum.   GTypeDef ::= "enum" UIdent GTEnumDef ;
---GTDefAlias. GTypeDef ::= "alias" UIdent [GTVars] "=" GType ;
-
 GTDefProto.  GTypeDef ::= "protocol" UIdent "=" GSession ;
+GTDefArea.   GTypeDef ::= "area" UIdent "@" GAnyInt GTAreaDef ;
 
-GFuncArg.   GFuncArg ::= LIdent ;
+GFuncName. GFuncName ::= LIdent ;
+GFuncArg.  GFuncArg  ::= LIdent ;
 separator nonempty GFuncArg "," ;
 
-GGlobal.    GGlobal ::= LIdent "=" GExpr ";" ;
-GFunc.      GFunc ::= "func" LIdent "(" [GFuncArg] ")" "{" GExpr "}" ;
-GProc.      GProc ::= "proc" UIdent "(" ")" "{" "}" ;
-GHwproc.    GHwproc ::= "hwproc" UIdent "{" "interrupt" HexInt ";" [GHwArea]
-                        GHwState [GHwChan] GHwInit GHwHandler "}" ;
+GProcArg.  GProcArg ::= LIdent ;
+separator GProcArg "," ;
 
-rules GTopDef ::= GTypeDef | GGlobal | GFunc | GProc | GHwproc ;
+GGlobal.  GGlobal  ::= LIdent "=" GExpr ";" ;
+GFunc.    GFunc    ::= "func" GFuncName "(" [GFuncArg] ")"
+  "{"
+    GExpr
+  "}" ;
+
+GProcDef. GProcDef ::= "proc" GProcName "(" [GProcArg] ")"
+  "{"
+    GProc
+  "}" ;
+
+GHwproc.  GHwproc  ::= "hwproc" GProcName
+  "{"
+    "interrupt" HexInt ";"
+    "init" "=" "{" GProc "}"
+  "}" ;
+
+rules GTopDef ::= GTypeDef | GGlobal | GFunc | GProcDef | GHwproc ;
 terminator  GTopDef "" ;
 
 GProg.      GProg ::= [GTopDef] ;
@@ -209,5 +250,5 @@ GProg.      GProg ::= [GTopDef] ;
 comment "//" ;
 
 -- Only export nessecary parsers.
-entrypoints GProg, GTypeDef, GType, GSession, GExpr, GHwproc, GHwSeq ;
+entrypoints GProg, GTypeDef, GType, GSession, GExpr, GProc, GHwproc ;
 

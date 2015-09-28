@@ -67,8 +67,8 @@ instance Unfoldable Session where
   embed (SIndVarF x) = SIndVar x
   embed (SEndF) = SEnd
 
-convLabelList :: [GSessLab] -> [(Text, GSession)]
-convLabelList = map (\(GSessLab (LIdent x) s)-> (pack x, s))
+convLabelList :: [GSessChoice] -> [(Text, GSession)]
+convLabelList = map (\(GSessChoice (GChoiceLabel (LIdent x)) s)-> (pack x, s))
 
 gToSession :: GSession -> Session
 gToSession = ana coalg

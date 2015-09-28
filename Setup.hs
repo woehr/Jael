@@ -59,7 +59,7 @@ bnfc _ lbi = PreProcessor
           "import " ++ scope ++ ".ErrM\n" ++
           "\n"
         rawSystemProgram verbosity happyProg
-         [ "-gca"
+         [ "-gcai"
          ,  dropExtension outRelativeFile </> "Par.y"
          ]
         rawSystemProgram verbosity alexProg

@@ -34,14 +34,14 @@ data Global = Global Ex TyEnv
   deriving (Show)
 
 -- splits the top level definition into its different types of components
-splitTop :: GProg -> ([GTypeDef], [GGlobal], [GFunc], [GProc], [GHwproc])
+splitTop :: GProg -> ([GTypeDef], [GGlobal], [GFunc], [GProcDef], [GHwproc])
 splitTop (GProg xs) =
   foldr
     (\x (ts, gs, fs, ps, hs) -> case x of
           GTopDefGTypeDef t -> (t:ts, gs,   fs,   ps,   hs)
           GTopDefGGlobal  g -> (ts,   g:gs, fs,   ps,   hs)
           GTopDefGFunc    f -> (ts,   gs,   f:fs, ps,   hs)
-          GTopDefGProc    p -> (ts,   gs,   fs,   p:ps, hs)
+          GTopDefGProcDef p -> (ts,   gs,   fs,   p:ps, hs)
           GTopDefGHwproc  h -> (ts,   gs,   fs,   ps,   h:hs)
     )
     ([], [], [], [], [])
@@ -51,7 +51,7 @@ gglobToGlob :: GGlobal -> (Text, Global)
 gglobToGlob (GGlobal (LIdent i) e) = (pack i, Global (gToEx e) (TyEnv M.empty))
 
 gfuncToGlob :: GFunc -> (Text, Global)
-gfuncToGlob (GFunc (LIdent i) as e) =
+gfuncToGlob (GFunc (GFuncName (LIdent i)) as e) =
   (pack i, Global (cata argsToAbs as) (TyEnv M.empty))
   where argsToAbs :: Prim [GFuncArg] Ex -> Ex
         argsToAbs (Cons (GFuncArg (LIdent x)) xs) = EAbs (pack x) xs
@@ -139,7 +139,7 @@ processSeq (TyEnv env) gs fs = do
     (env, M.empty)
     processOrder
 
-processConc :: [GProc] -> Either CompileErr a
+processConc :: [GProcDef] -> Either CompileErr a
 processConc ps = undefined
 
 processHw :: [GHwproc] -> Either CompileErr a

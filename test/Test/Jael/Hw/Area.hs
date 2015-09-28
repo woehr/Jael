@@ -7,7 +7,7 @@ module Test.Jael.Hw.Area
 import ClassyPrelude
 import qualified Data.Map as M
 import Jael.Grammar
-import Jael.Hw.Area
+import Jael.Parser
 import Jael.Seq.Types
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
@@ -16,24 +16,29 @@ import Test.Jael.Util
 
 hwAreaTests :: [T.Test]
 hwAreaTests =
-  [ testCase "polymorphic area" $ checkHwAreaErr polyArea
-  , testCase "area location" $ checkHwArea locationTest
+  [ testCase "area locations" $ checkHwArea locationTest
   ]
 
-checkHwAreaErr :: (Text, HwAreaErr) -> Assertion
-checkHwAreaErr (t, e) = undefined
-
 checkHwArea :: (Text, M.Map Text (Integer, Ty)) -> Assertion
-checkHwArea (t, vs) = undefined
-
-polyArea :: (Text, HwAreaErr)
-polyArea = (pack [raw|
-|], PolyArea
-  )
+checkHwArea (t, vs) =
+  case runParser pGTypeDef t of
+    Left err -> assertFailure (unpack err)
+    Right g  -> assertFailure $ "Unimplemented.\nParsed: " ++ show g
+                                           ++ "\nExpect: " ++ show vs
 
 locationTest :: (Text, M.Map Text (Integer, Ty))
 locationTest = (pack [raw|
+  area Area @ 0x4000
+  { [pad 8]
+    x :: Int
+  , y :: Bool
+  , [align 4]
+    z :: Int
+  }
 |], M.fromList
-  [ ("Area::a", (0x4000, TInt))
+  [ ("area",    (0x4000, TNamed "Area" []))
+  , ("area::x", (0x4008, TInt))
+  , ("area::y", (0x400C, TBool))
+  , ("area::z", (0x4010, TInt))
   ])
 
