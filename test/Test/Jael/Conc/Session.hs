@@ -43,13 +43,13 @@ checkSession (t, SessDefErr
 
 allErrs :: (Text, SessDefErr)
 allErrs = (pack [raw|
-  rec X. &[ a->rec X. Y
-          , b->?[Int]end
-          , c-> +[ a->end
-                 , a->end
-                 , b->end
+  rec X. &[ a=>rec X. <Y>
+          , b=>?[Int]end
+          , c=> +[ a=>end
+                 , a=>end
+                 , b=>end
                  ] end
-          , c->end
+          , c=>end
           ] end
 |], SessDefErr
       { sessErrDupInd = S.fromList ["X"]

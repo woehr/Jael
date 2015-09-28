@@ -6,7 +6,6 @@
 
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;
-token LIdentWithScope (lower (letter | digit | '_')* ({"::"} (lower (letter | digit | '_'))* )*) ;
 token IntTok ('0' | ('~'? ["123456789"] digit*)) ;
 token HexInt ({"0x"} digit+) ;
 token OctInt ('o' digit+) ;
@@ -14,10 +13,15 @@ token BitPat ('b' ["01"]+) ;
 
 rules GAnyInt ::= IntTok | HexInt | OctInt | BitPat ;
 
+GChoiceLabel. GChoiceLabel ::= LIdent ;
+
+GScopedIdent. GScopedIdent ::= [GScopeElem] ;
+GScopeElem.   GScopeElem ::= LIdent ;
+separator nonempty GScopeElem "::" ;
+
 -- Sequential grammar
 
 GUnit.       GUnit ::= "{}" ;
-GChoiceLabel. GChoiceLabel ::= LIdent ;
 
 GTNamedParam. GTNamedParam ::= GType ;
 separator GTNamedParam "," ;
@@ -53,7 +57,9 @@ GSessSel. GSession2 ::= "+" "[" [GSessChoice] "]" GSession1 ;
 GSessCho. GSession2 ::= "&" "[" [GSessChoice] "]" GSession1 ;
 
 GSessEnd. GSession3 ::= "end" ;
-GSessVar. GSession3 ::= UIdent ;
+-- recursion variable surrounded in <> to distinguish it from GTNamed in
+-- GSessGet and GSessPut
+GSessVar. GSession3 ::= "<" UIdent ">" ;
 
 coercions GSession 3 ;
 
@@ -70,7 +76,8 @@ GTStructDef. GTStructDef ::= [GTVars] "{" [GTStructElement] "}" ;
 GTEnumDef.   GTEnumDef ::= [GTVars] "{" [GTEnumElem] "}" ;
 
 -- Annotations for the fields of hardware areas
-GTAreaAnnPad. GTAreaAnn ::= "pad" GAnyInt ;
+GTAreaAnnPad.   GTAreaAnn ::= "pad" GAnyInt ;
+GTAreaAnnAlign. GTAreaAnn ::= "align" GAnyInt ;
 separator nonempty GTAreaAnn "," ;
 
 -- A single element list collecting several annotations
@@ -101,8 +108,8 @@ separator    nonempty GETupArg "," ;
 ----- Begin operators -----
 
 -- Haskell precedence 0
-GERightApp.  GExpr0 ::= GExpr0 "$>" GExpr1 ;
-GELeftApp.   GExpr1 ::= GExpr2 "<$" GExpr1 ;
+--GERightApp.  GExpr0 ::= GExpr0 "$>" GExpr1 ;
+--GELeftApp.   GExpr1 ::= GExpr2 "<$" GExpr1 ;
 
 -- Haskell precedence 1
 --GEBind.      GExpr2 ::= GExpr2 ">>=" GExpr3 ;
@@ -115,12 +122,12 @@ GELogOr.     GExpr3 ::= GExpr4 "||" GExpr3 ;
 GELogAnd.    GExpr4 ::= GExpr5 "&&" GExpr4 ;
 
 -- Haskell precedence 4
-GEEq.        GExpr5 ::= GExpr5 "==" GExpr5 ;
-GENotEq.     GExpr5 ::= GExpr5 "!=" GExpr5 ;
-GEGtEq.      GExpr5 ::= GExpr5 ">=" GExpr5 ;
-GELtEq.      GExpr5 ::= GExpr5 "<=" GExpr5 ;
-GEGt.        GExpr5 ::= GExpr5 ">"  GExpr5 ;
-GELt.        GExpr5 ::= GExpr5 "<"  GExpr5 ;
+GEEq.        GExpr5 ::= GExpr6 "==" GExpr6 ;
+GENotEq.     GExpr5 ::= GExpr6 "!=" GExpr6 ;
+GEGtEq.      GExpr5 ::= GExpr6 ">=" GExpr6 ;
+GELtEq.      GExpr5 ::= GExpr6 "<=" GExpr6 ;
+GEGt.        GExpr5 ::= GExpr6 ">"  GExpr6 ;
+GELt.        GExpr5 ::= GExpr6 "<"  GExpr6 ;
 -- elem, notElem
 
 -- Haskell precedence 5
@@ -141,7 +148,7 @@ GEMod.       GExpr8 ::= GExpr8 "%" GExpr9 ;
 GEBitCat.    GExpr9  ::= GExpr10 "#" GExpr9 ;
 
 -- Haskell precedence 9
-GERightComp. GExpr10 ::= GExpr10  "o>" GExpr11 ;
+GERightComp. GExpr10 ::= GExpr10 "o>" GExpr11 ;
 GELeftComp.  GExpr11 ::= GExpr12 "<o" GExpr11 ;
 
 GELogNot.    GExpr12 ::= "!" GExpr12 ;
@@ -156,10 +163,6 @@ GEAbs.       GExpr15 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
 
 GEScopeIdent. GEScopeArg ::= "::" LIdent ;
 GEScopeIndex. GEScopeArg ::= "::" IntTok ;
-terminator    GEScopeArg "" ;
-
-GEScopeArgNE. GEScopeArgNE ::= GEScopeArg ;
-terminator nonempty GEScopeArgNE "" ;
 
 GETrue.      GExpr16 ::= "true" ;
 GEFalse.     GExpr16 ::= "false" ;
@@ -176,7 +179,7 @@ coercions    GExpr 16 ;
 GProcName. GProcName ::= UIdent ;
 
 -- Builtin channels can have "::" in their name
-GChan.     GChan ::= LIdentWithScope ;
+GChan.     GChan ::= GScopedIdent ;
 
 -- User created channels can't have "::" in their name
 GUserChan. GUserChan ::= LIdent ;

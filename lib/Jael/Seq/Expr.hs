@@ -65,8 +65,8 @@ binOp op l r = EApp (EApp (EVar op) (gToEx l)) (gToEx r)
 
 -- Converts grammar to AST but no type checking yet
 gToEx :: GExpr -> Ex
-gToEx (GELeftApp   e1 e2) = binOp   "<$" e1 e2
-gToEx (GERightApp  e1 e2) = binOp   "$>" e1 e2
+--gToEx (GELeftApp   e1 e2) = binOp   "<$" e1 e2
+--gToEx (GERightApp  e1 e2) = binOp   "$>" e1 e2
 gToEx (GELogOr     e1 e2) = binPrm  POr e1 e2
 gToEx (GELogAnd    e1 e2) = binPrm  PAnd e1 e2
 gToEx (GEEq        e1 e2) = binPrm  PEq e1 e2

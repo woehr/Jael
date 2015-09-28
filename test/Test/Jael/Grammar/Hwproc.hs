@@ -30,7 +30,10 @@ hwprocTop = (pack [raw|
             (GProcSeq
               [ GProcLet (LIdent "letExpr")
                          (GEPlus (GEInt (IntTok "2")) (GEInt (IntTok "4")))
-              , GProcPut (GChan (LIdentWithScope "c::x::y::z"))
+              , GProcPut (GChan (GScopedIdent $
+                                  map (GScopeElem . LIdent) ["c", "x", "y", "z"]
+                                )
+                         )
                          (GEVar (LIdent "y"))
               ]
             )
