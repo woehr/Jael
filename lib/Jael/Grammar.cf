@@ -213,15 +213,15 @@ GProcRec.   GProc1 ::= "rec" GProcName "(" [GRecInitializer] ")"
 GProcParam. GProcParam ::= GExpr ;
 separator GProcParam "," ;
 
-GProcNamed. GProc2 ::= GProcName "(" [GProcParam] ")" ;
-GProcInact. GProc2 ::= GUnit ;
+GProcNamed. GProc1 ::= GProcName "(" [GProcParam] ")" ;
+GProcInact. GProc1 ::= GUnit ;
 
-GParElem. GParElem ::= GProc2 ;
+GParElem. GParElem ::= GProc1 ;
 separator nonempty GParElem "|" ;
 
-GProcPar.   GProc3 ::= "(" GParElem "|" [GParElem] ")" ;
+GProcPar.   GProc2 ::= "(" GParElem "|" [GParElem] ")" ;
 
-coercions GProc 3 ;
+coercions GProc 2 ;
 
 -- Top level grammar
 

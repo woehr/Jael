@@ -7,6 +7,7 @@ import Test.Jael.Compile (compileTests)
 import Test.Jael.Grammar.Enum (gEnumTests)
 import Test.Jael.Grammar.Expr (gExprTests)
 import Test.Jael.Grammar.Hwproc (gHwprocTests)
+import Test.Jael.Grammar.Proc (gProcTests)
 import Test.Jael.Grammar.Struct (gStructTests)
 import Test.Jael.Grammar.Type (gTypeTests)
 import Test.Jael.Conc.Proc (procTests)
@@ -38,10 +39,11 @@ main = defaultMainWithOpts
   , testGroup "Hwproc grammar" gHwprocTests
   -- hw
   , testGroup "Hardware areas" hwAreaTests
-  -- session types
+  -- sessions
   , testGroup "Session types" sessionTests
   -- processes
-  , testGroup "Processes" procTests
+  , testGroup "Process grammar" gProcTests
+  , testGroup "Process definition and type checking" procTests
   -- everything else
   , testGroup "Compilation" compileTests
   ] mempty

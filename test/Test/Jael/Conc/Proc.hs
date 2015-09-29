@@ -32,12 +32,13 @@ allErrs = (pack [raw|
   y = 5;
   x -> z;
   x <- y;
-  //x <- True;
+  x <- true;
   x select label;
   x case
     { p1 => {}
     , p2 => ( {}
-            //| SomeProc(x)
+            | SomeProc(x)
+            | SomeProc()
             | new a : Proto2;
               ( z <- a; {}
               | z -> b; {}
