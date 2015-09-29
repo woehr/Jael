@@ -184,35 +184,44 @@ GChan.     GChan ::= GScopedIdent ;
 -- User created channels can't have "::" in their name
 GUserChan. GUserChan ::= LIdent ;
 
-GConcChoice. GConcChoice ::= GChoiceLabel "=>" GProc ;
-separator nonempty GConcChoice "," ;
+GProcNew.   GProc1 ::= "new" GUserChan ":" UIdent ";" GProc1 ;
+GProcLet.   GProc1 ::= LIdent "="  GExpr          ";" GProc1 ;
+GProcGet.   GProc1 ::= GChan  "->" LIdent         ";" GProc1 ;
 
--- Processes that have continuations
-GProcNew.   GProcC ::= "new" GUserChan ":" UIdent ;
-GProcLet.   GProcC ::= LIdent "="  GExpr ;
-GProcGet.   GProcC ::= GChan  "->" LIdent ;
 -- The definition of an expression contains an LIdent as a var, so rather than
 -- creating a rule for (LIdent | GExpr) just look for single variable
 -- expressions that are channel names when parsing the grammar tree.
-GProcPut.   GProcC ::= GChan  "<-" GExpr ;
-GProcSel.   GProcC ::= GChan  "."  GChoiceLabel ;
 
-terminator GProcC ";" ;
+GProcPut.   GProc1 ::= GChan  "<-" GExpr           ";" GProc1 ;
+GProcSel.   GProc1 ::= GChan "select" GChoiceLabel ";" GProc1 ;
 
-GProcPar.   GProc0 ::= GProc0 "|" GProc1 ;
+GConcChoice. GConcChoice ::= GChoiceLabel "=>" GProc ;
+separator nonempty GConcChoice "," ;
 
-GProcSeq.   GProc1 ::= [GProcC] ;
-GProcCho.   GProc1 ::= [GProcC] GChan "." "case"
+GProcCho.   GProc1 ::= GChan "case"
   "{"
     [ GConcChoice ]
   "}" ;
 
+GRecInitializer. GRecInitializer ::= LIdent "=" GExpr ;
+separator nonempty GRecInitializer "," ;
+
+GProcRec.   GProc1 ::= "rec" GProcName "(" [GRecInitializer] ")"
+  "{" GProc "}" ;
+
 -- See comment for GProcPut for why GExpr is used.
 GProcParam. GProcParam ::= GExpr ;
 separator GProcParam "," ;
-GProcNamed. GProc2 ::= GProcName "(" [GProcParam] ")" ;
 
-coercions GProc 2 ;
+GProcNamed. GProc2 ::= GProcName "(" [GProcParam] ")" ;
+GProcInact. GProc2 ::= GUnit ;
+
+GParElem. GParElem ::= GProc2 ;
+separator nonempty GParElem "|" ;
+
+GProcPar.   GProc3 ::= "(" GParElem "|" [GParElem] ")" ;
+
+coercions GProc 3 ;
 
 -- Top level grammar
 

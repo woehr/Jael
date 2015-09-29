@@ -9,6 +9,7 @@ import Test.Jael.Grammar.Expr (gExprTests)
 import Test.Jael.Grammar.Hwproc (gHwprocTests)
 import Test.Jael.Grammar.Struct (gStructTests)
 import Test.Jael.Grammar.Type (gTypeTests)
+import Test.Jael.Conc.Proc (procTests)
 import Test.Jael.Conc.Session (sessionTests)
 import Test.Jael.Hw.Area (hwAreaTests)
 import Test.Jael.Seq.AST (astTests)
@@ -39,6 +40,8 @@ main = defaultMainWithOpts
   , testGroup "Hardware areas" hwAreaTests
   -- session types
   , testGroup "Session types" sessionTests
+  -- processes
+  , testGroup "Processes" procTests
   -- everything else
   , testGroup "Compilation" compileTests
   ] mempty

@@ -23,19 +23,19 @@ hwprocTop = (pack [raw|
     init = {
       letExpr = 2+4;
       c::x::y::z <- y;
+      {}
     }
   }
 |], GHwproc (GProcName (UIdent "SomeDev"))
             (HexInt "0x00100000")
-            (GProcSeq
-              [ GProcLet (LIdent "letExpr")
+            ( GProcLet (LIdent "letExpr")
                          (GEPlus (GEInt (IntTok "2")) (GEInt (IntTok "4")))
-              , GProcPut (GChan (GScopedIdent $
+            $ GProcPut (GChan (GScopedIdent $
                                   map (GScopeElem . LIdent) ["c", "x", "y", "z"]
-                                )
-                         )
-                         (GEVar (LIdent "y"))
-              ]
+                              )
+                       )
+                       (GEVar (LIdent "y"))
+            $ GProcInact GUnit
             )
   )
 
