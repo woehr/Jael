@@ -147,6 +147,12 @@ typeVars = cata alg
         alg (TFunF x y) = x `S.union` y
         alg _           = S.empty
 
+typeVars' :: Ty -> [Text]
+typeVars' = S.toList . typeVars
+
+typeVars'' :: [Ty] -> [Text]
+typeVars'' = join . map typeVars'
+
 polyTy :: Ty -> PolyTy
 polyTy t = PolyTy (S.toList . typeVars $ t) t
 

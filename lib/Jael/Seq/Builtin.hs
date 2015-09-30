@@ -3,32 +3,37 @@
 module Jael.Seq.Builtin
 where
 
-import ClassyPrelude
+import ClassyPrelude hiding (Enum)
 import Data.List (genericTake)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
+import Jael.Seq.Enum
+import Jael.Seq.Struct
 import Jael.Seq.Types
-import Jael.Seq.UserDefTy
 
 maxBuiltinTupSize :: Integer
 maxBuiltinTupSize = 10
 
-buildTup :: Integer -> (Text, UserDefTy)
+buildTup :: Integer -> (Text, Struct)
 buildTup i = let tvs = genericTake i . map (\v -> "a" ++ tshow v) $ ([0..]::[Integer])
               in ("Tup" ++ tshow i, Struct tvs $ NE.fromList
                                                $ map (tshow *** TVar)
                                                $ zip ([0..]::[Integer]) tvs
                  )
 
-builtinTypes :: [(Text, UserDefTy)]
-builtinTypes = ( "IntDivRes", Struct [] ( NE.fromList [ ("quot", TInt)
-                                                      , ("rem", TInt)
-                                                      ]
+builtinStruct :: [(Text, Struct)]
+builtinStruct = ( "IntDivRes", Struct [] ( NE.fromList [ ("quot", TInt)
+                                                       , ("rem", TInt)
+                                                       ]
                                         )
-               ) : ("Maybe", Enumer ["a"] $ NE.fromList [ TagWithTy "just" (TVar "a")
-                                                      , Tag "nothing"
-                                                      ]
-               ) : map buildTup [1..maxBuiltinTupSize]
+                ) : map buildTup [1..maxBuiltinTupSize]
+
+builtinEnums :: [(Text, Enum)]
+builtinEnums = [ ("Maybe", Enum ["a"] $ NE.fromList [ TagWithTy "just" (TVar "a")
+                                                    , Tag "nothing"
+                                                    ]
+                 )
+               ]
 
 builtinFuncs :: TyEnv
 builtinFuncs = TyEnv $ M.fromList

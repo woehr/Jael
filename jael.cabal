@@ -20,6 +20,7 @@ library
                        Jael.Conc.Proc
                        Jael.Conc.Session
                        Jael.Conc.TyCk
+                       Jael.Err
                        Jael.Grammar
                        Jael.Grammar.Abs
                        Jael.Grammar.ErrM
@@ -27,16 +28,17 @@ library
                        Jael.Grammar.Par
                        Jael.Grammar.Print
                        Jael.Hw.Area
-                       Jael.Hw.Seq
                        Jael.Parser
                        Jael.Seq.AST
                        Jael.Seq.Builtin
                        Jael.Seq.Closure
+                       Jael.Seq.Enum
                        Jael.Seq.Env
                        Jael.Seq.Expr
+                       Jael.Seq.Struct
                        Jael.Seq.TI
                        Jael.Seq.Types
-                       Jael.Seq.UserDefTy
+                       Jael.UserDefTy
                        Jael.Util
 
   default-extensions:  DeriveFunctor,

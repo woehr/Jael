@@ -5,6 +5,7 @@ module Jael.Util where
 import ClassyPrelude
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
+import qualified Data.Set as S
 
 wrongNumberOfElements :: Integer -> String -> String -> a
 wrongNumberOfElements n x y = error $ "Expected exactly " ++ show n ++ x ++ "s in " ++ y
@@ -36,4 +37,25 @@ repeated = map NE.head . filterByLength (>1)
 
 filterByLength :: Ord a => (Int -> Bool) -> [a] -> [NE.NonEmpty a]
 filterByLength p = filter (p . length) . NE.group . sort
+
+-- Given a list of text representing ty vars and a list representing field names
+-- and their associated type, return sets representing duplicate type variables,
+-- duplicate fields, free type variables, and unused type variables
+checkDefErr :: [Text]
+            -> [Text]
+            -> [Text]
+            -> Maybe (S.Set Text, S.Set Text, S.Set Text, S.Set Text)
+checkDefErr tvs fs ts =
+  let dupTVs = S.fromList $ repeated tvs
+      dupFields = S.fromList $ repeated fs
+      declaredTVs = S.fromList tvs
+      usedTVs = S.fromList ts
+      freeTVs = usedTVs `S.difference` declaredTVs
+      unusedTVs = declaredTVs `S.difference` usedTVs
+  in  if S.size dupTVs    /= 0 ||
+         S.size dupFields /= 0 ||
+         S.size freeTVs   /= 0 ||
+         S.size unusedTVs /= 0
+         then Just (dupTVs, dupFields, freeTVs, unusedTVs)
+         else Nothing
 

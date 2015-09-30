@@ -9,6 +9,7 @@ import qualified Data.Array as A
 import qualified Data.Graph as G
 import qualified Data.Map as M
 import qualified Data.Set as S
+import Jael.Err
 import Jael.Grammar
 import Jael.Parser
 import Jael.Util
@@ -18,17 +19,7 @@ import Jael.Seq.Env
 import Jael.Seq.Expr (freeVars, gToEx)
 import Jael.Seq.TI
 import Jael.Seq.Types
-import Jael.Seq.UserDefTy
-
-data CompileErr = ParseErr Text
-                | DupDef [Text]
-                | UndefVar [Text]
-                | UndefType [Text]
-                | CallCycle [Text]
-                | RecType [Text]
-                | TypeDefErr [TDefError]
-                | TypeInfErr [Text]
-  deriving (Eq, Show)
+import Jael.UserDefTy
 
 data Global = Global Ex TyEnv
   deriving (Show)
@@ -83,18 +74,18 @@ findCycles m =
          then Left recDeps
          else Right . map nodeName . G.topSort $ dg
 
-processTypes :: [GTypeDef] -> Either CompileErr TyEnv
+processTypes :: [GTypeDef] -> CompileErr TyEnv
 processTypes xs = do
   -- map of type names to their UserDefTy
   userTys <- either (Left . DupDef) Right
                $ insertCollectDups M.empty
                $ map gToUserDefTy xs
-  let tyDeps = map typeDependencies userTys
+  let tyDeps = map typeDeps userTys
   -- Find use of undefined types or recursive types
   _ <- case hasUndefined tyDeps of
             Just x -> (Left . UndefType) x
             Nothing -> either (Left . RecType) Right $ findCycles tyDeps
-  let (errs, fns) = M.mapEitherWithKey (curry validateType) userTys
+  let (errs, fns) = M.mapEitherWithKey validate userTys
   if M.size errs /= 0
      then Left $ TypeDefErr $ M.elems errs
      else either (Left . DupDef)
@@ -112,7 +103,7 @@ tiGlobal env (Global ex gEnv) =
 processSeq :: TyEnv
            -> [GGlobal]
            -> [GFunc]
-           -> Either CompileErr (M.Map Text TypedEx)
+           -> CompileErr (M.Map Text TypedEx)
 processSeq (TyEnv env) gs fs = do
   globExs <- either (Left . DupDef) Right $
     insertCollectDups M.empty (map gglobToGlob gs ++ map gfuncToGlob fs)
@@ -139,13 +130,13 @@ processSeq (TyEnv env) gs fs = do
     (env, M.empty)
     processOrder
 
-processConc :: [GProcDef] -> Either CompileErr a
+processConc :: [GProcDef] -> CompileErr a
 processConc ps = undefined
 
-processHw :: [GHwproc] -> Either CompileErr a
+processHw :: [GHwproc] -> CompileErr a
 processHw hs = undefined
 
-compile :: Text -> Either CompileErr Text
+compile :: Text -> CompileErr Text
 compile p = do
   prog <- either (Left . ParseErr) Right $ parseProgram p
   let (types, globs, funcs, procs, hwprocs) = splitTop prog

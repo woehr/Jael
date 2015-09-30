@@ -8,30 +8,32 @@ module Jael.Seq.Env
 import ClassyPrelude
 import Jael.Seq.Builtin
 import Jael.Seq.Types
-import Jael.Seq.UserDefTy
+import Jael.UserDefTy
 import Jael.Util
 
 defaultEnv :: TyEnv
-defaultEnv = mkBuiltinEnv builtinFuncs builtinTypes
+defaultEnv =
+  case builtinErrs of
+       Just es -> error $ unpack . intercalate "\n"
+                        $ "Errors validating builtins:" : es
+       Nothing -> case addToEnv builtinFuncs $
+                         concatMap envItems builtinStruct ++
+                         concatMap envItems builtinEnums
+                  of
+                       Left dups -> error $ unpack . intercalate "\n"
+                                          $ "Duplicates in environment when\
+                                            \ adding builtins:" : dups
+                       Right env' -> env'
 
-validateBuiltins :: [(Text, UserDefTy)] -> [(Text, PolyTy)]
-validateBuiltins =
-  concatMap (\x -> case validateType x of
-                        Left errs -> validationError x (tshow errs)
-                        Right xs -> xs
-            )
+userDefErr :: UserDefTy a b c d => (Text, a) -> Maybe Text
+userDefErr (n, t) =
+  case validate t of
+       Just e -> Just $ "Error validating " ++ n ++ ":\n\t" ++ tshow e
+       Nothing -> Nothing
 
-validationError :: (Text, UserDefTy) -> Text -> b
-validationError n xs = error . unpack $ "Builtin struct `" ++ tshow n
-                                     ++ "` did not validate:\n" ++ xs
-
-mkBuiltinEnv :: TyEnv -> [(Text, UserDefTy)] -> TyEnv
-mkBuiltinEnv env ts =
-  let fns = validateBuiltins ts
-   in case addToEnv env fns of
-      Left dups -> error $ unpack . intercalate "\n" $
-        "Duplicates in environment when adding builtins:" : dups
-      Right env' -> env'
+builtinErrs :: Maybe [Text]
+builtinErrs = liftA2 (++) (mapM userDefErr builtinStruct)
+                          (mapM userDefErr builtinEnums)
 
 addToEnv :: TyEnv -> [(Text, PolyTy)] -> Either [Text] TyEnv
 addToEnv (TyEnv env) = (liftA TyEnv) . insertCollectDups env
