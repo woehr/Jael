@@ -1,5 +1,5 @@
 {-# Language NoImplicitPrelude #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# Language MultiParamTypeClasses #-}
 
 module Jael.Seq.Struct where
 

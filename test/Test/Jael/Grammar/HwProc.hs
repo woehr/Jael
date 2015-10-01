@@ -1,7 +1,7 @@
 {-# Language NoImplicitPrelude, QuasiQuotes #-}
 
-module Test.Jael.Grammar.Hwproc
-( gHwprocTests
+module Test.Jael.Grammar.HwProc
+( gHwProcTests
 ) where
 
 import ClassyPrelude
@@ -11,13 +11,13 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit
 import Test.Jael.Util
 
-gHwprocTests :: [T.Test]
-gHwprocTests =
-  [ testCase "Parse valid hwproc" $ checkParsedTree pGHwproc hwprocTop
+gHwProcTests :: [T.Test]
+gHwProcTests =
+  [ testCase "Parse valid hwproc" $ checkParsedTree pGHwProc hwProcTop
   ]
 
-hwprocTop :: (Text, GHwproc)
-hwprocTop = (pack [raw|
+hwProcTop :: (Text, GHwProc)
+hwProcTop = (pack [raw|
   hwproc SomeDev {
     interrupt 0x00100000;
     init = {
@@ -26,10 +26,10 @@ hwprocTop = (pack [raw|
       {}
     }
   }
-|], GHwproc (GProcName (UIdent "SomeDev"))
+|], GHwProc (GProcName (UIdent "SomeDev"))
             (HexInt "0x00100000")
             ( GProcLet (LIdent "letExpr")
-                         (GEPlus (GEInt (IntTok "2")) (GEInt (IntTok "4")))
+                         (GEPlus (GEInt (DecInt "2")) (GEInt (DecInt "4")))
             $ GProcPut (GChan (GScopedIdent $
                                   map (GScopeElem . LIdent) ["c", "x", "y", "z"]
                               )

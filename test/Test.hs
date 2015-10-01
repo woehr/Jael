@@ -6,7 +6,7 @@ import Test.Framework
 import Test.Jael.Compile (compileTests)
 import Test.Jael.Grammar.Enum (gEnumTests)
 import Test.Jael.Grammar.Expr (gExprTests)
-import Test.Jael.Grammar.Hwproc (gHwprocTests)
+import Test.Jael.Grammar.HwProc (gHwProcTests)
 import Test.Jael.Grammar.Proc (gProcTests)
 import Test.Jael.Grammar.Struct (gStructTests)
 import Test.Jael.Grammar.Type (gTypeTests)
@@ -36,7 +36,7 @@ main = defaultMainWithOpts
   , testGroup "Enum creation" enumTests
   , testGroup "Struct creation" structTests
   -- hw grammar
-  , testGroup "Hwproc grammar" gHwprocTests
+  , testGroup "Hwproc grammar" gHwProcTests
   -- hw
   , testGroup "Hardware areas" hwAreaTests
   -- sessions

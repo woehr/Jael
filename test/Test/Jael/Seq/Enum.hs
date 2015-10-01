@@ -4,26 +4,25 @@ module Test.Jael.Seq.Enum
 ( enumTests
 ) where
 
-import ClassyPrelude
+import ClassyPrelude hiding (Enum)
 import qualified Data.Set as S
 import Jael.Grammar
+import Jael.Seq.Enum
 import Jael.Seq.Types
-import Jael.Seq.UserDefTy
+import Jael.UserDefTy
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit
 import Test.Jael.Util
 
-validator :: GTypeDef -> Either TDefError [(Text, PolyTy)]
-validator x =
-  case gToUserDefTy x of
-    (n, y@(Enumer _ _)) -> validateType (n, y)
-    _ -> error "Parsed non-enum typedef"
+validator :: GTypeDef -> Either EnumDefError [(Text, PolyTy)]
+validator (GTDefEnum (UIdent i) e) = validate' (pack i, gToUserDefTy e)
+validator _ = error "Parsed non-enum typedef"
 
 checkEnum :: (Text, [(Text, PolyTy)]) -> Assertion
 checkEnum = checkParsedTypes pGTypeDef ((either (Left . tshow) Right) . validator)
 
-checkErr :: (Text, TDefError) -> Assertion
+checkErr :: (Text, EnumDefError) -> Assertion
 checkErr = checkTDefErr pGTypeDef validator
 
 enumTests :: [T.Test]
@@ -59,13 +58,14 @@ enumMixedTags = (pack [raw|
     ]
   )
 
-enumAllErrs :: (Text, TDefError)
+enumAllErrs :: (Text, EnumDefError)
 enumAllErrs = (pack [raw|
   enum X a a b b { f0 a, f1 a, f1 c, f2 c }
-|], TDefError { dupTv = S.fromList ["a", "b"]
-              , dupField = S.fromList ["f1"]
-              , freeTv = S.fromList ["c"]
-              , unusedTv = S.fromList ["b"]
-              }
+|], EnumDefError
+      { eErrDupTv = S.fromList ["a", "b"]
+      , eErrDupField = S.fromList ["f1"]
+      , eErrFreeTv = S.fromList ["c"]
+      , eErrUnusedTv = S.fromList ["b"]
+      }
   )
 

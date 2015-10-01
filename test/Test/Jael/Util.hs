@@ -2,15 +2,17 @@
 
 module Test.Jael.Util where
 
-import ClassyPrelude
+import ClassyPrelude hiding (Enum)
 import qualified Data.Map as M
 import Jael.Grammar
 import Jael.Parser
+import Jael.Seq.Enum
 import Jael.Seq.Env
 import Jael.Seq.Expr
+import Jael.Seq.Struct
 import Jael.Seq.TI
 import Jael.Seq.Types
-import Jael.Seq.UserDefTy
+import Jael.UserDefTy
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
 import Test.HUnit
@@ -38,28 +40,17 @@ checkParsedTree p (tx, tr) = either (assertFailure . unpack)
                                     (tr @=?)
                                     (runParser p tx)
 
-checkTDefErr :: ParseFun a
-             -> (a -> Either TDefError b)
-             -> (Text, TDefError)
+checkTDefErr :: (Eq b, Show b)
+             => ParseFun a
+             -> (a -> Either b c)
+             -> (Text, b)
              -> Assertion
-checkTDefErr p validator (def, TDefError { dupTv = ets
-                                         , dupField = efs
-                                         , freeTv = eftvs
-                                         , unusedTv = eutvs
-                                         }) =
-  case runParser p def of
-       Left err -> assertFailure (show err)
-       Right gDef ->
-         case validator gDef of
-              Left (TDefError { dupTv = ts
-                              , dupField = fs
-                              , freeTv = ftvs
-                              , unusedTv = utvs})-> do
-                   assertEqual "Duplicate type variables wrong" ets ts
-                   assertEqual "Duplicate fields wrong" efs fs
-                   assertEqual "Free type variables wrong" eftvs ftvs
-                   assertEqual "Unused type variables wrong" eutvs utvs
-              Right _ -> assertFailure "Expected struct error"
+checkTDefErr p validator (def, expected) =
+  either assertFailure id $ do
+    gDef <- either (Left . show) Right $ runParser p def
+    case validator gDef of
+         Left actual -> Right $ assertEqual "" expected actual
+         Right _ -> Left $ "Expected definition error"
 
 checkParsedTypes :: Show b
                  => ParseFun a
@@ -76,14 +67,22 @@ checkInference :: Text -> (Text, Ty) -> Assertion
 checkInference testTypes (tx, expected) =
   either (assertFailure . unpack) id $ do
     (GProg prog) <- runParser pGProg testTypes
-    tDefs <- mapM (\xs -> case xs of
-                               GTopDefGTypeDef t -> Right t
-                               y -> Left ("Parsed non-type: " ++ tshow y)
-                  )
-                  prog
-    funs <- either (Left . tshow)
-                   (Right . concat)
-                   (mapM (validateType . gToUserDefTy) $ tDefs)
+    let sDefs = mapMaybe (\x -> case x of
+                                     (GTopDefGTypeDef (GTDefStruct (UIdent n) m))
+                                       -> Just (pack n, gToUserDefTy m)
+                                     _ -> Nothing
+                         ) prog :: [(Text, Struct)]
+    let eDefs = mapMaybe (\x -> case x of
+                                     (GTopDefGTypeDef (GTDefEnum (UIdent n) m))
+                                       -> Just (pack n, gToUserDefTy m)
+                                     _ -> Nothing
+                         ) prog :: [(Text, Enum)]
+    let structEnumErrs = mapMaybe (liftA tshow . validate . snd) sDefs ++
+                         mapMaybe (liftA tshow . validate . snd) eDefs
+    funs <- if length structEnumErrs == 0
+               then Right $ join (map envItems sDefs) ++
+                            join (map envItems eDefs)
+               else Left . intercalate "\n" $ structEnumErrs
     env <- either
              (\x -> Left . intercalate "\n" $ "Duplicates in env: " : x)
              (Right)

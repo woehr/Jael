@@ -17,6 +17,7 @@ source-repository head
 
 library
   exposed-modules:     Jael.Compile
+                       Jael.Conc.Env
                        Jael.Conc.Proc
                        Jael.Conc.Session
                        Jael.Conc.TyCk
@@ -51,6 +52,7 @@ library
                        containers,
                        llvm-general,
                        llvm-general-pure,
+                       mtl,
                        recursion-schemes,
                        semigroups
 

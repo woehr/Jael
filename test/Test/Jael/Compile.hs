@@ -6,6 +6,7 @@ module Test.Jael.Compile
 
 import ClassyPrelude
 import Jael.Compile
+import Jael.Err
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit

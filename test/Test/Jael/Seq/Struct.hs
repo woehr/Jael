@@ -7,23 +7,22 @@ module Test.Jael.Seq.Struct
 import ClassyPrelude
 import qualified Data.Set as S
 import Jael.Grammar
+import Jael.Seq.Struct
 import Jael.Seq.Types
-import Jael.Seq.UserDefTy
+import Jael.UserDefTy
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit
 import Test.Jael.Util
 
-validator :: GTypeDef -> Either TDefError [(Text, PolyTy)]
-validator x =
-  case gToUserDefTy x of
-       (n, y@(Struct _ _)) -> validateType (n, y)
-       _ -> error "Parsed non-struct typedef"
+validator :: GTypeDef -> Either StructDefError [(Text, PolyTy)]
+validator (GTDefStruct (UIdent i) s) = validate' (pack i, gToUserDefTy s)
+validator _ = error "Parsed non-struct typedef"
 
 checkStruct :: (Text, [(Text, PolyTy)]) -> Assertion
 checkStruct = checkParsedTypes pGTypeDef ((either (Left . tshow) Right) . validator)
 
-checkErr :: (Text, TDefError) -> Assertion
+checkErr :: (Text, StructDefError) -> Assertion
 checkErr = checkTDefErr pGTypeDef validator
 
 structTests :: [T.Test]
@@ -55,53 +54,58 @@ structValidPoly = (pack [raw|
     ]
   )
 
-structDupTyVars :: (Text, TDefError)
+structDupTyVars :: (Text, StructDefError)
 structDupTyVars = (pack [raw|
   struct X a a { f1:: a , f2 :: a }
-|],    TDefError { dupTv = S.fromList ["a"]
-                 , dupField = S.empty
-                 , freeTv = S.empty
-                 , unusedTv = S.empty
-                 }
+|], StructDefError
+      { sErrDupTv = S.fromList ["a"]
+      , sErrDupField = S.empty
+      , sErrFreeTv = S.empty
+      , sErrUnusedTv = S.empty
+      }
   )
 
-structDupFields :: (Text, TDefError)
+structDupFields :: (Text, StructDefError)
 structDupFields = (pack [raw|
   struct X { same :: Int , same :: Bool }
-|],    TDefError { dupTv = S.empty
-                 , dupField = S.fromList ["same"]
-                 , freeTv = S.empty
-                 , unusedTv = S.empty
-                 }
+|], StructDefError
+      { sErrDupTv = S.empty
+      , sErrDupField = S.fromList ["same"]
+      , sErrFreeTv = S.empty
+      , sErrUnusedTv = S.empty
+      }
   )
 
-structFreeTvs :: (Text, TDefError)
+structFreeTvs :: (Text, StructDefError)
 structFreeTvs = (pack [raw|
   struct X a { f1 :: a , f2 :: b }
-|],    TDefError { dupTv = S.empty
-                 , dupField = S.empty
-                 , freeTv = S.fromList ["b"]
-                 , unusedTv = S.empty
-                 }
+|], StructDefError
+      { sErrDupTv = S.empty
+      , sErrDupField = S.empty
+      , sErrFreeTv = S.fromList ["b"]
+      , sErrUnusedTv = S.empty
+      }
   )
 
-structUnusedTv :: (Text, TDefError)
+structUnusedTv :: (Text, StructDefError)
 structUnusedTv = (pack [raw|
   struct X a { f1 :: Int , f2 :: Bool }
-|],    TDefError { dupTv = S.empty
-                 , dupField = S.empty
-                 , freeTv = S.empty
-                 , unusedTv = S.fromList ["a"]
-                 }
+|], StructDefError
+      { sErrDupTv = S.empty
+      , sErrDupField = S.empty
+      , sErrFreeTv = S.empty
+      , sErrUnusedTv = S.fromList ["a"]
+      }
   )
 
-structAllErrs :: (Text, TDefError)
+structAllErrs :: (Text, StructDefError)
 structAllErrs = (pack [raw|
   struct X a a c c { f1 :: a , f1 :: a , f2 :: b , f2 :: b }
-|],    TDefError { dupTv = S.fromList ["a", "c"]
-                 , dupField = S.fromList ["f1", "f2"]
-                 , freeTv = S.fromList ["b"]
-                 , unusedTv = S.fromList ["c"]
-                 }
+|], StructDefError
+      { sErrDupTv = S.fromList ["a", "c"]
+      , sErrDupField = S.fromList ["f1", "f2"]
+      , sErrFreeTv = S.fromList ["b"]
+      , sErrUnusedTv = S.fromList ["c"]
+      }
   )
 

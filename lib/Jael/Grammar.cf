@@ -6,12 +6,12 @@
 
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;
-token IntTok ('0' | ('~'? ["123456789"] digit*)) ;
+token DecInt ('0' | ('~'? ["123456789"] digit*)) ;
 token HexInt ({"0x"} digit+) ;
 token OctInt ('o' digit+) ;
-token BitPat ('b' ["01"]+) ;
+token BinInt ('b' ["01"]+) ;
 
-rules GAnyInt ::= IntTok | HexInt | OctInt | BitPat ;
+rules GAnyInt ::= DecInt | HexInt | OctInt | BinInt ;
 
 GChoiceLabel. GChoiceLabel ::= LIdent ;
 
@@ -162,11 +162,11 @@ GEApp.       GExpr14 ::= GExpr14 "(" [GEAppArg] ")" ;
 GEAbs.       GExpr15 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
 
 GEScopeIdent. GEScopeArg ::= "::" LIdent ;
-GEScopeIndex. GEScopeArg ::= "::" IntTok ;
+GEScopeIndex. GEScopeArg ::= "::" DecInt ;
 
 GETrue.      GExpr16 ::= "true" ;
 GEFalse.     GExpr16 ::= "false" ;
-GEInt.       GExpr16 ::= IntTok ;
+GEInt.       GExpr16 ::= DecInt ;
 GEVar.       GExpr16 ::= LIdent ;
 GEScopedFn.  GExpr16 ::= UIdent GEScopeArg ;
 GEUnit.      GExpr16 ::= GUnit ;
@@ -248,13 +248,13 @@ GProcDef. GProcDef ::= "proc" GProcName "(" [GProcArg] ")"
     GProc
   "}" ;
 
-GHwproc.  GHwproc  ::= "hwproc" GProcName
+GHwProc.  GHwProc  ::= "hwproc" GProcName
   "{"
     "interrupt" HexInt ";"
     "init" "=" "{" GProc "}"
   "}" ;
 
-rules GTopDef ::= GTypeDef | GGlobal | GFunc | GProcDef | GHwproc ;
+rules GTopDef ::= GTypeDef | GGlobal | GFunc | GProcDef | GHwProc ;
 terminator  GTopDef "" ;
 
 GProg.      GProg ::= [GTopDef] ;
@@ -262,5 +262,5 @@ GProg.      GProg ::= [GTopDef] ;
 comment "//" ;
 
 -- Only export nessecary parsers.
-entrypoints GProg, GTypeDef, GType, GSession, GExpr, GProc, GHwproc ;
+entrypoints GProg, GTypeDef, GType, GSession, GExpr, GProc, GHwProc ;
 

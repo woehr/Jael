@@ -1,11 +1,12 @@
 {-# Language NoImplicitPrelude #-}
 -- Module for handling sequential specific grammar
 module Jael.Seq.Expr
-( freeVars
+( fargsToAbs
+, freeVars
 , gToEx
 ) where
 
-import ClassyPrelude hiding (Foldable)
+import ClassyPrelude hiding (Foldable, Prim)
 import Data.Functor.Foldable
 import Data.List.NonEmpty ( NonEmpty( (:|) ))
 import qualified Data.List.NonEmpty as NE
@@ -13,7 +14,6 @@ import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Seq.AST
 import Jael.Util
-import Text.Read (reads)
 
 freeVars :: Ex -> S.Set Text
 freeVars = cata alg
@@ -24,6 +24,12 @@ freeVars = cata alg
         alg (ELetF x e1 e2) = e1 `S.union` (S.delete x e2)
         alg _ = S.empty
 
+fargsToAbs :: GExpr -> [GFuncArg] -> Ex
+fargsToAbs e = cata alg
+  where alg :: Prim [GFuncArg] Ex -> Ex
+        alg (Cons (GFuncArg (LIdent x)) xs) = EAbs (pack x) xs
+        alg Nil = (gToEx e)
+
 -- The LetExpr grammar is only allowed in certain places so it isn't of the GExpr type
 letExprToEx :: GELetExpr -> Ex
 letExprToEx (GELetExpr [] e)    = gToEx e
@@ -33,20 +39,6 @@ letExprToEx (GELetExpr (GELetIdent (LIdent i) he : tls) e) =
 
 tupArgToEx :: GETupArg -> Ex
 tupArgToEx (GETupArg a) = gToEx a
-
-parseIntErrorMsg :: String
-parseIntErrorMsg = "Lexer should not produce MyInteger that " ++
-                   "can't be parsed. See definition in Grammar.cf"
-
-parseInt :: IntTok -> Integer
-parseInt (IntTok []) = error parseIntErrorMsg
-parseInt (IntTok s@(x:xs)) = let bNeg = x == '~'
-                                 readRes = if bNeg
-                                              then reads xs
-                                              else reads s
-                             in  case readRes of
-                                      [(i, [])] -> if bNeg then -i else i
-                                      _         -> error parseIntErrorMsg
 
 -- Helper function to apply arguments to an expression
 applyArgs :: Ex -> NE.NonEmpty GEAppArg -> Ex
@@ -94,7 +86,7 @@ gToEx (GEAbs [] _) = notEnoughElements 1 "GEAbsArg" "GEAbs"
 gToEx (GEAbs [GEAbsArg (LIdent i)]      le) = EAbs (pack i) (letExprToEx le)
 gToEx (GEAbs (GEAbsArg (LIdent i) : xs) le) = EAbs (pack i) (gToEx $ GEAbs xs le)
 
-gToEx (GEInt i) = ELit . LInt $ parseInt i
+gToEx (GEInt i) = ELit . LInt $ parseDecInt i
 gToEx (GETrue)  = ELit $ LBool True
 gToEx (GEFalse) = ELit $ LBool False
 gToEx (GETup xs) = case NE.nonEmpty (map tupArgToEx xs) of
@@ -103,5 +95,5 @@ gToEx (GETup xs) = case NE.nonEmpty (map tupArgToEx xs) of
 gToEx (GEUnit GUnit)  = ELit LUnit
 gToEx (GEVar (LIdent i)) = EVar (pack i)
 gToEx (GEScopedFn (UIdent t) (GEScopeIdent (LIdent f))) = (EVar . pack $ t ++ "::" ++ f)
-gToEx (GEScopedFn (UIdent t) (GEScopeIndex (IntTok n))) = (EVar . pack $ t ++ "::" ++ n)
+gToEx (GEScopedFn (UIdent t) (GEScopeIndex (DecInt n))) = (EVar . pack $ t ++ "::" ++ n)
 

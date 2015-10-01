@@ -1,4 +1,5 @@
-{-# Language NoImplicitPrelude, QuasiQuotes #-}
+{-# Language NoImplicitPrelude #-}
+{-# Language QuasiQuotes #-}
 
 module Test.Jael.Grammar.Proc
 ( gProcTests
@@ -6,10 +7,9 @@ module Test.Jael.Grammar.Proc
 
 import ClassyPrelude
 import Jael.Grammar
-import Jael.Parser
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
-import Test.HUnit
+--import Test.HUnit
 import Test.Jael.Util
 
 gProcTests :: [T.Test]
@@ -44,7 +44,7 @@ comprehensiveCase = (pack [raw|
     }
 |], GProcNew (GUserChan (LIdent "x"))
              (UIdent "SomeProto")
-  $ GProcLet (LIdent "y") (GEInt (IntTok "5"))
+  $ GProcLet (LIdent "y") (GEInt (DecInt "5"))
   $ GProcGet (GChan (GScopedIdent [GScopeElem (LIdent "x")])) (LIdent "z")
   $ GProcPut (GChan (GScopedIdent [GScopeElem (LIdent "x")])) (GEVar (LIdent "y"))
   $ GProcPut (GChan (GScopedIdent [GScopeElem (LIdent "x")])) GETrue
@@ -69,12 +69,12 @@ comprehensiveCase = (pack [raw|
       , GConcChoice (GChoiceLabel (LIdent "p3"))
           $ GProcRec (GProcName (UIdent "X"))
               [ GRecInitializer (LIdent "j") (GEVar (LIdent "x"))
-              , GRecInitializer (LIdent "k") (GEInt (IntTok "1"))
+              , GRecInitializer (LIdent "k") (GEInt (DecInt "1"))
               ]
           $ GProcPut (GChan (GScopedIdent [GScopeElem (LIdent "j")])) (GEVar (LIdent "k"))
           $ GProcPar (GParElem (GProcNamed (GProcName (UIdent "X"))
                          [ GProcParam (GEVar (LIdent "j"))
-                         , GProcParam (GEPlus (GEVar (LIdent "k")) (GEInt (IntTok "1")))
+                         , GProcParam (GEPlus (GEVar (LIdent "k")) (GEInt (DecInt "1")))
                          ]
                      ))
                      [GParElem $ GProcNamed (GProcName (UIdent "X")) []

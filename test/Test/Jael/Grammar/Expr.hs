@@ -40,19 +40,19 @@ gExprTests = [ testCase "int zero" (checkParsedTree pGExpr intZero)
 intZero :: (Text, GExpr)
 intZero = (pack [raw|
   0
-|], GEInt (IntTok "0")
+|], GEInt (DecInt "0")
   )
 
 intNeg :: (Text, GExpr)
 intNeg = (pack [raw|
   ~123
-|], GEInt (IntTok "~123")
+|], GEInt (DecInt "~123")
   )
 
 intPos :: (Text, GExpr)
 intPos = (pack [raw|
   123
-|], GEInt (IntTok "123")
+|], GEInt (DecInt "123")
   )
 
 intTooManyZero :: Text
@@ -129,8 +129,8 @@ appWithOp :: (Text, GExpr)
 appWithOp = (pack [raw|
   f (1 + 2)
 |], GEApp (GEVar (LIdent "f"))
-          [GEAppArg (GEPlus (GEInt (IntTok "1"))
-                            (GEInt (IntTok "2"))
+          [GEAppArg (GEPlus (GEInt (DecInt "1"))
+                            (GEInt (DecInt "2"))
                     )
           ]
   )
@@ -194,10 +194,10 @@ tup = (pack [raw|
   , {}
   , 42
   }
-|], GETup $ map GETupArg [ GEInt (IntTok "1")
+|], GETup $ map GETupArg [ GEInt (DecInt "1")
                          , GETrue
                          , GEUnit GUnit
-                         , GEInt (IntTok "42")
+                         , GEInt (DecInt "42")
                          ]
   )
 
@@ -216,8 +216,8 @@ tupInAbs = (pack [raw|
           , GEAbsArg (LIdent "d")
           ]
           (GELetExpr []
-                     (GETup $ map GETupArg [ GEInt (IntTok "1")
-                                           , GEInt (IntTok "2")
+                     (GETup $ map GETupArg [ GEInt (DecInt "1")
+                                           , GEInt (DecInt "2")
                                            , GEVar (LIdent "a")
                                            , GEPlus (GEVar (LIdent "a"))
                                                     (GEVar (LIdent "b"))
@@ -229,7 +229,7 @@ tupInAbs = (pack [raw|
 accIndex :: (Text, GExpr)
 accIndex = (pack [raw|
   Tup1::0
-|], GEScopedFn (UIdent "Tup1") (GEScopeIndex (IntTok "0"))
+|], GEScopedFn (UIdent "Tup1") (GEScopeIndex (DecInt "0"))
   )
 
 accLabel :: (Text, GExpr)
