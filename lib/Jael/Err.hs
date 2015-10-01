@@ -6,15 +6,14 @@ module Jael.Err
 ) where
 
 import ClassyPrelude
+import qualified Data.Set as S
 -- TODO: Change to Control.Monad.Except when using 7.10
 import Control.Monad.Error
 
 data CompileErr = ParseErr Text
                 | DupDef [Text]
-                | UndefVar [Text]
-                | UndefType [Text]
-                | CallCycle [Text]
-                | RecType [Text]
+                | UndefName (S.Set Text)
+                | DepCycle [Text]
                 | TypeDefErr [Text]
                 | TypeInfErr [Text]
   deriving (Eq, Show)

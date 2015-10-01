@@ -104,12 +104,13 @@ parseBinInt (BinInt ('b':xs)) = intDoParse readBin xs
 parseBinInt _ = error parseIntErrorMsg
 
 -- Find undefined variables for a given dependencies map
-hasUndefined :: M.Map Text (S.Set Text) -> Maybe [Text]
+hasUndefined :: M.Map Text (S.Set Text) -> Maybe (S.Set Text)
 hasUndefined deps =
   let ns = M.keysSet deps
-      undef = M.filter (\x -> S.size (x S.\\ ns) /= 0) deps
-   in if M.size undef /= 0
-         then Just $ concatMap S.toList $ M.elems undef
+      free = S.unions (M.elems deps)
+      undef = free S.\\ ns
+   in if S.size undef /= 0
+         then Just undef
          else Nothing
 
 -- Given a map of names to their dependencies return either a list of names

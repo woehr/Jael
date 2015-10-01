@@ -3,6 +3,8 @@
 module Jael.Compile where
 
 import ClassyPrelude hiding (Enum, Foldable, Prim)
+import qualified Data.Map as M
+import qualified Data.Set as S
 import Jael.Err
 import Jael.Grammar
 import Jael.Parser
@@ -13,7 +15,7 @@ import Jael.Conc.Session
 import Jael.Hw.Area
 import Jael.Seq.AST
 import Jael.Seq.Enum
-import Jael.Seq.Expr (fargsToAbs, gToEx)
+import Jael.Seq.Expr
 import Jael.Seq.Struct
 import Jael.Seq.Types
 import Jael.UserDefTy
@@ -53,7 +55,26 @@ dupDefs ns =
          else throwError $ DupDef repeats
 
 defErrs :: [Struct] -> [Enum] -> [HwArea] -> [Session] -> CompileErrM ()
-defErrs = undefined
+defErrs ss es as zs =
+  let errs = mapMaybe (liftA tshow . validate) ss
+          ++ mapMaybe (liftA tshow . validate) es
+          ++ mapMaybe (liftA tshow . validate) as
+          ++ mapMaybe (liftA tshow . validate) zs
+   in if length errs == 0
+         then return ()
+         else throwError $ TypeDefErr errs
+
+undefinedNames :: M.Map Text (S.Set Text) -> CompileErrM ()
+undefinedNames depMap =
+  case hasUndefined depMap of
+       Just undefed -> throwError $ UndefName undefed
+       Nothing -> return ()
+
+nameCycle :: M.Map Text (S.Set Text) -> CompileErrM [Text]
+nameCycle depMap =
+  case findCycles depMap of
+       Left cycles -> throwError $ DepCycle cycles
+       Right order -> return order
 
 processSeqTypes :: [(Text, Struct)]
                 -> [(Text, Enum)]
@@ -89,6 +110,23 @@ compile p = do
           (map snd enums)
           (map snd areas)
           (map snd protocols)
+
+  let exprDepMap = M.map freeVars . M.fromList $ exprs
+
+  -- Find uses of undefined variables
+  undefinedNames exprDepMap
+  exprOrder <- nameCycle exprDepMap
+
+  let typeDepMap = (M.map typeDeps . M.fromList $ structs)
+         `M.union` (M.map typeDeps . M.fromList $ enums)
+         `M.union` (M.map typeDeps . M.fromList $ areas)
+
+  -- Find uses of undefined types
+  undefinedNames typeDepMap
+  typeOrder <- nameCycle typeDepMap
+
+  -- Do NOT find uses of undefined sessions
+  -- (sessions don't support using aliases yet)
 
   -- Create an environment from sequential types
   seqTyEnv <- processSeqTypes structs enums areas

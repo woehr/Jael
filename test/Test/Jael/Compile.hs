@@ -5,6 +5,7 @@ module Test.Jael.Compile
 ) where
 
 import ClassyPrelude
+import qualified Data.Set as S
 import Jael.Compile
 import Jael.Err
 import Test.Framework as T
@@ -37,14 +38,14 @@ dupDef = (pack [raw|
 undefinedVar :: (Text, CompileErr)
 undefinedVar = (pack [raw|
   f=g;
-|], UndefVar ["g"]
+|], UndefName $ S.fromList ["g"]
   )
 
 callCycle :: (Text, CompileErr)
 callCycle = (pack [raw|
   f=g;
   g=f;
-|], CallCycle ["f", "g"]
+|], DepCycle ["f", "g"]
   )
 
 recType :: (Text, CompileErr)
@@ -52,12 +53,12 @@ recType = (pack [raw|
   struct S {
     f1 :: S
   }
-|], RecType ["S"]
+|], DepCycle ["S"]
   )
 
 undefType :: (Text, CompileErr)
 undefType = (pack [raw|
   enum E { f1 T }
-|], UndefType ["T"]
+|], UndefName $ S.fromList ["T"]
   )
 
