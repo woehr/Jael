@@ -5,9 +5,11 @@ module Jael.Conc.Proc where
 
 import ClassyPrelude hiding (Chan, Foldable)
 import Data.Functor.Foldable
+import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Seq.AST
 import Jael.Seq.Expr
+import Jael.Seq.Types
 import Jael.Conc.Session
 
 data PNewType = PNTNamed Text
@@ -22,6 +24,13 @@ newtype Chan = Chan Text
 
 type Var  = Text
 type Label = Text
+
+data TyOrSess = TorSTy Ty
+              | TorSSess Session
+              deriving (Show)
+
+data TopProc = TopProc [(Text, TyOrSess)] Proc
+  deriving (Show)
 
 data Proc = PGet Chan Var Proc
           | PPut Chan Ex Proc
@@ -117,4 +126,25 @@ gToProc = ana coalg
               ) = PNilF
         coalg (GProcPar e1 es
               ) = PParF (gParElemToProc e1 : map gParElemToProc es)
+
+procDeps :: TopProc -> S.Set Text
+procDeps (TopProc _ p) = cata alg p
+  where alg :: Base Proc (S.Set Text) -> S.Set Text
+        alg (PNamedF n _) = S.singleton n
+        alg (PCoRecF n _ x) = n `S.delete` x
+        alg (PNewF _ _ x) = x
+        alg (PGetF _ _ x) = x
+        alg (PPutF _ _ x) = x
+        alg (PSelF _ _ x) = x
+        alg (PCaseF _ xs) = S.unions (map snd xs)
+        alg (PParF xs) = S.unions xs
+        alg (PReplF _ _ x) = x
+        alg _ = S.empty
+
+gProcArgToList :: GProcArg -> (Text, TyOrSess)
+gProcArgToList (GProcArg (LIdent i) (GSessTy x)) = (pack i, TorSTy (gToType x))
+gProcArgToList (GProcArg (LIdent i) (GSessSess x)) = (pack i, TorSSess (gToSession x))
+
+gToTopProc :: [GProcArg] -> GProc -> TopProc
+gToTopProc as p = TopProc (map gProcArgToList as) (gToProc p)
 

@@ -47,7 +47,7 @@ GSessChoice. GSessChoice ::= GChoiceLabel "=>" GSession1 ;
 separator nonempty GSessChoice "," ;
 
 GSessTy.   GSessOrTy ::= GType ;
-GSessSess. GSessOrTy ::= GSession1 ;
+GSessSess. GSessOrTy ::= GSession ;
 
 GSessRec. GSession1 ::= "rec" UIdent "." GSession2 ;
 
@@ -237,7 +237,7 @@ GFuncName. GFuncName ::= LIdent ;
 GFuncArg.  GFuncArg  ::= LIdent ;
 separator nonempty GFuncArg "," ;
 
-GProcArg.  GProcArg ::= LIdent ;
+GProcArg.  GProcArg ::= LIdent ":" GSessOrTy ;
 separator GProcArg "," ;
 
 GGlobal.  GGlobal  ::= LIdent "=" GExpr ";" ;

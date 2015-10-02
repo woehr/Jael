@@ -16,7 +16,7 @@ import Test.Jael.Util
 
 procTests :: [T.Test]
 procTests =
-  [ testCase "proc validation" $ checkProc allErrs
+  [ testCase "proc validation" $ checkProc valid
   ]
 
 checkProc :: (Text, Proc) -> Assertion
@@ -24,8 +24,8 @@ checkProc (t, expected) = either (assertFailure . show)
                                  (assertEqual "" expected . gToProc)
                                  (runParser pGProc t)
 
-allErrs :: (Text, Proc)
-allErrs = (pack [raw|
+valid :: (Text, Proc)
+valid = (pack [raw|
   new x : SomeProto;
   y = 5;
   x -> z;

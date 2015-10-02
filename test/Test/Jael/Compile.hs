@@ -17,7 +17,9 @@ compileTests :: [T.Test]
 compileTests =
   [ testCase "duplicate def" $ assertCompErr dupDef
   , testCase "undefined var" $ assertCompErr undefinedVar
-  , testCase "call cycle" $ assertCompErr callCycle
+  , testCase "undefined proc " $ assertCompErr undefinedProc
+  , testCase "call cycle (expr)" $ assertCompErr callCycleExpr
+  , testCase "call cycle (proc)" $ assertCompErr callCycleProc
   , testCase "recursive type" $ assertCompErr recType
   , testCase "undefined type" $ assertCompErr undefType
   ]
@@ -41,11 +43,24 @@ undefinedVar = (pack [raw|
 |], UndefName $ S.fromList ["g"]
   )
 
-callCycle :: (Text, CompileErr)
-callCycle = (pack [raw|
+undefinedProc :: (Text, CompileErr)
+undefinedProc = (pack [raw|
+  proc X() { Z() }
+|], UndefName $ S.fromList ["Z"]
+  )
+
+callCycleExpr :: (Text, CompileErr)
+callCycleExpr = (pack [raw|
   f=g;
   g=f;
 |], DepCycle ["f", "g"]
+  )
+
+callCycleProc :: (Text, CompileErr)
+callCycleProc = (pack [raw|
+  proc X() { Y() }
+  proc Y() { X() }
+|], DepCycle ["X", "Y"]
   )
 
 recType :: (Text, CompileErr)

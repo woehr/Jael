@@ -26,7 +26,7 @@ splitTop :: GProg -> ( [(Text, Ex)]      -- a
                      , [(Text, Enum)]    -- c
                      , [(Text, HwArea)]  -- d
                      , [(Text, Session)] -- e
-                     , [(Text, Proc)]    -- f
+                     , [(Text, TopProc)] -- f
                      , [(Text, ())] --HwProc)]  -- g
                      )
 splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f, g) ->
@@ -43,7 +43,8 @@ splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f, g) ->
          -> (a,b,c,(pack n, gToUserDefTy (HwAreaGrammar i y)):d,e,f,g)
        (GTopDefGTypeDef (GTDefProto (UIdent n) y))
          -> (a,b,c,d,(pack n, gToUserDefTy y)                  :e,f,g)
-       (GTopDefGProcDef _) -> (a,b,c,d,e,f,g)
+       (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) xs p))
+         -> (a,b,c,d,e,                 (pack n, gToTopProc xs p):f,g)
        (GTopDefGHwProc  _) -> (a,b,c,d,e,f,g)
   ) ([],[],[],[],[],[],[]) xs
 
@@ -125,13 +126,23 @@ compile p = do
   undefinedNames typeDepMap
   typeOrder <- nameCycle typeDepMap
 
-  -- Do NOT find uses of undefined sessions
-  -- (sessions don't support using aliases yet)
+  -- Sessions can't refer to other sessions by name (yet) so there is no need to
+  -- look for uses of undefined names
+
+  let procDepMap = (M.map procDeps . M.fromList $ procs)
+  -- Processes on the other hand can continue with a function by name, and they
+  -- can not be called recursively.
+  undefinedNames procDepMap
+
+  -- Processes are explicitly typed so the order in which they're processed does
+  -- not matter. We still need to check for, and prevent, recursion between and
+  -- within named processes
+  _ <- nameCycle procDepMap
 
   -- Create an environment from sequential types
   seqTyEnv <- processSeqTypes structs enums areas
   -- Create an environment from concurrent types
   conTyEnv <- processConcTypes areas protocols hwprocs
   -- Uses variables to quiet warnings
-  undefined hwprocs exprOrder typeOrder seqTyEnv conTyEnv
+  undefined exprOrder typeOrder seqTyEnv conTyEnv
 
