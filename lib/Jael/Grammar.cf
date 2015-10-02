@@ -184,7 +184,10 @@ GChan.     GChan ::= GScopedIdent ;
 -- User created channels can't have "::" in their name
 GUserChan. GUserChan ::= LIdent ;
 
-GProcNew.   GProc1 ::= "new" GUserChan ":" UIdent ";" GProc1 ;
+GSessOrIdentIdent. GSessOrIdent ::= UIdent ;
+GSessOrIdentSess.  GSessOrIdent ::= GSession ;
+
+GProcNew.   GProc1 ::= "new" GUserChan ":" GSessOrIdent ";" GProc1 ;
 GProcLet.   GProc1 ::= LIdent "="  GExpr          ";" GProc1 ;
 GProcGet.   GProc1 ::= GChan  "->" LIdent         ";" GProc1 ;
 

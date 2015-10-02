@@ -132,5 +132,6 @@ compile p = do
   seqTyEnv <- processSeqTypes structs enums areas
   -- Create an environment from concurrent types
   conTyEnv <- processConcTypes areas protocols hwprocs
-  undefined hwprocs seqTyEnv conTyEnv -- Uses variables to quiet warnings
+  -- Uses variables to quiet warnings
+  undefined hwprocs exprOrder typeOrder seqTyEnv conTyEnv
 

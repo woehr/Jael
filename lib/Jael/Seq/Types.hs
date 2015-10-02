@@ -15,7 +15,7 @@ data Ty = TVar Text
         | TBit
         | TNamed Text [Ty]
         | TFun Ty Ty
-        deriving (Show)
+        deriving (Eq, Show)
 
 data TyF a = TVarF Text
            | TUnitF

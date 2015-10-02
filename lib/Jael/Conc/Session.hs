@@ -40,7 +40,7 @@ data Session = SGetTy Ty Session
              | SCoInd Text Session
              | SIndVar Text
              | SEnd
-             deriving (Show)
+             deriving (Eq, Show)
 
 data SessionF a = SGetTyF Ty a
                 | SPutTyF Ty a

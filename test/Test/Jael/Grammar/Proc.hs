@@ -43,7 +43,7 @@ comprehensiveCase = (pack [raw|
               }
     }
 |], GProcNew (GUserChan (LIdent "x"))
-             (UIdent "SomeProto")
+             (GSessOrIdentIdent (UIdent "SomeProto"))
   $ GProcLet (LIdent "y") (GEInt (DecInt "5"))
   $ GProcGet (GChan (GScopedIdent [GScopeElem (LIdent "x")])) (LIdent "z")
   $ GProcPut (GChan (GScopedIdent [GScopeElem (LIdent "x")])) (GEVar (LIdent "y"))
@@ -61,7 +61,7 @@ comprehensiveCase = (pack [raw|
                                   []
                                 )
                      , GParElem
-                       $ GProcNew (GUserChan (LIdent "a")) (UIdent "Proto2")
+                       $ GProcNew (GUserChan (LIdent "a")) (GSessOrIdentIdent (UIdent "Proto2"))
                        $ GProcPut (GChan (GScopedIdent [GScopeElem (LIdent "z")])) (GEVar (LIdent "a"))
                        $ GProcGet (GChan (GScopedIdent [GScopeElem (LIdent "z")])) (LIdent "b")
                        $ GProcInact GUnit
