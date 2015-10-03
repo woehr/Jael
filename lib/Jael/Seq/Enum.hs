@@ -1,5 +1,5 @@
 {-# Language NoImplicitPrelude #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# Language TypeFamilies #-}
 
 module Jael.Seq.Enum where
 
@@ -25,7 +25,11 @@ data EnumDefError = EnumDefError
   , eErrUnusedTv :: S.Set Text
   } deriving (Eq, Show)
 
-instance UserDefTy Enum GTEnumDef PolyTy EnumDefError where
+instance UserDefTy Enum where
+  type TGrammar Enum = GTEnumDef
+  type TError   Enum = EnumDefError
+  type TEnvItem Enum = PolyTy
+
   gToUserDefTy = gToEnum
   validate = validateEnum
   typeDeps = enumTypeDeps

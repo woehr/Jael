@@ -1,5 +1,5 @@
 {-# Language NoImplicitPrelude #-}
-{-# Language MultiParamTypeClasses #-}
+{-# Language TypeFamilies #-}
 
 module Jael.Seq.Struct where
 
@@ -22,7 +22,11 @@ data StructDefError = StructDefError
   , sErrUnusedTv :: S.Set Text
   } deriving (Eq, Show)
 
-instance UserDefTy Struct GTStructDef PolyTy StructDefError where
+instance UserDefTy Struct where
+  type TGrammar Struct = GTStructDef
+  type TError   Struct = StructDefError
+  type TEnvItem Struct = PolyTy
+
   gToUserDefTy = gToStruct
   validate = validateStruct
   typeDeps = structTypeDeps

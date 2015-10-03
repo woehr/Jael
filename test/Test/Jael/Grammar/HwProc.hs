@@ -8,7 +8,7 @@ import ClassyPrelude
 import Jael.Grammar
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
-import Test.HUnit
+--import Test.HUnit
 import Test.Jael.Util
 
 gHwProcTests :: [T.Test]

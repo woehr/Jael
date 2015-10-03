@@ -1,4 +1,3 @@
-{-# Language MultiParamTypeClasses #-}
 {-# Language NoImplicitPrelude #-}
 {-# Language TypeFamilies #-}
 
@@ -13,7 +12,11 @@ import Jael.UserDefTy
 import Jael.Util
 import Jael.Seq.Types
 
-instance UserDefTy Session GSession () SessDefErr where
+instance UserDefTy Session where
+  type TGrammar Session = GSession
+  type TError   Session = SessDefErr
+  type TEnvItem Session = ()
+
   gToUserDefTy = gToSession
   validate = validateSession
   -- The way sessions are defined in the grammar currently means they can't

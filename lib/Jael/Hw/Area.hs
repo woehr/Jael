@@ -1,5 +1,5 @@
 {-# Language NoImplicitPrelude #-}
-{-# Language MultiParamTypeClasses #-}
+{-# Language TypeFamilies #-}
 
 module Jael.Hw.Area where
 
@@ -24,7 +24,11 @@ data HwAreaTy = HwSeqTy Ty
 data HwAreaGrammar = HwAreaGrammar GAnyInt GTAreaDef
   deriving (Show)
 
-instance UserDefTy HwArea HwAreaGrammar HwAreaTy HwAreaErr where
+instance UserDefTy HwArea where
+  type TGrammar HwArea = HwAreaGrammar
+  type TError   HwArea = HwAreaErr
+  type TEnvItem HwArea = HwAreaTy
+
   gToUserDefTy = undefined
   validate = validateHwArea
   typeDeps = undefined

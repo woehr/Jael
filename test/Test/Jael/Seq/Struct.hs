@@ -16,11 +16,13 @@ import Test.HUnit
 import Test.Jael.Util
 
 validator :: GTypeDef -> Either StructDefError [(Text, PolyTy)]
-validator (GTDefStruct (UIdent i) s) = validate' (pack i, gToUserDefTy s)
+validator (GTDefStruct (UIdent i) s) =
+  validate' (pack i, gToUserDefTy s :: Struct)
 validator _ = error "Parsed non-struct typedef"
 
 checkStruct :: (Text, [(Text, PolyTy)]) -> Assertion
-checkStruct = checkParsedTypes pGTypeDef ((either (Left . tshow) Right) . validator)
+checkStruct =
+  checkParsedTypes pGTypeDef ((either (Left . tshow) Right) . validator)
 
 checkErr :: (Text, StructDefError) -> Assertion
 checkErr = checkTDefErr pGTypeDef validator
@@ -48,9 +50,15 @@ structValidSimple = (pack [raw|
 structValidPoly :: (Text, [(Text, PolyTy)])
 structValidPoly = (pack [raw|
   struct X a b{f0::a, f1 :: b }
-|], [ ("x",     PolyTy ["a", "b"] $ TFun (TVar "a") (TFun (TVar "b") (TNamed "X" [TVar "a", TVar "b"])))
-    , ("X::f0", PolyTy ["a", "b"] $ TFun (TNamed "X" [TVar "a", TVar "b"]) (TVar "a"))
-    , ("X::f1", PolyTy ["a", "b"] $ TFun (TNamed "X" [TVar "a", TVar "b"]) (TVar "b"))
+|], [ ("x",     PolyTy ["a", "b"] $ TFun (TVar "a") (TFun (TVar "b")
+                                      (TNamed "X" [TVar "a", TVar "b"])
+                                    ))
+    , ("X::f0", PolyTy ["a", "b"] $ TFun (TNamed "X" [TVar "a", TVar "b"])
+                                         (TVar "a")
+      )
+    , ("X::f1", PolyTy ["a", "b"] $ TFun (TNamed "X" [TVar "a", TVar "b"])
+                                         (TVar "b")
+      )
     ]
   )
 
