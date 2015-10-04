@@ -5,6 +5,8 @@ module Test.Jael.Conc.Proc
 ) where
 
 import ClassyPrelude
+import qualified Data.Map as M
+import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Parser
 import Jael.Conc.Proc
@@ -16,13 +18,27 @@ import Test.Jael.Util
 
 procTests :: [T.Test]
 procTests =
-  [ testCase "proc validation" $ checkProc valid
+  [ testCase "proc valid" $ checkProc valid
+  , testCase "free vars" $ checkProcErr freeVars
+  , testCase "dup args" $ checkProcErr dupArgs
+  , testCase "co-rec capture" $ checkProcErr coRecCapt
   ]
 
 checkProc :: (Text, Proc) -> Assertion
 checkProc (t, expected) = either (assertFailure . show)
                                  (assertEqual "" expected . gToProc)
                                  (runParser pGProc t)
+
+checkProcErr :: (Text, ProcDefErr) -> Assertion
+checkProcErr (t, expected) = either (assertFailure . show)
+                                    (assertEqual "" (Just expected)
+                                      . validateTopProc
+                                      . parseTopProc)
+                                    (runParser pGTopDef t)
+
+parseTopProc :: GTopDef -> TopProc
+parseTopProc (GTopDefGProcDef (GProcDef _ as p)) = gToTopProc as p
+parseTopProc _ = error "Expected only process definitions."
 
 valid :: (Text, Proc)
 valid = (pack [raw|
@@ -51,11 +67,11 @@ valid = (pack [raw|
     }
 |], PNew "x" (PNTNamed "SomeProto")
   $ PNew "y" (PNTExpr (ELit (LInt 5)))
-  $ PGet (Chan "x") "z"
-  $ PPut (Chan "x") (EVar "y")
-  $ PPut (Chan "x") (ELit (LBool True))
-  $ PSel (Chan "x") "label"
-  $ PCase (Chan "x")
+  $ PGet "x" "z"
+  $ PPut "x" (EVar "y")
+  $ PPut "x" (ELit (LBool True))
+  $ PSel "x" "label"
+  $ PCase "x"
       [ ("p1", PNil)
       , ("p2", PPar
                 [ PNil
@@ -63,15 +79,15 @@ valid = (pack [raw|
                 , PNamed "SomeProc" []
                 , PNew "a" (PNTNamed "Proto2")
                 $ PPar
-                    [ PPut (Chan "z") (EVar "a") PNil
-                    , PGet (Chan "z") "b" PNil
+                    [ PPut "z" (EVar "a") PNil
+                    , PGet "z" "b" PNil
                     ]
                 ]
         )
       , ("p3", PCoRec "X" [ ("j", EVar "x")
                           , ("k", ELit (LInt 1))
                           ]
-               ( PPut (Chan "j") (EVar "k")
+               ( PPut "j" (EVar "k")
                $ PPar [ PNamed "X" [ EVar "j"
                                    , EApp (EApp (EPrm PAdd) (EVar "k")) (ELit (LInt 1))
                                    ]
@@ -80,5 +96,45 @@ valid = (pack [raw|
                )
         )
       ]
+  )
+
+freeVars :: (Text, ProcDefErr)
+freeVars = (pack [raw|
+  proc X(x:Int) {
+    y <- x;
+    {}
+  }
+|], ProcDefErr
+      { pErrFreeVars = S.fromList ["y"]
+      , pErrDupArgs = S.empty
+      , pErrNonExplicitCoRecVarCapture = M.empty
+      }
+  )
+
+dupArgs :: (Text, ProcDefErr)
+dupArgs = (pack [raw|
+  proc X(x:Int, x:Bool) {
+    {}
+  }
+|], ProcDefErr
+      { pErrFreeVars = S.empty
+      , pErrDupArgs = S.fromList ["x"]
+      , pErrNonExplicitCoRecVarCapture = M.empty
+      }
+  )
+
+coRecCapt :: (Text, ProcDefErr)
+coRecCapt = (pack [raw|
+  proc X(x:Int, y:Bool) {
+    rec X(x=x) {
+      y <- x;
+      X(x)
+    }
+  }
+|], ProcDefErr
+      { pErrFreeVars = S.empty
+      , pErrDupArgs = S.empty
+      , pErrNonExplicitCoRecVarCapture = M.fromList [("X", S.fromList ["y"])]
+      }
   )
 
