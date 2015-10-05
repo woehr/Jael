@@ -22,6 +22,7 @@ procTests =
   , testCase "free vars" $ checkProcErr freeVars
   , testCase "dup args" $ checkProcErr dupArgs
   , testCase "co-rec capture" $ checkProcErr coRecCapt
+  , testCase "ambiguious co-rec name" $ checkProcErr ambiguousRecName
   ]
 
 checkProc :: (Text, Proc) -> Assertion
@@ -37,7 +38,7 @@ checkProcErr (t, expected) = either (assertFailure . show)
                                     (runParser pGTopDef t)
 
 parseTopProc :: GTopDef -> TopProc
-parseTopProc (GTopDefGProcDef (GProcDef _ as p)) = gToTopProc as p
+parseTopProc (GTopDefGProcDef (GProcDef _ as p)) = gToTopProc (as, p)
 parseTopProc _ = error "Expected only process definitions."
 
 valid :: (Text, Proc)
@@ -101,40 +102,78 @@ valid = (pack [raw|
 freeVars :: (Text, ProcDefErr)
 freeVars = (pack [raw|
   proc X(x:Int) {
-    y <- x;
-    {}
+    a <- x;
+    ( Y(b)
+    | y case { p1 => c = d + e; {}
+             , p2 => z select p3; {}
+             }
+    | f -> x; {}
+    )
   }
 |], ProcDefErr
-      { pErrFreeVars = S.fromList ["y"]
+      { pErrFreeVars = S.fromList ["a", "b", "d", "e", "f", "y", "z"]
       , pErrDupArgs = S.empty
-      , pErrNonExplicitCoRecVarCapture = M.empty
+      , pErrCoRecVarCapture = M.empty
+      , pErrAmbiguousRecName = S.empty
       }
   )
 
 dupArgs :: (Text, ProcDefErr)
 dupArgs = (pack [raw|
   proc X(x:Int, x:Bool) {
-    {}
+    rec Y(y={}, y={}) {
+      {}
+    }
   }
 |], ProcDefErr
       { pErrFreeVars = S.empty
-      , pErrDupArgs = S.fromList ["x"]
-      , pErrNonExplicitCoRecVarCapture = M.empty
+      , pErrDupArgs = S.fromList ["x", "y"]
+      , pErrCoRecVarCapture = M.empty
+      , pErrAmbiguousRecName = S.empty
       }
   )
 
 coRecCapt :: (Text, ProcDefErr)
 coRecCapt = (pack [raw|
-  proc X(x:Int, y:Bool) {
-    rec X(x=x) {
-      y <- x;
-      X(x)
+  proc X(x:Int, y:Bool, z:Foo) {
+    rec Y(x=x, z=z) {
+      y <- a + x; // a is undefined so it shouldn't show up in the capture error
+      rec Z(x=x) {
+        bar = x + y + z; {}
+      }
+    }
+  }
+|], ProcDefErr
+      { pErrFreeVars = S.fromList ["a"]
+      , pErrDupArgs = S.empty
+      , pErrCoRecVarCapture = M.fromList
+          [ ("Y", S.fromList ["y"])
+          , ("Z", S.fromList ["y", "z"])
+          ]
+      , pErrAmbiguousRecName = S.empty
+      }
+  )
+
+-- Y is ambiguous, Z is not. X is as well, but we need to consider all top level
+-- processes to determine if a recursive name is hiding another
+ambiguousRecName :: (Text, ProcDefErr)
+ambiguousRecName = (pack [raw|
+  proc X(x:Int, y:Bool, z:Foo) {
+    rec X(x=x, z=z) {
+      rec Y(x=x) {
+        rec Y(x=x) {
+          ( rec Z(x=x) { {} }
+          | rec Z(x=x) { {} }
+          )
+        }
+      }
     }
   }
 |], ProcDefErr
       { pErrFreeVars = S.empty
       , pErrDupArgs = S.empty
-      , pErrNonExplicitCoRecVarCapture = M.fromList [("X", S.fromList ["y"])]
+      , pErrCoRecVarCapture = M.empty
+      , pErrAmbiguousRecName = S.fromList ["Y"]
       }
   )
 

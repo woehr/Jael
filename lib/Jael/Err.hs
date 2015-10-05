@@ -6,6 +6,7 @@ module Jael.Err
 ) where
 
 import ClassyPrelude
+import qualified Data.Map as M
 import qualified Data.Set as S
 -- TODO: Change to Control.Monad.Except when using 7.10
 import Control.Monad.Error
@@ -16,6 +17,7 @@ data CompileErr = ParseErr Text
                 | DepCycle [Text]
                 | TypeDefErr [Text]
                 | TypeInfErr [Text]
+                | AmbigName (M.Map Text (S.Set Text))
   deriving (Eq, Show)
 
 type CompileErrM = Either CompileErr

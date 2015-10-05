@@ -1,10 +1,12 @@
-{-# Language NoImplicitPrelude, QuasiQuotes #-}
+{-# Language NoImplicitPrelude #-}
+{-# Language QuasiQuotes #-}
 
 module Test.Jael.Compile
 ( compileTests
 ) where
 
 import ClassyPrelude
+import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Compile
 import Jael.Err
@@ -22,6 +24,7 @@ compileTests =
   , testCase "call cycle (proc)" $ assertCompErr callCycleProc
   , testCase "recursive type" $ assertCompErr recType
   , testCase "undefined type" $ assertCompErr undefType
+  , testCase "ambiguous co-rec name" $ assertCompErr ambigName
   ]
 
 assertCompErr :: (Text, CompileErr) -> Assertion
@@ -75,5 +78,17 @@ undefType :: (Text, CompileErr)
 undefType = (pack [raw|
   enum E { f1 T }
 |], UndefName $ S.fromList ["T"]
+  )
+
+ambigName :: (Text, CompileErr)
+ambigName = (pack [raw|
+  proc X() { {} }
+
+  proc Y(a:Int) {
+    ( rec X(a=a) { {} }
+    | rec Y(a=a) { {} }
+    )
+  }
+|], AmbigName $ M.fromList [("Y", S.fromList ["X", "Y"])]
   )
 
