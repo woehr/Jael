@@ -37,8 +37,8 @@ data Session = SGetTy Ty Session
              | SPutTy Ty Session
              | SGetSess Session Session
              | SPutSess Session Session
-             | SChoice [(Text, Session)] Session
-             | SSelect [(Text, Session)] Session
+             | SChoice [(Text, Session)]
+             | SSelect [(Text, Session)]
              | SRepl Session
              | SCoInd Text Session
              | SIndVar Text
@@ -49,8 +49,8 @@ data SessionF a = SGetTyF Ty a
                 | SPutTyF Ty a
                 | SGetSessF a a
                 | SPutSessF a a
-                | SChoiceF [(Text, a)] a
-                | SSelectF [(Text, a)] a
+                | SChoiceF [(Text, a)]
+                | SSelectF [(Text, a)]
                 | SReplF a
                 | SCoIndF Text a
                 | SIndVarF Text
@@ -64,8 +64,8 @@ instance Foldable Session where
   project (SPutTy x y) = SPutTyF x y
   project (SGetSess x y) = SGetSessF x y
   project (SPutSess x y) = SPutSessF x y
-  project (SChoice x y) = SChoiceF x y
-  project (SSelect x y) = SSelectF x y
+  project (SChoice x) = SChoiceF x
+  project (SSelect x) = SSelectF x
   project (SRepl x) = SReplF x
   project (SCoInd x y) = SCoIndF x y
   project (SIndVar x) = SIndVarF x
@@ -76,12 +76,24 @@ instance Unfoldable Session where
   embed (SPutTyF x y) = SPutTy x y
   embed (SGetSessF x y) = SGetSess x y
   embed (SPutSessF x y) = SPutSess x y
-  embed (SChoiceF x y) = SChoice x y
-  embed (SSelectF x y) = SSelect x y
+  embed (SChoiceF x) = SChoice x
+  embed (SSelectF x) = SSelect x
   embed (SReplF x) = SRepl x
   embed (SCoIndF x y) = SCoInd x y
   embed (SIndVarF x) = SIndVar x
   embed (SEndF) = SEnd
+
+dual :: Session -> Session
+dual (SGetTy   x y) = SPutTy   x (dual y)
+dual (SPutTy   x y) = SGetTy   x (dual y)
+dual (SGetSess x y) = SPutSess x (dual y)
+dual (SPutSess x y) = SGetSess x (dual y)
+dual (SChoice  x)   = SSelect   $ map (\(a,b)->(a,dual b)) x
+dual (SSelect  x)   = SChoice   $ map (\(a,b)->(a,dual b)) x
+dual (SRepl    x)   = error "Can not take dual of non-linear type."
+dual (SCoInd   x y) = SCoInd   x (dual y)
+dual (SIndVar  x)   = SIndVar  x
+dual (SEnd)         = SEnd
 
 convLabelList :: [GSessChoice] -> [(Text, GSession)]
 convLabelList = map (\(GSessChoice (GChoiceLabel (LIdent x)) s)-> (pack x, s))
@@ -96,8 +108,8 @@ gToSession = ana coalg
         coalg (GSessGet (GSessSess s) cont) = SGetSessF s cont
         coalg (GSessPut (GSessTy t) cont) = SPutTyF (gToType t) cont
         coalg (GSessPut (GSessSess s) cont) = SPutSessF s cont
-        coalg (GSessSel ss cont) = SSelectF (convLabelList ss) cont
-        coalg (GSessCho ss cont) = SChoiceF (convLabelList ss) cont
+        coalg (GSessSel ss) = SSelectF (convLabelList ss)
+        coalg (GSessCho ss) = SChoiceF (convLabelList ss)
 
 tupListMerge :: ([a], [b]) -> ([a], [b]) -> ([a], [b])
 tupListMerge (as, bs) (a's, b's) = (as ++ a's, bs ++ b's)
@@ -112,8 +124,8 @@ varUsage = cata alg
         alg (SPutTyF _ y) = y
         alg (SGetSessF xs ys) = xs `tupListMerge` ys
         alg (SPutSessF xs ys) = xs `tupListMerge` ys
-        alg (SChoiceF xs y) = foldr tupListMerge ([], []) (y:(map snd xs))
-        alg (SSelectF xs y) = foldr tupListMerge ([], []) (y:(map snd xs))
+        alg (SChoiceF xs) = foldr tupListMerge ([], []) (map snd xs)
+        alg (SSelectF xs) = foldr tupListMerge ([], []) (map snd xs)
         alg (SReplF x) = x
 
 -- Finds any duplicate labels in a single select or choice. Accross several
@@ -126,8 +138,8 @@ dupLabels = cata alg
         alg (SPutTyF _ y) = y
         alg (SGetSessF xs ys) = xs `S.union` ys
         alg (SPutSessF xs ys) = xs `S.union` ys
-        alg (SChoiceF xs y) = S.unions $ (S.fromList $ repeated $ map fst xs):y:(map snd xs)
-        alg (SSelectF xs y) = S.unions $ (S.fromList $ repeated $ map fst xs):y:(map snd xs)
+        alg (SChoiceF xs) = S.unions $ (S.fromList $ repeated $ map fst xs):(map snd xs)
+        alg (SSelectF xs) = S.unions $ (S.fromList $ repeated $ map fst xs):(map snd xs)
         alg _ = S.empty
 
 --freeIndVars :: Session -> S.Set Text
