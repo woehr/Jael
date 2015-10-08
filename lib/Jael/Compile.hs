@@ -43,8 +43,8 @@ splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f, g) ->
          -> (a,b,c,(pack n, gToUserDefTy (HwAreaGrammar i y)):d,e,f,g)
        (GTopDefGTypeDef (GTDefProto (UIdent n) y))
          -> (a,b,c,d,(pack n, gToUserDefTy y)                  :e,f,g)
-       (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) xs p))
-         -> (a,b,c,d,e,                 (pack n, gToTopProc xs p):f,g)
+       (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) ys p))
+         -> (a,b,c,d,e,                 (pack n, gToTopProc ys p):f,g)
        (GTopDefGHwProc  _) -> (a,b,c,d,e,f,g)
   ) ([],[],[],[],[],[],[]) xs
 

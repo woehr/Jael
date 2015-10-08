@@ -1,6 +1,7 @@
 { nixpkgs ? (import <nixpkgs> {})
 }:
 let
-  inherit (import ./gen-jael-drv.nix { inherit nixpkgs; }) jael-drv-for;
+  inherit (import ./gen-jael-drv.nix { inherit nixpkgs; }) jael-shell;
 in
-  jael-drv-for "shell"
+  jael-shell
+
