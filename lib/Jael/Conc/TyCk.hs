@@ -8,7 +8,7 @@ import ClassyPrelude hiding (Chan, Foldable)
 --import qualified Data.Set as S
 import Jael.Conc.Env
 import Jael.Conc.Proc
---import Jael.Conc.Session
+import Jael.Conc.Session
 --import Jael.Seq.Types
 
 data SessTyErr = SessTyErr

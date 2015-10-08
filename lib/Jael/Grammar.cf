@@ -53,10 +53,10 @@ GSessRec. GSession1 ::= "rec" UIdent "." GSession2 ;
 
 GSessGet. GSession2 ::= "?" "[" GSessOrTy "]" GSession1 ;
 GSessPut. GSession2 ::= "!" "[" GSessOrTy "]" GSession1 ;
-GSessSel. GSession2 ::= "+" "[" [GSessChoice] "]" GSession1 ;
-GSessCho. GSession2 ::= "&" "[" [GSessChoice] "]" GSession1 ;
+GSessSel. GSession2 ::= "+" "[" [GSessChoice] "]" ;
+GSessCho. GSession2 ::= "&" "[" [GSessChoice] "]" ;
 
-GSessEnd. GSession3 ::= "end" ;
+GSessEnd. GSession3 ::= ";" ;
 -- recursion variable surrounded in <> to distinguish it from GTNamed in
 -- GSessGet and GSessPut
 GSessVar. GSession3 ::= "<" UIdent ">" ;
@@ -265,5 +265,5 @@ GProg.      GProg ::= [GTopDef] ;
 comment "//" ;
 
 -- Only export nessecary parsers.
-entrypoints GProg, GTypeDef, GType, GSession, GExpr, GProc, GHwProc ;
+entrypoints GProg, GTopDef, GTypeDef, GType, GSession, GExpr, GProc, GHwProc ;
 

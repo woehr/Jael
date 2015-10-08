@@ -25,7 +25,7 @@ defaultEnv =
                                             \ adding builtins:" : dups
                        Right env' -> env'
 
-userDefErr :: UserDefTy a b c d => (Text, a) -> Maybe Text
+userDefErr :: UserDefTy a => (Text, a) -> Maybe Text
 userDefErr (n, t) =
   case validate t of
        Just e -> Just $ "Error validating " ++ n ++ ":\n\t" ++ tshow e

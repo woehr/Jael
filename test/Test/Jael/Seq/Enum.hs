@@ -16,11 +16,12 @@ import Test.HUnit
 import Test.Jael.Util
 
 validator :: GTypeDef -> Either EnumDefError [(Text, PolyTy)]
-validator (GTDefEnum (UIdent i) e) = validate' (pack i, gToUserDefTy e)
+validator (GTDefEnum (UIdent i) e) = validate' (pack i, gToUserDefTy e :: Enum)
 validator _ = error "Parsed non-enum typedef"
 
 checkEnum :: (Text, [(Text, PolyTy)]) -> Assertion
-checkEnum = checkParsedTypes pGTypeDef ((either (Left . tshow) Right) . validator)
+checkEnum =
+  checkParsedTypes pGTypeDef ((either (Left . tshow) Right) . validator)
 
 checkErr :: (Text, EnumDefError) -> Assertion
 checkErr = checkTDefErr pGTypeDef validator

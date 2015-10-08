@@ -5,6 +5,8 @@ module Test.Jael.Conc.Proc
 ) where
 
 import ClassyPrelude
+import qualified Data.Map as M
+import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Parser
 import Jael.Conc.Proc
@@ -16,13 +18,28 @@ import Test.Jael.Util
 
 procTests :: [T.Test]
 procTests =
-  [ testCase "proc validation" $ checkProc valid
+  [ testCase "proc valid" $ checkProc valid
+  , testCase "free vars" $ checkProcErr freeVars
+  , testCase "dup args" $ checkProcErr dupArgs
+  , testCase "co-rec capture" $ checkProcErr coRecCapt
+  , testCase "ambiguious co-rec name" $ checkProcErr ambiguousRecName
   ]
 
 checkProc :: (Text, Proc) -> Assertion
 checkProc (t, expected) = either (assertFailure . show)
                                  (assertEqual "" expected . gToProc)
                                  (runParser pGProc t)
+
+checkProcErr :: (Text, ProcDefErr) -> Assertion
+checkProcErr (t, expected) = either (assertFailure . show)
+                                    (assertEqual "" (Just expected)
+                                      . validateTopProc
+                                      . parseTopProc)
+                                    (runParser pGTopDef t)
+
+parseTopProc :: GTopDef -> TopProc
+parseTopProc (GTopDefGProcDef (GProcDef _ as p)) = gToTopProc (as, p)
+parseTopProc _ = error "Expected only process definitions."
 
 valid :: (Text, Proc)
 valid = (pack [raw|
@@ -51,11 +68,11 @@ valid = (pack [raw|
     }
 |], PNew "x" (PNTNamed "SomeProto")
   $ PNew "y" (PNTExpr (ELit (LInt 5)))
-  $ PGet (Chan "x") "z"
-  $ PPut (Chan "x") (EVar "y")
-  $ PPut (Chan "x") (ELit (LBool True))
-  $ PSel (Chan "x") "label"
-  $ PCase (Chan "x")
+  $ PGet "x" "z"
+  $ PPut "x" (EVar "y")
+  $ PPut "x" (ELit (LBool True))
+  $ PSel "x" "label"
+  $ PCase "x"
       [ ("p1", PNil)
       , ("p2", PPar
                 [ PNil
@@ -63,15 +80,15 @@ valid = (pack [raw|
                 , PNamed "SomeProc" []
                 , PNew "a" (PNTNamed "Proto2")
                 $ PPar
-                    [ PPut (Chan "z") (EVar "a") PNil
-                    , PGet (Chan "z") "b" PNil
+                    [ PPut "z" (EVar "a") PNil
+                    , PGet "z" "b" PNil
                     ]
                 ]
         )
       , ("p3", PCoRec "X" [ ("j", EVar "x")
                           , ("k", ELit (LInt 1))
                           ]
-               ( PPut (Chan "j") (EVar "k")
+               ( PPut "j" (EVar "k")
                $ PPar [ PNamed "X" [ EVar "j"
                                    , EApp (EApp (EPrm PAdd) (EVar "k")) (ELit (LInt 1))
                                    ]
@@ -80,5 +97,83 @@ valid = (pack [raw|
                )
         )
       ]
+  )
+
+freeVars :: (Text, ProcDefErr)
+freeVars = (pack [raw|
+  proc X(x:Int) {
+    a <- x;
+    ( Y(b)
+    | y case { p1 => c = d + e; {}
+             , p2 => z select p3; {}
+             }
+    | f -> x; {}
+    )
+  }
+|], ProcDefErr
+      { pErrFreeVars = S.fromList ["a", "b", "d", "e", "f", "y", "z"]
+      , pErrDupArgs = S.empty
+      , pErrCoRecVarCapture = M.empty
+      , pErrAmbiguousRecName = S.empty
+      }
+  )
+
+dupArgs :: (Text, ProcDefErr)
+dupArgs = (pack [raw|
+  proc X(x:Int, x:Bool) {
+    rec Y(y={}, y={}) {
+      {}
+    }
+  }
+|], ProcDefErr
+      { pErrFreeVars = S.empty
+      , pErrDupArgs = S.fromList ["x", "y"]
+      , pErrCoRecVarCapture = M.empty
+      , pErrAmbiguousRecName = S.empty
+      }
+  )
+
+coRecCapt :: (Text, ProcDefErr)
+coRecCapt = (pack [raw|
+  proc X(x:Int, y:Bool, z:Foo) {
+    rec Y(x=x, z=z) {
+      y <- a + x; // a is undefined so it shouldn't show up in the capture error
+      rec Z(x=x) {
+        bar = x + y + z; {}
+      }
+    }
+  }
+|], ProcDefErr
+      { pErrFreeVars = S.fromList ["a"]
+      , pErrDupArgs = S.empty
+      , pErrCoRecVarCapture = M.fromList
+          [ ("Y", S.fromList ["y"])
+          , ("Z", S.fromList ["y", "z"])
+          ]
+      , pErrAmbiguousRecName = S.empty
+      }
+  )
+
+-- Y is ambiguous, Z is not. X is as well, but we need to consider all top level
+-- processes to determine if a recursive name is hiding another
+ambiguousRecName :: (Text, ProcDefErr)
+ambiguousRecName = (pack [raw|
+  proc X(x:Int, y:Bool, z:Foo) {
+    rec X(x=x, z=z) {
+      rec Y(x=x) {
+        rec Y(x=x) {
+          ( rec Z(x=x) { {} }
+          | rec Z(x=x) { {} }
+          )
+        }
+      }
+    }
+  }
+|], ProcDefErr
+      { pErrFreeVars = S.empty
+      , pErrDupArgs = S.empty
+      , pErrCoRecVarCapture = M.empty
+      , pErrAmbiguousRecName = S.fromList ["Y"]
+      }
   )
 

@@ -44,7 +44,7 @@ splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f, g) ->
        (GTopDefGTypeDef (GTDefProto (UIdent n) y))
          -> (a,b,c,d,(pack n, gToUserDefTy y)                  :e,f,g)
        (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) ys p))
-         -> (a,b,c,d,e,                 (pack n, gToTopProc ys p):f,g)
+         -> (a,b,c,d,e,              (pack n, gToTopProc (ys, p)):f,g)
        (GTopDefGHwProc  _) -> (a,b,c,d,e,f,g)
   ) ([],[],[],[],[],[],[]) xs
 
@@ -55,15 +55,34 @@ dupDefs ns =
          then return ()
          else throwError $ DupDef repeats
 
-defErrs :: [Struct] -> [Enum] -> [HwArea] -> [Session] -> CompileErrM ()
-defErrs ss es as zs =
+defErrs :: [Struct]
+        -> [Enum]
+        -> [HwArea]
+        -> [Session]
+        -> [TopProc]
+        -> CompileErrM ()
+defErrs ss es as zs ps =
   let errs = mapMaybe (liftA tshow . validate) ss
           ++ mapMaybe (liftA tshow . validate) es
           ++ mapMaybe (liftA tshow . validate) as
           ++ mapMaybe (liftA tshow . validate) zs
+          ++ mapMaybe (liftA tshow . validate) ps
    in if length errs == 0
          then return ()
          else throwError $ TypeDefErr errs
+
+shadowingDef :: [Text] -> [(Text, TopProc)] -> CompileErrM ()
+shadowingDef ns ps =
+  let nameSet = S.fromList ns
+      redefMap = foldr (\(n, (TopProc _ p)) a ->
+          let redefs = redefinedCoRecVar nameSet p
+           in if S.size redefs /= 0
+                 then M.insert n redefs a
+                 else a
+        ) M.empty ps
+   in if M.size redefMap /= 0
+         then throwError $ AmbigName redefMap
+         else return ()
 
 undefinedNames :: M.Map Text (S.Set Text) -> CompileErrM ()
 undefinedNames depMap =
@@ -97,20 +116,26 @@ compile p = do
 
   let (exprs, structs, enums, areas, protocols, procs, hwprocs) = splitTop prog
 
-  -- Find duplicate name definitions
-  dupDefs $ (map fst exprs)     ++
-            (map fst structs)   ++
-            (map fst enums)     ++
-            (map fst areas)     ++
-            (map fst protocols) ++
-            (map fst procs)     ++
-            (map fst hwprocs)
+  let topLevelNames = (map fst exprs)     ++
+                      (map fst structs)   ++
+                      (map fst enums)     ++
+                      (map fst areas)     ++
+                      (map fst protocols) ++
+                      (map fst procs)     ++
+                      (map fst hwprocs)
 
-  -- Check for errors in a types definition
+  -- Find duplicate name definitions
+  dupDefs topLevelNames
+
+  -- Check for errors in a definition
   defErrs (map snd structs)
           (map snd enums)
           (map snd areas)
           (map snd protocols)
+          (map snd procs)
+
+  -- Check for names that shadow other names
+  shadowingDef topLevelNames procs
 
   let exprDepMap = M.map freeVars . M.fromList $ exprs
 
@@ -130,8 +155,8 @@ compile p = do
   -- look for uses of undefined names
 
   let procDepMap = (M.map procDeps . M.fromList $ procs)
-  -- Processes on the other hand can continue with a function by name, and they
-  -- can not be called recursively.
+  -- Processes on the other hand can continue with a process by name, and they
+  -- can not be called recursively (recursion must be explicitly defined).
   undefinedNames procDepMap
 
   -- Processes are explicitly typed so the order in which they're processed does
