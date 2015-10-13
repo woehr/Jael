@@ -180,9 +180,10 @@ GProcName. GProcName ::= UIdent ;
 
 -- Builtin channels can have "::" in their name
 GChan.     GChan ::= GScopedIdent ;
+GChanNeg.  GChan ::= "^" GScopedIdent ;
 
 -- User created channels can't have "::" in their name
-GUserChan. GUserChan ::= LIdent ;
+GUserChan.    GUserChan ::= LIdent ;
 
 GSessOrIdentIdent. GSessOrIdent ::= UIdent ;
 GSessOrIdentSess.  GSessOrIdent ::= GSession ;

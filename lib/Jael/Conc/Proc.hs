@@ -29,7 +29,10 @@ data ProcDefErr = ProcDefErr
   , pErrAmbiguousRecName :: S.Set Text
   } deriving (Eq, Show)
 
-type Chan = Text
+data Polarity = Positive | Negative
+  deriving (Eq, Ord, Show)
+
+type Chan = (Text, Polarity)
 type Var  = Text
 type Label = Text
 
@@ -53,7 +56,6 @@ instance UserDefTy TopProc where
 data Proc = PGet Chan Var Proc
           | PPut Chan Ex Proc
           | PNew Text PNewType Proc
-          | PRepl Chan Var Proc
           | PPar [Proc]
           | PCase Chan [(Label, Proc)]
           | PSel Chan Label Proc
@@ -66,7 +68,6 @@ data Proc = PGet Chan Var Proc
 data ProcF a = PGetF Chan Var a
              | PPutF Chan Ex a
              | PNewF Text PNewType a
-             | PReplF Chan Var a
              | PParF [a]
              | PCaseF Chan [(Label, a)]
              | PSelF Chan Label a
@@ -82,7 +83,6 @@ instance Foldable Proc where
   project (PGet x y z)   = PGetF x y z
   project (PPut x y z)   = PPutF x y z
   project (PNew x y z)   = PNewF x y z
-  project (PRepl x y z)  = PReplF x y z
   project (PPar x)       = PParF x
   project (PCase x y)    = PCaseF x y
   project (PSel x y z)   = PSelF x y z
@@ -95,7 +95,6 @@ instance Unfoldable Proc where
   embed (PGetF x y z)   = PGet x y z
   embed (PPutF x y z)   = PPut x y z
   embed (PNewF x y z)   = PNew x y z
-  embed (PReplF x y z)  = PRepl x y z
   embed (PParF x)       = PPar x
   embed (PCaseF x y)    = PCase x y
   embed (PSelF x y z)   = PSel x y z
@@ -129,13 +128,21 @@ gToProc = ana coalg
         coalg (GProcLet (LIdent x) y p
               ) = PNewF (pack x) (PNTExpr $ gToEx y) p
         coalg (GProcGet (GChan (GScopedIdent xs)) (LIdent y) p
-              ) = PGetF (gScopedToText xs) (pack y) p
+              ) = PGetF ((gScopedToText xs), Positive) (pack y) p
+        coalg (GProcGet (GChanNeg (GScopedIdent xs)) (LIdent y) p
+              ) = PGetF ((gScopedToText xs), Negative) (pack y) p
         coalg (GProcPut (GChan (GScopedIdent xs)) ex p
-              ) = PPutF (gScopedToText xs) (gToEx ex) p
+              ) = PPutF ((gScopedToText xs), Positive) (gToEx ex) p
+        coalg (GProcPut (GChanNeg (GScopedIdent xs)) ex p
+              ) = PPutF ((gScopedToText xs), Negative) (gToEx ex) p
         coalg (GProcSel (GChan (GScopedIdent xs)) (GChoiceLabel (LIdent y)) p
-              ) = PSelF (gScopedToText xs) (pack y) p
+              ) = PSelF ((gScopedToText xs), Positive) (pack y) p
+        coalg (GProcSel (GChanNeg (GScopedIdent xs)) (GChoiceLabel (LIdent y)) p
+              ) = PSelF ((gScopedToText xs), Negative) (pack y) p
         coalg (GProcCho (GChan (GScopedIdent xs)) ys
-              ) = PCaseF (gScopedToText xs) (gChoiceToProc ys)
+              ) = PCaseF ((gScopedToText xs), Positive) (gChoiceToProc ys)
+        coalg (GProcCho (GChanNeg (GScopedIdent xs)) ys
+              ) = PCaseF ((gScopedToText xs), Negative) (gChoiceToProc ys)
         coalg (GProcRec (GProcName (UIdent x)) inits p
               ) = PCoRecF (pack x) (gToInitList inits) p
         coalg (GProcNamed (GProcName (UIdent x)) params
@@ -154,7 +161,6 @@ procDeps (TopProc _ p) = cata alg p
         alg (PGetF  _ _ x) = x
         alg (PPutF  _ _ x) = x
         alg (PSelF  _ _ x) = x
-        alg (PReplF _ _ x) = x
         alg (PCaseF _ xs) = S.unions (map snd xs)
         alg (PParF    xs) = S.unions xs
         alg _ = S.empty
@@ -168,11 +174,10 @@ procFreeVars = cata alg
         alg (PNewF v (PNTNamed _)   p) = v `S.delete` p
         alg (PNewF v (PNTSession _) p) = v `S.delete` p
         alg (PNewF v (PNTExpr e)    p) = v `S.delete` (p `S.union` freeVars e)
-        alg (PGetF  c v p) = c `S.insert` (v `S.insert` p)
-        alg (PPutF  c e p) = c `S.insert` (freeVars e `S.union` p)
-        alg (PSelF  c _ p) = c `S.insert` p
-        alg (PCaseF c  xs) = c `S.insert` S.unions (map snd xs)
-        alg (PReplF c v p) = c `S.insert` (v `S.insert` p)
+        alg (PGetF  (c, _) v p) = c `S.insert` (v `S.insert` p)
+        alg (PPutF  (c, _) e p) = c `S.insert` (freeVars e `S.union` p)
+        alg (PSelF  (c, _) _ p) = c `S.insert` p
+        alg (PCaseF (c, _)  xs) = c `S.insert` S.unions (map snd xs)
         alg (PParF xs) = S.unions xs
         alg _ = S.empty
 
@@ -191,7 +196,6 @@ coRecCapturedVars = para alg
         alg (PGetF  _ _ (_, x)) = x
         alg (PPutF  _ _ (_, x)) = x
         alg (PSelF  _ _ (_, x)) = x
-        alg (PReplF _ _ (_, x)) = x
         alg _ = M.empty
 
 recDupArgs :: Proc -> S.Set Text
@@ -204,7 +208,6 @@ recDupArgs = cata alg
         alg (PGetF  _ _ x) = x
         alg (PPutF  _ _ x) = x
         alg (PSelF  _ _ x) = x
-        alg (PReplF _ _ x) = x
         alg _ = S.empty
 
 ambigCoRecDef :: Proc -> S.Set Text
@@ -219,7 +222,6 @@ ambigCoRecDef = para alg
         alg (PGetF  _ _ (_, x)) = x
         alg (PPutF  _ _ (_, x)) = x
         alg (PSelF  _ _ (_, x)) = x
-        alg (PReplF _ _ (_, x)) = x
         alg _ = S.empty
 
 coRecNames :: Proc -> S.Set Text
@@ -232,7 +234,6 @@ coRecNames = cata alg
         alg (PGetF  _ _ x) = x
         alg (PPutF  _ _ x) = x
         alg (PSelF  _ _ x) = x
-        alg (PReplF _ _ x) = x
         alg _ = S.empty
 
 -- Given a set of names and a process, return the set of names that are both
