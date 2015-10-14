@@ -179,24 +179,24 @@ coercions    GExpr 16 ;
 GProcName. GProcName ::= UIdent ;
 
 -- Builtin channels can have "::" in their name
-GChan.     GChan ::= GScopedIdent ;
-GChanNeg.  GChan ::= "^" GScopedIdent ;
+GChanPos.  GChan ::= "+" GScopedIdent ;
+GChanNeg.  GChan ::= "-" GScopedIdent ;
 
--- User created channels can't have "::" in their name
-GUserChan.    GUserChan ::= LIdent ;
+GChanOrExprC. GChanOrExpr ::= GChan ;
+GChanOrExprE. GChanOrExpr ::= GExpr ;
 
 GSessOrIdentIdent. GSessOrIdent ::= UIdent ;
 GSessOrIdentSess.  GSessOrIdent ::= GSession ;
 
-GProcNew.   GProc1 ::= "new" GUserChan ":" GSessOrIdent ";" GProc1 ;
-GProcLet.   GProc1 ::= LIdent "="  GExpr          ";" GProc1 ;
-GProcGet.   GProc1 ::= GChan  "->" LIdent         ";" GProc1 ;
+GProcNew.   GProc1 ::= "new" LIdent ":" GSessOrIdent ";" GProc1 ;
+GProcLet.   GProc1 ::= LIdent "="  GExpr             ";" GProc1 ;
+GProcGet.   GProc1 ::= GChan  "->" LIdent            ";" GProc1 ;
 
 -- The definition of an expression contains an LIdent as a var, so rather than
 -- creating a rule for (LIdent | GExpr) just look for single variable
 -- expressions that are channel names when parsing the grammar tree.
 
-GProcPut.   GProc1 ::= GChan  "<-" GExpr           ";" GProc1 ;
+GProcPut.   GProc1 ::= GChan  "<-" GChanOrExpr     ";" GProc1 ;
 GProcSel.   GProc1 ::= GChan "select" GChoiceLabel ";" GProc1 ;
 
 GConcChoice. GConcChoice ::= GChoiceLabel "=>" GProc ;
@@ -207,18 +207,18 @@ GProcCho.   GProc1 ::= GChan "case"
     [ GConcChoice ]
   "}" ;
 
-GRecInitializer. GRecInitializer ::= LIdent "=" GExpr ;
+GRecInitializer. GRecInitializer ::= LIdent "=" GChanOrExpr ;
 separator nonempty GRecInitializer "," ;
 
 GProcRec.   GProc1 ::= "rec" GProcName "(" [GRecInitializer] ")"
   "{" GProc "}" ;
 
 -- See comment for GProcPut for why GExpr is used.
-GProcParam. GProcParam ::= GExpr ;
+GProcParam. GProcParam ::= GChanOrExpr ;
 separator GProcParam "," ;
 
 GProcNamed. GProc1 ::= GProcName "(" [GProcParam] ")" ;
-GProcInact. GProc1 ::= GUnit ;
+GProcInact. GProc1 ::= "done" ;
 
 GParElem. GParElem ::= GProc1 ;
 separator nonempty GParElem "|" ;

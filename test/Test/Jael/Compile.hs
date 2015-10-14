@@ -82,11 +82,11 @@ undefType = (pack [raw|
 
 ambigName :: (Text, CompileErr)
 ambigName = (pack [raw|
-  proc X() { {} }
+  proc X() { done }
 
   proc Y(a:Int) {
-    ( rec X(a=a) { {} }
-    | rec Y(a=a) { {} }
+    ( rec X(a=a) { done }
+    | rec Y(a=a) { done }
     )
   }
 |], AmbigName $ M.fromList [("Y", S.fromList ["X", "Y"])]

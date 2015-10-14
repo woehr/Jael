@@ -39,19 +39,20 @@ data Session = SGetTy Ty Session
              | SPutSess Session Session
              | SChoice [(Text, Session)]
              | SSelect [(Text, Session)]
-             | SRepl Session
              | SCoInd Text Session
              | SIndVar Text
              | SEnd
              deriving (Eq, Show)
 
+-- Some functions in this module recurse into the session in SGetSess and
+-- SPutSess while others do not. This is why that session is a Session instead
+-- of an "a"
 data SessionF a = SGetTyF Ty a
                 | SPutTyF Ty a
-                | SGetSessF a a
-                | SPutSessF a a
+                | SGetSessF Session a
+                | SPutSessF Session a
                 | SChoiceF [(Text, a)]
                 | SSelectF [(Text, a)]
-                | SReplF a
                 | SCoIndF Text a
                 | SIndVarF Text
                 | SEndF
@@ -66,7 +67,6 @@ instance Foldable Session where
   project (SPutSess x y) = SPutSessF x y
   project (SChoice x) = SChoiceF x
   project (SSelect x) = SSelectF x
-  project (SRepl x) = SReplF x
   project (SCoInd x y) = SCoIndF x y
   project (SIndVar x) = SIndVarF x
   project (SEnd) = SEndF
@@ -78,22 +78,20 @@ instance Unfoldable Session where
   embed (SPutSessF x y) = SPutSess x y
   embed (SChoiceF x) = SChoice x
   embed (SSelectF x) = SSelect x
-  embed (SReplF x) = SRepl x
   embed (SCoIndF x y) = SCoInd x y
   embed (SIndVarF x) = SIndVar x
   embed (SEndF) = SEnd
 
 dual :: Session -> Session
-dual (SGetTy   x y) = SPutTy   x (dual y)
-dual (SPutTy   x y) = SGetTy   x (dual y)
-dual (SGetSess x y) = SPutSess x (dual y)
-dual (SPutSess x y) = SGetSess x (dual y)
-dual (SChoice  x)   = SSelect   $ map (\(a,b)->(a,dual b)) x
-dual (SSelect  x)   = SChoice   $ map (\(a,b)->(a,dual b)) x
-dual (SRepl    _)   = error "Can not take dual of non-linear type."
-dual (SCoInd   x y) = SCoInd   x (dual y)
-dual (SIndVar  x)   = SIndVar  x
-dual (SEnd)         = SEnd
+dual = cata alg
+  where alg :: Base Session Session -> Session
+        alg (SGetTyF   x y) = SPutTy   x y
+        alg (SPutTyF   x y) = SGetTy   x y
+        alg (SGetSessF x y) = SPutSess x y
+        alg (SPutSessF x y) = SGetSess x y
+        alg (SChoiceF  x)   = SSelect x
+        alg (SSelectF  x)   = SChoice x
+        alg x = embed x
 
 convLabelList :: [GSessChoice] -> [(Text, GSession)]
 convLabelList = map (\(GSessChoice (GChoiceLabel (LIdent x)) s)-> (pack x, s))
@@ -105,9 +103,9 @@ gToSession = ana coalg
         coalg (GSessVar (UIdent var)) = SIndVarF (pack var)
         coalg (GSessRec (UIdent var) cont) = SCoIndF (pack var) cont
         coalg (GSessGet (GSessTy t) cont) = SGetTyF (gToType t) cont
-        coalg (GSessGet (GSessSess s) cont) = SGetSessF s cont
+        coalg (GSessGet (GSessSess s) cont) = SGetSessF (gToSession s) cont
         coalg (GSessPut (GSessTy t) cont) = SPutTyF (gToType t) cont
-        coalg (GSessPut (GSessSess s) cont) = SPutSessF s cont
+        coalg (GSessPut (GSessSess s) cont) = SPutSessF (gToSession s) cont
         coalg (GSessSel ss) = SSelectF (convLabelList ss)
         coalg (GSessCho ss) = SChoiceF (convLabelList ss)
 
@@ -122,11 +120,10 @@ varUsage = cata alg
         alg (SCoIndF var (vs, us)) = (var:vs, us)
         alg (SGetTyF _ y) = y
         alg (SPutTyF _ y) = y
-        alg (SGetSessF xs ys) = xs `tupListMerge` ys
-        alg (SPutSessF xs ys) = xs `tupListMerge` ys
+        alg (SGetSessF xs ys) = varUsage xs `tupListMerge` ys
+        alg (SPutSessF xs ys) = varUsage xs `tupListMerge` ys
         alg (SChoiceF xs) = foldr tupListMerge ([], []) (map snd xs)
         alg (SSelectF xs) = foldr tupListMerge ([], []) (map snd xs)
-        alg (SReplF x) = x
 
 -- Finds any duplicate labels in a single select or choice. Accross several
 -- select or choice labels can be reused.
@@ -136,8 +133,8 @@ dupLabels = cata alg
         alg (SCoIndF _ cont) = cont
         alg (SGetTyF _ y) = y
         alg (SPutTyF _ y) = y
-        alg (SGetSessF xs ys) = xs `S.union` ys
-        alg (SPutSessF xs ys) = xs `S.union` ys
+        alg (SGetSessF xs ys) = dupLabels xs `S.union` ys
+        alg (SPutSessF xs ys) = dupLabels xs `S.union` ys
         alg (SChoiceF xs) = S.unions $ (S.fromList $ repeated $ map fst xs):(map snd xs)
         alg (SSelectF xs) = S.unions $ (S.fromList $ repeated $ map fst xs):(map snd xs)
         alg _ = S.empty

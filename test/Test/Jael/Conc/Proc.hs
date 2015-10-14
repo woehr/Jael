@@ -45,52 +45,52 @@ valid :: (Text, Proc)
 valid = (pack [raw|
   new x : SomeProto;
   y = 5;
-  x -> z;
-  x <- y;
-  x <- true;
-  x select label;
-  x case
-    { p1 => {}
-    , p2 => ( {}
-            | SomeProc(x)
+  +x -> z;
+  -x <- y;
+  +x <- true;
+  -x select label;
+  +x case
+  { p1 => done
+    , p2 => ( done
+            | SomeProc(+x)
             | SomeProc()
             | new a : Proto2;
-              ( z <- a; {}
-              | z -> b; {}
+              ( -z <- a; done
+              | +z -> b; done
               )
             )
     , p3 => rec X(j=x, k=1)
-              { j <- k;
-                ( X(j, k+1)
-                | {}
+              { +j <- k;
+                ( X(-j, k+1)
+                | done
                 )
               }
     }
 |], PNew "x" (PNTNamed "SomeProto")
   $ PNew "y" (PNTExpr (ELit (LInt 5)))
-  $ PGet "x" "z"
-  $ PPut "x" (EVar "y")
-  $ PPut "x" (ELit (LBool True))
-  $ PSel "x" "label"
-  $ PCase "x"
+  $ PGet ("x", Positive) "z"
+  $ PPut ("x", Negative) (Right $ EVar "y")
+  $ PPut ("x", Positive) (Right $ ELit (LBool True))
+  $ PSel ("x", Negative) "label"
+  $ PCase ("x", Positive)
       [ ("p1", PNil)
       , ("p2", PPar
                 [ PNil
-                , PNamed "SomeProc" [EVar "x"]
+                , PNamed "SomeProc" [Left ("x", Positive)]
                 , PNamed "SomeProc" []
                 , PNew "a" (PNTNamed "Proto2")
                 $ PPar
-                    [ PPut "z" (EVar "a") PNil
-                    , PGet "z" "b" PNil
+                    [ PPut ("z", Negative) (Right $ EVar "a") PNil
+                    , PGet ("z", Positive) "b" PNil
                     ]
                 ]
         )
-      , ("p3", PCoRec "X" [ ("j", EVar "x")
-                          , ("k", ELit (LInt 1))
+      , ("p3", PCoRec "X" [ ("j", Right $ EVar "x")
+                          , ("k", Right $ ELit (LInt 1))
                           ]
-               ( PPut "j" (EVar "k")
-               $ PPar [ PNamed "X" [ EVar "j"
-                                   , EApp (EApp (EPrm PAdd) (EVar "k")) (ELit (LInt 1))
+               ( PPut ("j", Positive) (Right $ EVar "k")
+               $ PPar [ PNamed "X" [ Left ("j", Negative)
+                                   , Right $ EApp (EApp (EPrm PAdd) (EVar "k")) (ELit (LInt 1))
                                    ]
                       , PNil
                       ]
@@ -102,12 +102,12 @@ valid = (pack [raw|
 freeVars :: (Text, ProcDefErr)
 freeVars = (pack [raw|
   proc X(x:Int) {
-    a <- x;
+    +a <- x;
     ( Y(b)
-    | y case { p1 => c = d + e; {}
-             , p2 => z select p3; {}
-             }
-    | f -> x; {}
+    | -y case { p1 => c = d + e; done
+              , p2 => +z select p3; done
+              }
+    | +f -> x; done
     )
   }
 |], ProcDefErr
@@ -121,9 +121,7 @@ freeVars = (pack [raw|
 dupArgs :: (Text, ProcDefErr)
 dupArgs = (pack [raw|
   proc X(x:Int, x:Bool) {
-    rec Y(y={}, y={}) {
-      {}
-    }
+    rec Y(y={}, y={}) { done }
   }
 |], ProcDefErr
       { pErrFreeVars = S.empty
@@ -137,9 +135,9 @@ coRecCapt :: (Text, ProcDefErr)
 coRecCapt = (pack [raw|
   proc X(x:Int, y:Bool, z:Foo) {
     rec Y(x=x, z=z) {
-      y <- a + x; // a is undefined so it shouldn't show up in the capture error
+      +y <- a + x; // a is undefined so it shouldn't show up in the capture error
       rec Z(x=x) {
-        bar = x + y + z; {}
+        bar = x + y + z; done
       }
     }
   }
@@ -162,8 +160,8 @@ ambiguousRecName = (pack [raw|
     rec X(x=x, z=z) {
       rec Y(x=x) {
         rec Y(x=x) {
-          ( rec Z(x=x) { {} }
-          | rec Z(x=x) { {} }
+          ( rec Z(x=x) { done }
+          | rec Z(x=x) { done }
           )
         }
       }

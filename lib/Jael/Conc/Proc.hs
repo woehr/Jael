@@ -36,6 +36,8 @@ type Chan = (Text, Polarity)
 type Var  = Text
 type Label = Text
 
+type ChanEx = Either Chan Ex
+
 data TyOrSess = TorSTy Ty
               | TorSSess Session
               deriving (Show)
@@ -54,26 +56,26 @@ instance UserDefTy TopProc where
   envItems _ = []
 
 data Proc = PGet Chan Var Proc
-          | PPut Chan Ex Proc
+          | PPut Chan ChanEx Proc
           | PNew Text PNewType Proc
           | PPar [Proc]
           | PCase Chan [(Label, Proc)]
           | PSel Chan Label Proc
-          | PCoRec Text [(Var, Ex)] Proc
+          | PCoRec Text [(Var, ChanEx)] Proc
           | PFwd Chan Chan
-          | PNamed Text [Ex]
+          | PNamed Text [ChanEx]
           | PNil
           deriving (Eq, Show)
 
 data ProcF a = PGetF Chan Var a
-             | PPutF Chan Ex a
+             | PPutF Chan ChanEx a
              | PNewF Text PNewType a
              | PParF [a]
              | PCaseF Chan [(Label, a)]
              | PSelF Chan Label a
-             | PCoRecF Text [(Var, Ex)] a
+             | PCoRecF Text [(Var, ChanEx)] a
              | PFwdF Chan Chan
-             | PNamedF Text [Ex]
+             | PNamedF Text [ChanEx]
              | PNilF
              deriving (Functor, Show)
 
@@ -109,37 +111,42 @@ gScopedToText = intercalate "::" . map (\(GScopeElem (LIdent x)) -> pack x)
 gChoiceToProc :: [GConcChoice] -> [(Text, GProc)]
 gChoiceToProc = map (\(GConcChoice (GChoiceLabel (LIdent x)) p) -> (pack x, p))
 
-gToInitList :: [GRecInitializer] -> [(Text, Ex)]
-gToInitList = map (\(GRecInitializer (LIdent x) ex) -> (pack x, gToEx ex))
+gToChanEx :: GChanOrExpr -> ChanEx
+gToChanEx (GChanOrExprC (GChanPos (GScopedIdent c))) = Left (gScopedToText c, Positive)
+gToChanEx (GChanOrExprC (GChanNeg (GScopedIdent c))) = Left (gScopedToText c, Negative)
+gToChanEx (GChanOrExprE ex) = Right (gToEx ex)
+
+gToInitList :: [GRecInitializer] -> [(Text, ChanEx)]
+gToInitList = map (\(GRecInitializer (LIdent x) y) -> (pack x, gToChanEx y))
 
 gParElemToProc :: GParElem -> GProc
 gParElemToProc (GParElem p) = p
 
-gProcParamToEx :: GProcParam -> Ex
-gProcParamToEx (GProcParam x) = gToEx x
+gProcParamToEx :: GProcParam -> ChanEx
+gProcParamToEx (GProcParam x) = gToChanEx x
 
 gToProc :: GProc -> Proc
 gToProc = ana coalg
   where coalg :: GProc -> Base Proc GProc
-        coalg (GProcNew (GUserChan (LIdent x)) (GSessOrIdentIdent (UIdent y)) p
+        coalg (GProcNew (LIdent x) (GSessOrIdentIdent (UIdent y)) p
               ) = PNewF (pack x) (PNTNamed $ pack y) p
-        coalg (GProcNew (GUserChan (LIdent x)) (GSessOrIdentSess y) p
+        coalg (GProcNew (LIdent x) (GSessOrIdentSess y) p
               ) = PNewF (pack x) (PNTSession $ gToSession y) p
         coalg (GProcLet (LIdent x) y p
               ) = PNewF (pack x) (PNTExpr $ gToEx y) p
-        coalg (GProcGet (GChan (GScopedIdent xs)) (LIdent y) p
+        coalg (GProcGet (GChanPos (GScopedIdent xs)) (LIdent y) p
               ) = PGetF ((gScopedToText xs), Positive) (pack y) p
         coalg (GProcGet (GChanNeg (GScopedIdent xs)) (LIdent y) p
               ) = PGetF ((gScopedToText xs), Negative) (pack y) p
-        coalg (GProcPut (GChan (GScopedIdent xs)) ex p
-              ) = PPutF ((gScopedToText xs), Positive) (gToEx ex) p
-        coalg (GProcPut (GChanNeg (GScopedIdent xs)) ex p
-              ) = PPutF ((gScopedToText xs), Negative) (gToEx ex) p
-        coalg (GProcSel (GChan (GScopedIdent xs)) (GChoiceLabel (LIdent y)) p
+        coalg (GProcPut (GChanPos (GScopedIdent xs)) cex p
+              ) = PPutF ((gScopedToText xs), Positive) (gToChanEx cex) p
+        coalg (GProcPut (GChanNeg (GScopedIdent xs)) cex p
+              ) = PPutF ((gScopedToText xs), Negative) (gToChanEx cex) p
+        coalg (GProcSel (GChanPos (GScopedIdent xs)) (GChoiceLabel (LIdent y)) p
               ) = PSelF ((gScopedToText xs), Positive) (pack y) p
         coalg (GProcSel (GChanNeg (GScopedIdent xs)) (GChoiceLabel (LIdent y)) p
               ) = PSelF ((gScopedToText xs), Negative) (pack y) p
-        coalg (GProcCho (GChan (GScopedIdent xs)) ys
+        coalg (GProcCho (GChanPos (GScopedIdent xs)) ys
               ) = PCaseF ((gScopedToText xs), Positive) (gChoiceToProc ys)
         coalg (GProcCho (GChanNeg (GScopedIdent xs)) ys
               ) = PCaseF ((gScopedToText xs), Negative) (gChoiceToProc ys)
@@ -147,7 +154,7 @@ gToProc = ana coalg
               ) = PCoRecF (pack x) (gToInitList inits) p
         coalg (GProcNamed (GProcName (UIdent x)) params
               ) = PNamedF (pack x) (map gProcParamToEx params)
-        coalg (GProcInact GUnit
+        coalg (GProcInact
               ) = PNilF
         coalg (GProcPar e1 es
               ) = PParF (gParElemToProc e1 : map gParElemToProc es)
@@ -165,17 +172,23 @@ procDeps (TopProc _ p) = cata alg p
         alg (PParF    xs) = S.unions xs
         alg _ = S.empty
 
+-- TODO: Maybe create a type class for things that can have free variables to
+-- avoid having a new function name like this.
+cexFreeVars :: ChanEx -> S.Set Text
+cexFreeVars (Left (c, _)) = S.singleton c
+cexFreeVars (Right ex)    = freeVars ex
+
 procFreeVars :: Proc -> S.Set Text
 procFreeVars = cata alg
   where alg :: Base Proc (S.Set Text) -> S.Set Text
-        alg (PNamedF _ as) = S.unions $ map freeVars as
-        alg (PCoRecF _ as p) = S.unions (map (freeVars . snd) as)
+        alg (PNamedF _ as) = S.unions $ map cexFreeVars as
+        alg (PCoRecF _ as p) = S.unions (map (cexFreeVars . snd) as)
                               `S.union` (p S.\\ (S.fromList $ map fst as))
         alg (PNewF v (PNTNamed _)   p) = v `S.delete` p
         alg (PNewF v (PNTSession _) p) = v `S.delete` p
         alg (PNewF v (PNTExpr e)    p) = v `S.delete` (p `S.union` freeVars e)
         alg (PGetF  (c, _) v p) = c `S.insert` (v `S.insert` p)
-        alg (PPutF  (c, _) e p) = c `S.insert` (freeVars e `S.union` p)
+        alg (PPutF  (c, _) e p) = c `S.insert` (cexFreeVars e `S.union` p)
         alg (PSelF  (c, _) _ p) = c `S.insert` p
         alg (PCaseF (c, _)  xs) = c `S.insert` S.unions (map snd xs)
         alg (PParF xs) = S.unions xs
