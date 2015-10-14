@@ -41,8 +41,10 @@ splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f, g) ->
          -> (a,b,(pack n, gToUserDefTy y)                  :c,d,e,f,g)
        (GTopDefGTypeDef (GTDefArea (UIdent n) i y))
          -> (a,b,c,(pack n, gToUserDefTy (HwAreaGrammar i y)):d,e,f,g)
-       (GTopDefGTypeDef (GTDefProto (UIdent n) y))
+       (GTopDefGTypeDef (GTDefProto (UIdent n) (GSessDef GPolPos y)))
          -> (a,b,c,d,(pack n, gToUserDefTy y)                  :e,f,g)
+       (GTopDefGTypeDef (GTDefProto (UIdent n) (GSessDef GPolNeg y)))
+         -> (a,b,c,d,(pack n, dual $ gToUserDefTy y)           :e,f,g)
        (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) ys p))
          -> (a,b,c,d,e,              (pack n, gToTopProc (ys, p)):f,g)
        (GTopDefGHwProc  _) -> (a,b,c,d,e,f,g)
@@ -151,8 +153,10 @@ compile p = do
   undefinedNames typeDepMap
   typeOrder <- nameCycle typeDepMap
 
-  -- Sessions can't refer to other sessions by name (yet) so there is no need to
-  -- look for uses of undefined names
+  let sessDepMap = (M.map freeIndVars . M.fromList $ protocols)
+  -- Find uses of undefined sessions
+  undefinedNames sessDepMap
+  _ <- nameCycle sessDepMap
 
   let procDepMap = (M.map procDeps . M.fromList $ procs)
   -- Processes on the other hand can continue with a process by name, and they

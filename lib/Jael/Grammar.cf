@@ -47,7 +47,7 @@ GSessChoice. GSessChoice ::= GChoiceLabel "=>" GSession1 ;
 separator nonempty GSessChoice "," ;
 
 GSessTy.   GSessOrTy ::= GType ;
-GSessSess. GSessOrTy ::= GSession ;
+GSessSess. GSessOrTy ::= GSession1 ;
 
 GSessRec. GSession1 ::= "rec" UIdent "." GSession2 ;
 
@@ -62,6 +62,11 @@ GSessEnd. GSession3 ::= ";" ;
 GSessVar. GSession3 ::= "<" UIdent ">" ;
 
 coercions GSession 3 ;
+
+GPolPos. GPolarity ::= ;
+GPolNeg. GPolarity ::= "dual" ;
+
+GSessDef. GSessDef ::= GPolarity GSession ;
 
 -- Struct element is an accessor followed by a type
 GTStructFieldName. GTStructFieldName ::= LIdent ;
@@ -185,16 +190,9 @@ GChanNeg.  GChan ::= "-" GScopedIdent ;
 GChanOrExprC. GChanOrExpr ::= GChan ;
 GChanOrExprE. GChanOrExpr ::= GExpr ;
 
-GSessOrIdentIdent. GSessOrIdent ::= UIdent ;
-GSessOrIdentSess.  GSessOrIdent ::= GSession ;
-
-GProcNew.   GProc1 ::= "new" LIdent ":" GSessOrIdent ";" GProc1 ;
-GProcLet.   GProc1 ::= LIdent "="  GExpr             ";" GProc1 ;
-GProcGet.   GProc1 ::= GChan  "->" LIdent            ";" GProc1 ;
-
--- The definition of an expression contains an LIdent as a var, so rather than
--- creating a rule for (LIdent | GExpr) just look for single variable
--- expressions that are channel names when parsing the grammar tree.
+GProcNew.   GProc1 ::= "new" LIdent ":" GSessDef   ";" GProc1 ;
+GProcLet.   GProc1 ::= LIdent "="  GExpr           ";" GProc1 ;
+GProcGet.   GProc1 ::= GChan  "->" LIdent          ";" GProc1 ;
 
 GProcPut.   GProc1 ::= GChan  "<-" GChanOrExpr     ";" GProc1 ;
 GProcSel.   GProc1 ::= GChan "select" GChoiceLabel ";" GProc1 ;
@@ -213,7 +211,6 @@ separator nonempty GRecInitializer "," ;
 GProcRec.   GProc1 ::= "rec" GProcName "(" [GRecInitializer] ")"
   "{" GProc "}" ;
 
--- See comment for GProcPut for why GExpr is used.
 GProcParam. GProcParam ::= GChanOrExpr ;
 separator GProcParam "," ;
 
@@ -231,7 +228,7 @@ coercions GProc 2 ;
 
 GTDefStruct. GTypeDef ::= "struct" UIdent GTStructDef ;
 GTDefEnum.   GTypeDef ::= "enum" UIdent GTEnumDef ;
-GTDefProto.  GTypeDef ::= "protocol" UIdent "=" GSession ;
+GTDefProto.  GTypeDef ::= "protocol" UIdent "=" GSessDef ;
 GTDefArea.   GTypeDef ::= "area" UIdent "@" GAnyInt GTAreaDef ;
 
 GFuncName. GFuncName ::= LIdent ;

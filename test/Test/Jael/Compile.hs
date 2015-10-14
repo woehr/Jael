@@ -23,7 +23,10 @@ compileTests =
   , testCase "call cycle (expr)" $ assertCompErr callCycleExpr
   , testCase "call cycle (proc)" $ assertCompErr callCycleProc
   , testCase "recursive type" $ assertCompErr recType
+  , testCase "recursive session" $ assertCompErr recSession
+  , testCase "recursive session w/o rec" $ assertCompErr recSessionNoCoRec
   , testCase "undefined type" $ assertCompErr undefType
+  , testCase "undefined session" $ assertCompErr undefSession
   , testCase "ambiguous co-rec name" $ assertCompErr ambigName
   ]
 
@@ -74,10 +77,29 @@ recType = (pack [raw|
 |], DepCycle ["S"]
   )
 
+recSession :: (Text, CompileErr)
+recSession = (pack [raw|
+  protocol X = ![{}] <Y>
+  protocol Y = ?[{}] <X>
+|], DepCycle ["X", "Y"]
+  )
+
+recSessionNoCoRec :: (Text, CompileErr)
+recSessionNoCoRec = (pack [raw|
+  protocol X = ![{}] <X>
+|], DepCycle ["X"]
+  )
+
 undefType :: (Text, CompileErr)
 undefType = (pack [raw|
   enum E { f1 T }
 |], UndefName $ S.fromList ["T"]
+  )
+
+undefSession :: (Text, CompileErr)
+undefSession = (pack [raw|
+  protocol X = <Y>
+|], UndefName $ S.fromList ["Y"]
   )
 
 ambigName :: (Text, CompileErr)

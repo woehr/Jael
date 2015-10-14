@@ -19,7 +19,7 @@ gProcTests =
 
 comprehensiveCase:: (Text, GProc)
 comprehensiveCase = (pack [raw|
-  new x : SomeProto;
+  new x : <SomeProto>;
   y = 5;
   +x -> z;
   -x <- y;
@@ -30,7 +30,7 @@ comprehensiveCase = (pack [raw|
     , p2 => ( done
             | SomeProc(x)
             | SomeProc()
-            | new a : Proto2;
+            | new a : dual <Proto2>;
               +z <- a;
               -z -> b;
               done
@@ -43,7 +43,7 @@ comprehensiveCase = (pack [raw|
               }
     }
 |], GProcNew (LIdent "x")
-             (GSessOrIdentIdent (UIdent "SomeProto"))
+             (GSessDef GPolPos $ GSessVar (UIdent "SomeProto"))
   $ GProcLet (LIdent "y") (GEInt (DecInt "5"))
   $ GProcGet (GChanPos (GScopedIdent [GScopeElem (LIdent "x")])) (LIdent "z")
   $ GProcPut (GChanNeg (GScopedIdent [GScopeElem (LIdent "x")])) (GChanOrExprE $ GEVar (LIdent "y"))
@@ -61,7 +61,7 @@ comprehensiveCase = (pack [raw|
                                   []
                                 )
                      , GParElem
-                       $ GProcNew (LIdent "a") (GSessOrIdentIdent (UIdent "Proto2"))
+                       $ GProcNew (LIdent "a") (GSessDef GPolNeg $ GSessVar (UIdent "Proto2"))
                        $ GProcPut (GChanPos (GScopedIdent [GScopeElem (LIdent "z")])) (GChanOrExprE $ GEVar (LIdent "a"))
                        $ GProcGet (GChanNeg (GScopedIdent [GScopeElem (LIdent "z")])) (LIdent "b")
                        $ GProcInact

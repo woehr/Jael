@@ -43,7 +43,7 @@ parseTopProc _ = error "Expected only process definitions."
 
 valid :: (Text, Proc)
 valid = (pack [raw|
-  new x : SomeProto;
+  new x : <SomeProto>;
   y = 5;
   +x -> z;
   -x <- y;
@@ -54,7 +54,7 @@ valid = (pack [raw|
     , p2 => ( done
             | SomeProc(+x)
             | SomeProc()
-            | new a : Proto2;
+            | new a : dual <Proto2>;
               ( -z <- a; done
               | +z -> b; done
               )
@@ -78,7 +78,7 @@ valid = (pack [raw|
                 [ PNil
                 , PNamed "SomeProc" [Left ("x", Positive)]
                 , PNamed "SomeProc" []
-                , PNew "a" (PNTNamed "Proto2")
+                , PNew "a" (PNTNamedDual "Proto2")
                 $ PPar
                     [ PPut ("z", Negative) (Right $ EVar "a") PNil
                     , PGet ("z", Positive) "b" PNil

@@ -16,6 +16,7 @@ import Jael.UserDefTy
 import Jael.Util
 
 data PNewType = PNTNamed Text
+              | PNTNamedDual Text
               | PNTSession Session
               -- Not a type but is how we'll introducing seq values into the
               -- process tree for now
@@ -128,10 +129,14 @@ gProcParamToEx (GProcParam x) = gToChanEx x
 gToProc :: GProc -> Proc
 gToProc = ana coalg
   where coalg :: GProc -> Base Proc GProc
-        coalg (GProcNew (LIdent x) (GSessOrIdentIdent (UIdent y)) p
-              ) = PNewF (pack x) (PNTNamed $ pack y) p
-        coalg (GProcNew (LIdent x) (GSessOrIdentSess y) p
-              ) = PNewF (pack x) (PNTSession $ gToSession y) p
+        coalg (GProcNew (LIdent x) (GSessDef GPolPos (GSessVar (UIdent i))) p
+              ) = PNewF (pack x) (PNTNamed $ pack i) p
+        coalg (GProcNew (LIdent x) (GSessDef GPolNeg (GSessVar (UIdent i))) p
+              ) = PNewF (pack x) (PNTNamedDual $ pack i) p
+        coalg (GProcNew (LIdent x) (GSessDef GPolPos s) p
+              ) = PNewF (pack x) (PNTSession $ gToSession s) p
+        coalg (GProcNew (LIdent x) (GSessDef GPolNeg s) p
+              ) = PNewF (pack x) (PNTSession $ dual $ gToSession s) p
         coalg (GProcLet (LIdent x) y p
               ) = PNewF (pack x) (PNTExpr $ gToEx y) p
         coalg (GProcGet (GChanPos (GScopedIdent xs)) (LIdent y) p

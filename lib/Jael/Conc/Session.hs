@@ -29,7 +29,6 @@ instance UserDefTy Session where
 data SessDefErr = SessDefErr
   { sessErrDupInd :: (S.Set Text)
   , sessErrDupLab :: (S.Set Text)
-  , sessErrFree   :: (S.Set Text)
   , sessErrUnused :: (S.Set Text)
   } deriving (Eq, Show)
 
@@ -139,8 +138,8 @@ dupLabels = cata alg
         alg (SSelectF xs) = S.unions $ (S.fromList $ repeated $ map fst xs):(map snd xs)
         alg _ = S.empty
 
---freeIndVars :: Session -> S.Set Text
---freeIndVars = freeIndVars' . varUsage
+freeIndVars :: Session -> S.Set Text
+freeIndVars = freeIndVars' . varUsage
 
 freeIndVars' :: ([Text], [Text]) -> S.Set Text
 freeIndVars' (defd, used) = S.fromList used S.\\ S.fromList defd
@@ -156,16 +155,13 @@ validateSession s =
   let usages@(varsDefd, _) = varUsage s
       dupInd = repeated varsDefd
       dupLabs = dupLabels s
-      free = freeIndVars' usages
       unused = unusedIndVars' usages
    in if (length dupInd /= 0) ||
          (S.size dupLabs /= 0) ||
-         (S.size free /= 0) ||
          (S.size unused /= 0)
         then Just SessDefErr
               { sessErrDupInd = S.fromList dupInd
               , sessErrDupLab = dupLabs
-              , sessErrFree   = free
               , sessErrUnused = unused
               }
         else Nothing

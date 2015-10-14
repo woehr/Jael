@@ -25,7 +25,6 @@ checkSessionErr :: (Text, SessDefErr) -> Assertion
 checkSessionErr (t, SessDefErr
                      { sessErrDupInd = exDupInd
                      , sessErrDupLab = exDupLab
-                     , sessErrFree   = exFree
                      , sessErrUnused = exUnused
                      }) =
   case runParser pGSession t of
@@ -34,12 +33,10 @@ checkSessionErr (t, SessDefErr
          case validateSession (gToSession gDef) of
               Just (SessDefErr { sessErrDupInd = dupInd
                                , sessErrDupLab = dupLab
-                               , sessErrFree   = free
                                , sessErrUnused = unused
                                })-> do
                    assertEqual "" exDupInd dupInd
                    assertEqual "" exDupLab dupLab
-                   assertEqual "" exFree free
                    assertEqual "" exUnused unused
               Nothing -> assertFailure "Expected session def error"
 
@@ -59,7 +56,6 @@ allErrs = (pack [raw|
 |], SessDefErr
       { sessErrDupInd = S.fromList ["X"]
       , sessErrDupLab = S.fromList ["a","c"]
-      , sessErrFree   = S.fromList ["Y"]
       , sessErrUnused = S.fromList ["X"]
       }
   )
