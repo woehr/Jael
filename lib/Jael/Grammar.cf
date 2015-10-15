@@ -59,14 +59,10 @@ GSessCho. GSession2 ::= "&" "[" [GSessChoice] "]" ;
 GSessEnd. GSession3 ::= ";" ;
 -- recursion variable surrounded in <> to distinguish it from GTNamed in
 -- GSessGet and GSessPut
-GSessVar. GSession3 ::= "<" UIdent ">" ;
+GSessVar.     GSession3 ::= "<" UIdent ">" ;
+GSessVarDual. GSession3 ::= "<" "dual" UIdent ">" ;
 
 coercions GSession 3 ;
-
-GPolPos. GPolarity ::= ;
-GPolNeg. GPolarity ::= "dual" ;
-
-GSessDef. GSessDef ::= GPolarity GSession ;
 
 -- Struct element is an accessor followed by a type
 GTStructFieldName. GTStructFieldName ::= LIdent ;
@@ -184,13 +180,14 @@ coercions    GExpr 16 ;
 GProcName. GProcName ::= UIdent ;
 
 -- Builtin channels can have "::" in their name
-GChanPos.  GChan ::= "+" GScopedIdent ;
-GChanNeg.  GChan ::= "-" GScopedIdent ;
+GChan.  GChan ::= "^" GScopedIdent ;
 
 GChanOrExprC. GChanOrExpr ::= GChan ;
 GChanOrExprE. GChanOrExpr ::= GExpr ;
 
-GProcNew.   GProc1 ::= "new" LIdent ":" GSessDef   ";" GProc1 ;
+GProcNew.   GProc1 ::= "new" "(" "^" LIdent "," "^" LIdent ")"
+  ":" GSession   ";" GProc1 ;
+
 GProcLet.   GProc1 ::= LIdent "="  GExpr           ";" GProc1 ;
 GProcGet.   GProc1 ::= GChan  "->" LIdent          ";" GProc1 ;
 
@@ -228,7 +225,7 @@ coercions GProc 2 ;
 
 GTDefStruct. GTypeDef ::= "struct" UIdent GTStructDef ;
 GTDefEnum.   GTypeDef ::= "enum" UIdent GTEnumDef ;
-GTDefProto.  GTypeDef ::= "protocol" UIdent "=" GSessDef ;
+GTDefProto.  GTypeDef ::= "protocol" UIdent "=" GSession ;
 GTDefArea.   GTypeDef ::= "area" UIdent "@" GAnyInt GTAreaDef ;
 
 GFuncName. GFuncName ::= LIdent ;

@@ -10,6 +10,7 @@ import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Parser
 import Jael.Conc.Proc
+import Jael.Conc.Session
 import Jael.Seq.AST
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
@@ -43,53 +44,53 @@ parseTopProc _ = error "Expected only process definitions."
 
 valid :: (Text, Proc)
 valid = (pack [raw|
-  new x : <SomeProto>;
+  new (^xp, ^xn) : <SomeProto>;
   y = 5;
-  +x -> z;
-  -x <- y;
-  +x <- true;
-  -x select label;
-  +x case
-  { p1 => done
+  ^xp -> z;
+  ^xn <- y;
+  ^xp <- true;
+  ^xn select label;
+  ^xp case
+    { p1 => done
     , p2 => ( done
-            | SomeProc(+x)
+            | SomeProc(^xp)
             | SomeProc()
-            | new a : dual <Proto2>;
-              ( -z <- a; done
-              | +z -> b; done
+            | new (^a, ^b) : <dual Proto2>;
+              ( ^z <- a; done
+              | ^z -> b; done
               )
             )
     , p3 => rec X(j=x, k=1)
-              { +j <- k;
-                ( X(-j, k+1)
+              { ^j <- k;
+                ( X(^j, k+1)
                 | done
                 )
               }
     }
-|], PNew "x" (PNTNamed "SomeProto")
-  $ PNew "y" (PNTExpr (ELit (LInt 5)))
-  $ PGet ("x", Positive) "z"
-  $ PPut ("x", Negative) (Right $ EVar "y")
-  $ PPut ("x", Positive) (Right $ ELit (LBool True))
-  $ PSel ("x", Negative) "label"
-  $ PCase ("x", Positive)
+|], PNewChan "xp" "xn" (SVar "SomeProto")
+  $ PNewVal "y" (ELit (LInt 5))
+  $ PGet "xp" "z"
+  $ PPut "xn" (Right $ EVar "y")
+  $ PPut "xp" (Right $ ELit (LBool True))
+  $ PSel "xn" "label"
+  $ PCase "xp"
       [ ("p1", PNil)
       , ("p2", PPar
                 [ PNil
-                , PNamed "SomeProc" [Left ("x", Positive)]
+                , PNamed "SomeProc" [Left "xp"]
                 , PNamed "SomeProc" []
-                , PNew "a" (PNTNamedDual "Proto2")
+                , PNewChan "a" "b" (SDualVar "Proto2")
                 $ PPar
-                    [ PPut ("z", Negative) (Right $ EVar "a") PNil
-                    , PGet ("z", Positive) "b" PNil
+                    [ PPut "z" (Right $ EVar "a") PNil
+                    , PGet "z" "b" PNil
                     ]
                 ]
         )
       , ("p3", PCoRec "X" [ ("j", Right $ EVar "x")
                           , ("k", Right $ ELit (LInt 1))
                           ]
-               ( PPut ("j", Positive) (Right $ EVar "k")
-               $ PPar [ PNamed "X" [ Left ("j", Negative)
+               ( PPut "j" (Right $ EVar "k")
+               $ PPar [ PNamed "X" [ Left "j"
                                    , Right $ EApp (EApp (EPrm PAdd) (EVar "k")) (ELit (LInt 1))
                                    ]
                       , PNil
@@ -102,12 +103,12 @@ valid = (pack [raw|
 freeVars :: (Text, ProcDefErr)
 freeVars = (pack [raw|
   proc X(x:Int) {
-    +a <- x;
+    ^a <- x;
     ( Y(b)
-    | -y case { p1 => c = d + e; done
-              , p2 => +z select p3; done
+    | ^y case { p1 => c = d + e; done
+              , p2 => ^z select p3; done
               }
-    | +f -> x; done
+    | ^f -> x; done
     )
   }
 |], ProcDefErr
@@ -135,7 +136,7 @@ coRecCapt :: (Text, ProcDefErr)
 coRecCapt = (pack [raw|
   proc X(x:Int, y:Bool, z:Foo) {
     rec Y(x=x, z=z) {
-      +y <- a + x; // a is undefined so it shouldn't show up in the capture error
+      ^y <- a + x; // a is undefined so it shouldn't show up in the capture error
       rec Z(x=x) {
         bar = x + y + z; done
       }

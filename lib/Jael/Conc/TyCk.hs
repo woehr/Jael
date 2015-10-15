@@ -19,7 +19,7 @@ separateArgs :: [(Text, TyOrSess)] -> ([(Chan, Session)], [(Text, Ty)])
 separateArgs xs = foldr
   (\(n, x) (ss, ts) -> case x of
                     TorSTy t   -> (ss, (n,t):ts)
-                    TorSSess s -> (((n, Positive), s):ss, ts)
+                    TorSSess s -> ((n,s):ss, ts)
   ) ([],[]) xs
 
 tyCheckTopProc :: TopProc -> Maybe [SessTyErr]

@@ -17,8 +17,12 @@ import Test.Jael.Util
 
 sessionTests :: [T.Test]
 sessionTests =
-  [ testCase "test all session def errors" $ checkSessionErr allErrs
-  , testCase "test session dual function" $ checkSessionDual testDual
+  [ testCase "session dual" $ checkSessionDual testDual
+  , testCase "session dual with vars" $ checkSessionDual testDualVars
+  , testCase "duplicate induction variable" $ checkSessionErr dupIndVar
+  , testCase "duplicate label" $ checkSessionErr dupLabel
+  , testCase "unused recursion variable" $ checkSessionErr unusedRecVar
+  , testCase "rec variable is dual error" $ checkSessionErr dualRecVar
   ]
 
 checkSessionErr :: (Text, SessDefErr) -> Assertion
@@ -42,23 +46,6 @@ checkSessionErr (t, SessDefErr
 
 checkSessionDual :: (Text, Session) -> Assertion
 checkSessionDual = checkParsedTree (liftM (dual . gToSession) . pGSession)
-
-allErrs :: (Text, SessDefErr)
-allErrs = (pack [raw|
-  rec X. &[ a=>rec X. <Y>
-          , b=>?[Int];
-          , c=> +[ a=>;
-                 , a=>;
-                 , b=>;
-                 ]
-          , c=>;
-          ]
-|], SessDefErr
-      { sessErrDupInd = S.fromList ["X"]
-      , sessErrDupLab = S.fromList ["a","c"]
-      , sessErrUnused = S.fromList ["X"]
-      }
-  )
 
 -- A session to be parsed and dualed, and the expected dual
 testDual :: (Text, Session)
@@ -84,7 +71,79 @@ testDual = (pack [raw|
                             , ("c", SPutSess (SPutTy TInt $ SGetTy TInt $ SEnd) SEnd)
                             ]
               )
-            , ("e", SCoInd "X" $ SPutTy TBool $ SGetTy TInt $ SIndVar "X")
+            , ("e", SCoInd "X" $ SPutTy TBool $ SGetTy TInt $ SVar "X")
             ]
+  )
+
+testDualVars :: (Text, Session)
+testDualVars = (pack [raw|
+  rec X. +[ a => <X>
+          , b => <NamedProto>
+          ]
+|], SCoInd "X"
+  $ SChoice [ ("a", SVar "X")
+            , ("b", SDualVar "NamedProto")
+            ]
+  )
+
+dupIndVar :: (Text, SessDefErr)
+dupIndVar = (pack [raw|
+  rec X. &[ a=> rec X. <X>
+          , b=> ?[Int];
+          , c=> +[ a=>;
+                 , b=>;
+                 ]
+          ]
+|], SessDefErr
+      { sessErrDupInd = S.fromList ["X"]
+      , sessErrDupLab = S.empty
+      , sessErrUnused = S.empty
+      , sessErrDualRec = S.empty
+      }
+  )
+
+dupLabel :: (Text, SessDefErr)
+dupLabel = (pack [raw|
+  rec X. &[ a=> <X>
+          , b=> ?[Int];
+          , c=> +[ a=>;
+                 , a=>;
+                 , b=>;
+                 ]
+          , c=>;
+          ]
+|], SessDefErr
+      { sessErrDupInd = S.empty
+      , sessErrDupLab = S.fromList ["a","c"]
+      , sessErrUnused = S.empty
+      , sessErrDualRec = S.empty
+      }
+  )
+
+unusedRecVar :: (Text, SessDefErr)
+unusedRecVar = (pack [raw|
+  rec X. &[ a=> rec Y. <Z>
+          , b=> ?[Int];
+          , c=> +[ a=>;
+                 , b=>;
+                 ]
+          ]
+|], SessDefErr
+      { sessErrDupInd = S.empty
+      , sessErrDupLab = S.empty
+      , sessErrUnused = S.fromList ["X", "Y"]
+      , sessErrDualRec = S.empty
+      }
+  )
+
+dualRecVar :: (Text, SessDefErr)
+dualRecVar = (pack [raw|
+  rec X. ?[{}] <dual X>
+|], SessDefErr
+      { sessErrDupInd = S.empty
+      , sessErrDupLab = S.empty
+      , sessErrUnused = S.empty
+      , sessErrDualRec = S.fromList ["X"]
+      }
   )
 

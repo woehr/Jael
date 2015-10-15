@@ -5,7 +5,6 @@ module Jael.Conc.Session where
 
 import ClassyPrelude hiding (Foldable)
 import Data.Functor.Foldable
-import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
 import Jael.UserDefTy
@@ -27,9 +26,10 @@ instance UserDefTy Session where
   envItems _ = []
 
 data SessDefErr = SessDefErr
-  { sessErrDupInd :: (S.Set Text)
-  , sessErrDupLab :: (S.Set Text)
-  , sessErrUnused :: (S.Set Text)
+  { sessErrDupInd  :: (S.Set Text)
+  , sessErrDupLab  :: (S.Set Text)
+  , sessErrUnused  :: (S.Set Text)
+  , sessErrDualRec :: (S.Set Text)
   } deriving (Eq, Show)
 
 data Session = SGetTy Ty Session
@@ -39,7 +39,8 @@ data Session = SGetTy Ty Session
              | SChoice [(Text, Session)]
              | SSelect [(Text, Session)]
              | SCoInd Text Session
-             | SIndVar Text
+             | SVar Text
+             | SDualVar Text
              | SEnd
              deriving (Eq, Show)
 
@@ -53,7 +54,8 @@ data SessionF a = SGetTyF Ty a
                 | SChoiceF [(Text, a)]
                 | SSelectF [(Text, a)]
                 | SCoIndF Text a
-                | SIndVarF Text
+                | SVarF Text
+                | SDualVarF Text
                 | SEndF
                deriving (Functor, Show)
 
@@ -67,7 +69,8 @@ instance Foldable Session where
   project (SChoice x) = SChoiceF x
   project (SSelect x) = SSelectF x
   project (SCoInd x y) = SCoIndF x y
-  project (SIndVar x) = SIndVarF x
+  project (SVar x) = SVarF x
+  project (SDualVar x) = SDualVarF x
   project (SEnd) = SEndF
 
 instance Unfoldable Session where
@@ -78,19 +81,30 @@ instance Unfoldable Session where
   embed (SChoiceF x) = SChoice x
   embed (SSelectF x) = SSelect x
   embed (SCoIndF x y) = SCoInd x y
-  embed (SIndVarF x) = SIndVar x
+  embed (SVarF x) = SVar x
+  embed (SDualVarF x) = SDualVar x
   embed (SEndF) = SEnd
 
 dual :: Session -> Session
-dual = cata alg
-  where alg :: Base Session Session -> Session
-        alg (SGetTyF   x y) = SPutTy   x y
-        alg (SPutTyF   x y) = SGetTy   x y
-        alg (SGetSessF x y) = SPutSess x y
-        alg (SPutSessF x y) = SGetSess x y
-        alg (SChoiceF  x)   = SSelect x
-        alg (SSelectF  x)   = SChoice x
-        alg x = embed x
+dual s = let
+    vs = S.fromList . (\(x, _, _) -> x) . varUsage $ s
+    alg :: Base Session Session -> Session
+    alg (SGetTyF   x y) = SPutTy   x y
+    alg (SPutTyF   x y) = SGetTy   x y
+    alg (SGetSessF x y) = SPutSess x y
+    alg (SPutSessF x y) = SGetSess x y
+    alg (SChoiceF  x)   = SSelect x
+    alg (SSelectF  x)   = SChoice x
+    alg (SVarF x)       = if x `S.member` vs
+                             then SVar x
+                             else SDualVar x
+    -- A valid session should not have a "dualed" recursion variable
+    alg (SDualVarF x)   = if x `S.member` vs
+                             then error "Compiler error. This should not happen\
+                                        \ if the session was validated."
+                             else SVar x
+    alg x = embed x
+  in cata alg s
 
 convLabelList :: [GSessChoice] -> [(Text, GSession)]
 convLabelList = map (\(GSessChoice (GChoiceLabel (LIdent x)) s)-> (pack x, s))
@@ -99,7 +113,8 @@ gToSession :: GSession -> Session
 gToSession = ana coalg
   where coalg :: GSession -> Base Session GSession
         coalg (GSessEnd) = SEndF
-        coalg (GSessVar (UIdent var)) = SIndVarF (pack var)
+        coalg (GSessVar (UIdent var)) = SVarF (pack var)
+        coalg (GSessVarDual (UIdent var)) = SDualVarF (pack var)
         coalg (GSessRec (UIdent var) cont) = SCoIndF (pack var) cont
         coalg (GSessGet (GSessTy t) cont) = SGetTyF (gToType t) cont
         coalg (GSessGet (GSessSess s) cont) = SGetSessF (gToSession s) cont
@@ -108,24 +123,27 @@ gToSession = ana coalg
         coalg (GSessSel ss) = SSelectF (convLabelList ss)
         coalg (GSessCho ss) = SChoiceF (convLabelList ss)
 
-tupListMerge :: ([a], [b]) -> ([a], [b]) -> ([a], [b])
-tupListMerge (as, bs) (a's, b's) = (as ++ a's, bs ++ b's)
+tupListMerge :: ([a], [b], [c]) -> ([a], [b], [c]) -> ([a], [b], [c])
+tupListMerge (a, b, c) (a', b', c') = (a ++ a', b ++ b', c ++ c')
 
-varUsage :: Session -> ([Text], [Text])
+-- Returns a list of co-inductive names, a list of session variables, and a list
+-- of dualed session variables
+varUsage :: Session -> ([Text], [Text], [Text])
 varUsage = cata alg
-  where alg :: Base Session ([Text], [Text]) -> ([Text], [Text])
-        alg (SEndF) = ([], [])
-        alg (SIndVarF var) = ([], [var])
-        alg (SCoIndF var (vs, us)) = (var:vs, us)
+  where alg :: Base Session ([Text], [Text], [Text]) -> ([Text], [Text], [Text])
+        alg (SEndF) = ([], [], [])
+        alg (SVarF var) = ([], [var], [])
+        alg (SDualVarF var) = ([], [], [var])
+        alg (SCoIndF var (us, vs, ws)) = (var:us, vs, ws)
         alg (SGetTyF _ y) = y
         alg (SPutTyF _ y) = y
         alg (SGetSessF xs ys) = varUsage xs `tupListMerge` ys
         alg (SPutSessF xs ys) = varUsage xs `tupListMerge` ys
-        alg (SChoiceF xs) = foldr tupListMerge ([], []) (map snd xs)
-        alg (SSelectF xs) = foldr tupListMerge ([], []) (map snd xs)
+        alg (SChoiceF xs) = foldr tupListMerge ([], [], []) (map snd xs)
+        alg (SSelectF xs) = foldr tupListMerge ([], [], []) (map snd xs)
 
--- Finds any duplicate labels in a single select or choice. Accross several
--- select or choice labels can be reused.
+-- Finds any duplicate labels in a single select or choice. Across several
+-- select or choice, labels can be reused.
 dupLabels :: Session -> S.Set Text
 dupLabels = cata alg
   where alg :: Base Session (S.Set Text) -> S.Set Text
@@ -141,33 +159,33 @@ dupLabels = cata alg
 freeIndVars :: Session -> S.Set Text
 freeIndVars = freeIndVars' . varUsage
 
-freeIndVars' :: ([Text], [Text]) -> S.Set Text
-freeIndVars' (defd, used) = S.fromList used S.\\ S.fromList defd
+freeIndVars' :: ([Text], [Text], [Text]) -> S.Set Text
+freeIndVars' (defd, vars, dualedVars) =
+  S.fromList (vars ++ dualedVars) S.\\ S.fromList defd
 
 --unusedIndVars :: Session -> S.Set Text
 --unusedIndVars = unusedIndVars' . varUsage
 
-unusedIndVars' :: ([Text], [Text]) -> S.Set Text
-unusedIndVars' (defd, used) = S.fromList defd S.\\ S.fromList used
+unusedIndVars' :: ([Text], [Text], [Text]) -> S.Set Text
+unusedIndVars' (defd, vars, dualedVars) =
+  S.fromList defd S.\\ S.fromList (vars ++ dualedVars)
 
 validateSession :: Session -> Maybe SessDefErr
 validateSession s =
-  let usages@(varsDefd, _) = varUsage s
+  let usages@(varsDefd, _, dualedVars) = varUsage s
       dupInd = repeated varsDefd
       dupLabs = dupLabels s
       unused = unusedIndVars' usages
-   in if (length dupInd /= 0) ||
-         (S.size dupLabs /= 0) ||
-         (S.size unused /= 0)
+      dualedRecs = S.fromList dualedVars `S.intersection` S.fromList varsDefd
+   in if (length dupInd     /= 0) ||
+         (S.size dupLabs    /= 0) ||
+         (S.size unused     /= 0) ||
+         (S.size dualedRecs /= 0)
         then Just SessDefErr
               { sessErrDupInd = S.fromList dupInd
               , sessErrDupLab = dupLabs
               , sessErrUnused = unused
+              , sessErrDualRec = dualedRecs
               }
         else Nothing
-
-validateSessions :: M.Map Text Session -> Maybe (M.Map Text SessDefErr)
-validateSessions ss =
-  let errMap = M.mapMaybe validateSession ss
-   in if M.size errMap == 0 then Nothing else Just errMap
 

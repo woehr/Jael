@@ -22,7 +22,7 @@ hwProcTop = (pack [raw|
     interrupt 0x00100000;
     init = {
       letExpr = 2+4;
-      +c::x::y::z <- y;
+      ^c::x::y::z <- y;
       done
     }
   }
@@ -30,10 +30,9 @@ hwProcTop = (pack [raw|
             (HexInt "0x00100000")
             ( GProcLet (LIdent "letExpr")
                          (GEPlus (GEInt (DecInt "2")) (GEInt (DecInt "4")))
-            $ GProcPut (GChanPos (GScopedIdent $
-                                  map (GScopeElem . LIdent) ["c", "x", "y", "z"]
-                              )
-                       )
+            $ GProcPut (GChan (GScopedIdent $
+                          map (GScopeElem . LIdent) ["c", "x", "y", "z"]
+                       ))
                        (GChanOrExprE $ GEVar (LIdent "y"))
             $ GProcInact
             )
