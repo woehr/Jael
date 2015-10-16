@@ -8,7 +8,6 @@ module Jael.Err
 import ClassyPrelude
 import qualified Data.Map as M
 import qualified Data.Set as S
--- TODO: Change to Control.Monad.Except when using 7.10
 import Control.Monad.Except
 
 data CompileErr = ParseErr Text
