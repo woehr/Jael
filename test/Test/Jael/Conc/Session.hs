@@ -23,25 +23,16 @@ sessionTests =
   , testCase "duplicate label" $ checkSessionErr dupLabel
   , testCase "unused recursion variable" $ checkSessionErr unusedRecVar
   , testCase "rec variable is dual error" $ checkSessionErr dualRecVar
+  , testCase "no session behaviour" $ checkSessionErr noSessBehaviour
   ]
 
 checkSessionErr :: (Text, SessDefErr) -> Assertion
-checkSessionErr (t, SessDefErr
-                     { sessErrDupInd = exDupInd
-                     , sessErrDupLab = exDupLab
-                     , sessErrUnused = exUnused
-                     }) =
+checkSessionErr (t, expected) =
   case runParser pGSession t of
        Left err -> assertFailure (show err)
        Right gDef ->
          case validateSession (gToSession gDef) of
-              Just (SessDefErr { sessErrDupInd = dupInd
-                               , sessErrDupLab = dupLab
-                               , sessErrUnused = unused
-                               })-> do
-                   assertEqual "" exDupInd dupInd
-                   assertEqual "" exDupLab dupLab
-                   assertEqual "" exUnused unused
+              Just err -> assertEqual "" expected err
               Nothing -> assertFailure "Expected session def error"
 
 checkSessionDual :: (Text, Session) -> Assertion
@@ -88,7 +79,7 @@ testDualVars = (pack [raw|
 
 dupIndVar :: (Text, SessDefErr)
 dupIndVar = (pack [raw|
-  rec X. &[ a=> rec X. <X>
+  rec X. &[ a=> rec X. ![{}] <X>
           , b=> ?[Int];
           , c=> +[ a=>;
                  , b=>;
@@ -99,6 +90,7 @@ dupIndVar = (pack [raw|
       , sessErrDupLab = S.empty
       , sessErrUnused = S.empty
       , sessErrDualRec = S.empty
+      , sessErrNoBehaviour = S.empty
       }
   )
 
@@ -117,6 +109,7 @@ dupLabel = (pack [raw|
       , sessErrDupLab = S.fromList ["a","c"]
       , sessErrUnused = S.empty
       , sessErrDualRec = S.empty
+      , sessErrNoBehaviour = S.empty
       }
   )
 
@@ -133,6 +126,7 @@ unusedRecVar = (pack [raw|
       , sessErrDupLab = S.empty
       , sessErrUnused = S.fromList ["X", "Y"]
       , sessErrDualRec = S.empty
+      , sessErrNoBehaviour = S.empty
       }
   )
 
@@ -144,6 +138,22 @@ dualRecVar = (pack [raw|
       , sessErrDupLab = S.empty
       , sessErrUnused = S.empty
       , sessErrDualRec = S.fromList ["X"]
+      , sessErrNoBehaviour = S.empty
+      }
+  )
+
+noSessBehaviour :: (Text, SessDefErr)
+noSessBehaviour = (pack [raw|
+  rec X. &[ a => rec Y. <Y>
+          , b => rec Z. <Z>
+          , c => <X>
+          ]
+|], SessDefErr
+      { sessErrDupInd = S.empty
+      , sessErrDupLab = S.empty
+      , sessErrUnused = S.empty
+      , sessErrDualRec = S.empty
+      , sessErrNoBehaviour = S.fromList ["Y", "Z"]
       }
   )
 

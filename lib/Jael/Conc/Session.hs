@@ -30,6 +30,7 @@ data SessDefErr = SessDefErr
   , sessErrDupLab  :: (S.Set Text)
   , sessErrUnused  :: (S.Set Text)
   , sessErrDualRec :: (S.Set Text)
+  , sessErrNoBehaviour :: (S.Set Text)
   } deriving (Eq, Show)
 
 data Session = SGetTy Ty Session
@@ -156,6 +157,20 @@ dupLabels = cata alg
         alg (SSelectF xs) = S.unions $ (S.fromList $ repeated $ map fst xs):(map snd xs)
         alg _ = S.empty
 
+-- TODO: Is `rec X. <X>` the only case?
+trivialRecursionVars :: Session -> S.Set Text
+trivialRecursionVars (SCoInd v (SVar v')) = if v == v'
+                                               then S.singleton v
+                                               else S.empty
+trivialRecursionVars (SCoInd _ x) = trivialRecursionVars x
+trivialRecursionVars (SGetTy _ x) = trivialRecursionVars x
+trivialRecursionVars (SPutTy _ x) = trivialRecursionVars x
+trivialRecursionVars (SGetSess xs ys) = trivialRecursionVars xs `S.union` trivialRecursionVars ys
+trivialRecursionVars (SPutSess xs ys) = trivialRecursionVars xs `S.union` trivialRecursionVars ys
+trivialRecursionVars (SChoice xs) = S.unions $ map (trivialRecursionVars . snd) xs
+trivialRecursionVars (SSelect xs) = S.unions $ map (trivialRecursionVars . snd) xs
+trivialRecursionVars _ = S.empty
+
 freeIndVars :: Session -> S.Set Text
 freeIndVars = freeIndVars' . varUsage
 
@@ -177,15 +192,18 @@ validateSession s =
       dupLabs = dupLabels s
       unused = unusedIndVars' usages
       dualedRecs = S.fromList dualedVars `S.intersection` S.fromList varsDefd
+      trivialRec = trivialRecursionVars s
    in if (length dupInd     /= 0) ||
          (S.size dupLabs    /= 0) ||
          (S.size unused     /= 0) ||
-         (S.size dualedRecs /= 0)
+         (S.size dualedRecs /= 0) ||
+         (S.size trivialRec /= 0)
         then Just SessDefErr
               { sessErrDupInd = S.fromList dupInd
               , sessErrDupLab = dupLabs
               , sessErrUnused = unused
               , sessErrDualRec = dualedRecs
+              , sessErrNoBehaviour = trivialRec
               }
         else Nothing
 

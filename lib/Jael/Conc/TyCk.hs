@@ -22,7 +22,7 @@ data SessTyErr = UnusedLin (M.Map Chan Session)
 addIfNotRedefinition :: Text -> EnvValue -> ConcTyEnv -> SessTyErrM ConcTyEnv
 addIfNotRedefinition k v env@(ConcTyEnv {lin=lEnv, base=bEnv, duals=dEnv}) =
  let add = \kv m -> case addIfUnique kv m of
-                         Just m -> return m
+                         Just m' -> return m'
                          Nothing -> throwError $ RedefinedName k
  in case v of
          Linear s -> add (k, s) lEnv >>= (\lEnv' -> return $ env{lin  =lEnv'})
@@ -44,14 +44,15 @@ separateArgs xs = foldr
                     TorSSess s -> ((n,s):ss, ts)
   ) ([],[]) xs
 
-tyCheckTopProc :: TopProc -> Maybe SessTyErr
-tyCheckTopProc (TopProc as p) =
+tyCheckTopProc :: M.Map Text Session -> TopProc -> Maybe SessTyErr
+tyCheckTopProc sessNames (TopProc as p) =
   -- Separate arguments into linear and base types
   let (ls, bs) = separateArgs as
       env = ConcTyEnv
               { lin = M.fromList ls
               , duals = M.empty
               , base = M.fromList bs
+              , aliases = sessNames
               }
    -- Just the error or throw away the returned env and return Nothing
    in either Just (const Nothing) $ tyCkProc env p
@@ -76,7 +77,7 @@ tyCkProc env (PGet c name p) = do
                   env'  <- addIfNotRedefinition name (Linear v) env
                   return $ updateSession c s env'
                s -> throwError $ ProtocolMismatch c s
-  return env'
+  tyCkProc env' p
 
 tyCkProc env PNil =
   let unusedLinear = M.filter (\x -> x /= SEnd) (lin env)

@@ -12,6 +12,7 @@ import Test.Jael.Grammar.Struct (gStructTests)
 import Test.Jael.Grammar.Type (gTypeTests)
 import Test.Jael.Conc.Proc (procTests)
 import Test.Jael.Conc.Session (sessionTests)
+import Test.Jael.Conc.TyCk (concTyCkTests)
 import Test.Jael.Hw.Area (hwAreaTests)
 import Test.Jael.Seq.AST (astTests)
 import Test.Jael.Seq.Builtin (builtinTests)
@@ -44,6 +45,7 @@ main = defaultMainWithOpts
   -- processes
   , testGroup "Process grammar" gProcTests
   , testGroup "Process definition and type checking" procTests
+  , testGroup "Process type checking" concTyCkTests
   -- everything else
   , testGroup "Compilation" compileTests
   ] mempty

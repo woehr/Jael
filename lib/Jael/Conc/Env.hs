@@ -12,8 +12,9 @@ data EnvValue = Linear Session | Base Ty | Dual Chan
   deriving (Show)
 
 data ConcTyEnv = ConcTyEnv
-  { lin   :: M.Map Chan Session
-  , duals :: M.Map Chan Chan
-  , base  :: M.Map Text Ty
+  { lin     :: M.Map Chan Session
+  , base    :: M.Map Text Ty
+  , duals   :: M.Map Chan Chan
+  , aliases :: M.Map Text Session
   } deriving (Show)
 
