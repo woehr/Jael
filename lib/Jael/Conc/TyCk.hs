@@ -24,30 +24,31 @@ data SessTyErr = UnusedLin (M.Map Chan Session)
                | TypeMismatch Chan Ty
                | DuplicateSeqEnvItem [Text]
                | SeqTIErrs [Text]
+               | UnknownLabel Text
                | PrintThing Text
   deriving (Eq, Show)
 
--- Resolves a session variable. First determine if it's a recursion variable.
--- If not, check if it's an alias.
-resolveVar :: Text -> ConcTyEnv -> Session
-resolveVar var (ConcTyEnv{recs=recVars, aliases=als}) =
-  case M.lookup var recVars of
-       Just s -> s
-       Nothing -> case M.lookup var als of
-                       Just s -> s
-                       Nothing -> error "Should not happen because we already\
-                                       \ check for undefined aliases."
+preconditionError :: a
+preconditionError = error "Some assumption about a precondition has been violated."
 
 -- Adds (or replaces) the session, v, with channel name, k, to the environment
 -- but first unfolds it until the session is no longer a SCoInd, SVar, or
 -- SDualVar and updates the environment as necessary
 unfoldSession :: Text -> Session -> ConcTyEnv -> ConcTyEnv
-unfoldSession k v env@(ConcTyEnv{lin=linEnv, recs=recVars}) =
-  case v of
-    SCoInd var s -> unfoldSession k s env{recs=M.insert var s recVars}
-    SVar var     -> unfoldSession k (resolveVar var env) env
-    SDualVar var -> unfoldSession k (dual $ resolveVar var env) env
-    _ -> env{lin=M.insert k v linEnv}
+unfoldSession k (SCoInd var s) env@(ConcTyEnv{recs=recVars}) =
+  unfoldSession k s env{recs=M.insert (k, var) s recVars}
+
+unfoldSession k (SVar var) env@(ConcTyEnv{recs=recVars, aliases=als}) =
+  case M.lookup (k, var) recVars of
+       Just s -> unfoldSession k s env
+       Nothing -> unfoldSession k (M.findWithDefault preconditionError var als)
+                    env{recs=M.filterWithKey (\(c,_) _ -> c /= k) recVars}
+
+unfoldSession k (SDualVar var) env@(ConcTyEnv{recs=recVars, aliases=als})
+  | M.member (k, var) recVars = error "A recursion variable should not be dualed."
+  | otherwise = unfoldSession k (dual $ M.findWithDefault preconditionError var als) env
+
+unfoldSession k v env@(ConcTyEnv{lin=linEnv}) = env{lin=M.insert k v linEnv}
 
 addIfNotRedefinition :: Text -> EnvValue -> ConcTyEnv -> SessTyErrM ConcTyEnv
 addIfNotRedefinition k v env@(ConcTyEnv {lin=lEnv, base=bEnv, duals=dEnv}) =
@@ -144,7 +145,14 @@ tyCkProc env@(ConcTyEnv{lin=lEnv}) (PPut c chanOrExpr pCont) = do
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
-tyCkProc env (PNamed n as) = undefined env n as
+tyCkProc env (PSel chan lab pCont) = do
+  sess <- channelLookup chan env
+  env' <- case sess of
+               SSelect ls -> case lookup lab ls of
+                                  Just s -> return $ updateSession chan s env
+                                  Nothing -> throwError $ UnknownLabel lab
+               _ -> throwError $ ProtocolMismatch chan sess
+  tyCkProc env' pCont
 
 tyCkProc env PNil =
   let unusedLinear = M.filter (/= SEnd) (lin env)

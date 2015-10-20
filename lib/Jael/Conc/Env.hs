@@ -14,7 +14,7 @@ data EnvValue = Linear Session | Base Ty | Dual Chan
 
 data ConcTyEnv = ConcTyEnv
   { lin     :: M.Map Chan Session
-  , recs    :: M.Map Text Session
+  , recs    :: M.Map (Chan, Text) Session
   , duals   :: M.Map Chan Chan
   , base    :: M.Map Text Ty
   , seqEnv  :: TyEnv

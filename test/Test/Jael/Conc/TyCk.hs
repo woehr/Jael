@@ -27,6 +27,8 @@ concTyCkTests =
   , testCase "unused seq from chan" $ checkTyCkErr channelGetUnusedSeq
   , testCase "unused linear from chan" $ checkTyCkErr channelGetUnusedLin
   , testCase "rec def unfolding" $ checkTyCkErr recDefUnfold
+  , testCase "alias has rec var with same name" $ checkTyCkErr reusedRecVarInAlias
+  , testCase "bad label" $ checkTyCkErr badLabel
   ]
 
 testAliases :: M.Map Text Session
@@ -127,5 +129,38 @@ recDefUnfold = (pack [raw|
       [ ("x", SPutTy TInt $ SGetTy TInt $ SVar "X")
       , ("y", SPutTy TInt $ SGetTy TInt $ SVar "X")
       ]
+  )
+
+-- The session AltTxRxInt is defined with a recursion variable X. By defining
+-- a session that uses that alias and defines its own recursion variable with
+-- the same name, and substitution of AltTxRxInt would create an ambiguity.
+-- This test checks that the X in AltTxRxInt is renamed such that there is no
+-- ambiguity.
+reusedRecVarInAlias :: (Text, SessTyErr)
+reusedRecVarInAlias = (pack [raw|
+  proc P( x: rec X. +[a => <X>, b => <AltTxRxInt>]
+        , y: rec X. +[a => <X>, b => <AltTxRxInt>]
+        )
+  {
+    ^x select b;
+    ^x <- 42;
+    ^x -> z;
+    ^y select a;
+    done
+  }
+|], UnusedLin $ M.fromList
+      [ ("x", SPutTy TInt $ SGetTy TInt $ SVar "X")
+      , ("y", SSelect [("a", SVar "X"), ("b", SVar "AltTxRxInt")])
+      ]
+  )
+
+badLabel :: (Text, SessTyErr)
+badLabel = (pack [raw|
+  proc P( x: +[a => ;, b => ![Int];])
+  {
+    ^x select c;
+    done
+  }
+|], UnknownLabel "c"
   )
 
