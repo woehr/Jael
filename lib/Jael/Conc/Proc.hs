@@ -241,14 +241,14 @@ coRecNames = cata alg
 redefinedCoRecVar :: S.Set Text -> Proc -> S.Set Text
 redefinedCoRecVar ns p = ns `S.intersection` coRecNames p
 
-gProcArgToList :: GProcArg -> (Text, TyOrSess)
-gProcArgToList (GProcArg (LIdent i) (GSessTy x)) =
+gToProcArg :: GProcArg -> (Text, TyOrSess)
+gToProcArg (GProcArg (LIdent i) (GSessTy x)) =
   (pack i, TorSTy (gToType x))
-gProcArgToList (GProcArg (LIdent i) (GSessSess x)) =
+gToProcArg (GProcArg (LIdent i) (GSessSess x)) =
   (pack i, TorSSess (gToSession x))
 
 gToTopProc :: ([GProcArg], GProc) -> TopProc
-gToTopProc (as, p) = TopProc (map gProcArgToList as) (gToProc p)
+gToTopProc (as, p) = TopProc (map gToProcArg as) (gToProc p)
 
 validateTopProc :: TopProc -> Maybe ProcDefErr
 validateTopProc (TopProc as p) =

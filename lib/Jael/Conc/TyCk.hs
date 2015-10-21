@@ -25,6 +25,8 @@ data SessTyErr = UnusedLin (M.Map Chan Session)
                | DuplicateSeqEnvItem [Text]
                | SeqTIErrs [Text]
                | UnknownLabel Text
+               | FreshNonParallel Text
+               | DualChanArgs (Text, Text)
                | PrintThing Text
   deriving (Eq, Show)
 
@@ -88,8 +90,12 @@ separateArgs xs = foldr
                     TorSSess s -> ((n,s):ss, ts)
   ) ([],[]) xs
 
-tyCheckTopProc :: TyEnv -> M.Map Text Session -> TopProc -> Maybe SessTyErr
-tyCheckTopProc sEnv sessNames (TopProc as p) =
+tyCheckTopProc :: TyEnv
+               -> M.Map Text Session
+               -> M.Map Text [(Text, TyOrSess)]
+               -> TopProc
+               -> Maybe SessTyErr
+tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
   -- Separate arguments into linear and base types
   let (ls, bs) = separateArgs as
   -- Do some processing of the top level sessions so type checking can match on

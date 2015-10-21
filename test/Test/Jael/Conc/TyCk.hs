@@ -29,8 +29,14 @@ concTyCkTests =
   , testCase "rec def unfolding" $ checkTyCkErr recDefUnfold
   , testCase "alias has rec var with same name" $ checkTyCkErr reusedRecVarInAlias
   , testCase "bad label" $ checkTyCkErr badLabel
+  , testCase "fresh channel not used in parallel (get)" $ checkTyCkErr freshNonParGet
+  , testCase "fresh channel not used in parallel (put)" $ checkTyCkErr freshNonParPut
+  , testCase "fresh channel not used in parallel (sel)" $ checkTyCkErr freshNonParSel
+  , testCase "fresh channel not used in parallel (cho)" $ checkTyCkErr freshNonParCho
+  , testCase "named proc passed duals" $ checkTyCkErr namedProcWithDualArgs
   ]
 
+-- A map of aliases that will be passed to the type checking function
 testAliases :: M.Map Text Session
 testAliases =
   M.map (
@@ -43,8 +49,20 @@ testAliases =
         , ("AltTxRxInt", "rec X. ![Int] ?[Int] <X>")
         ]
 
+-- A map of function names to their arguments that will be passed to the type
+-- checking function
+testProcs :: M.Map Text [(Text, TyOrSess)]
+testProcs =
+  M.map (map $
+    \t -> case runParser pGProcArg t of
+               Left err -> error (unpack err)
+               Right g -> gToProcArg g
+  ) $ M.fromList
+        [ ("DualArgProc", ["arg1: ![Int];", "arg2: ?[Int];"])
+        ]
+
 doTyCk :: Text -> Maybe SessTyErr
-doTyCk = tyCheckTopProc defaultEnv testAliases
+doTyCk = tyCheckTopProc defaultEnv testAliases testProcs
          . parseTopProc
          . pGTopDef
          . myLexer
@@ -162,5 +180,64 @@ badLabel = (pack [raw|
     done
   }
 |], UnknownLabel "c"
+  )
+
+-- The following four tests check that a fresh channel is not used outside of
+-- a parallel composition. This is necessary for the Tcut rule of pi-DILL to be
+-- satisfied. Intuitively, it ensures that there is always a process
+-- communicating on each end of a channel.
+freshNonParGet :: (Text, SessTyErr)
+freshNonParGet = (pack [raw|
+  proc P() {
+    new (^x, ^y) : ![Int]; ;
+    // Expecting an error here before an unused linear resources error.
+    ^x <- 42;
+    done
+  }
+|], FreshNonParallel "x"
+  )
+
+freshNonParPut :: (Text, SessTyErr)
+freshNonParPut = (pack [raw|
+  proc P() {
+    new (^x, ^y) : ![Int]; ;
+    ^y -> z;
+    done
+  }
+|], FreshNonParallel "y"
+  )
+
+freshNonParSel :: (Text, SessTyErr)
+freshNonParSel = (pack [raw|
+  proc P() {
+    new (^x, ^y) : +[a => ;];
+    ^x select a;
+    done
+  }
+|], FreshNonParallel "x"
+  )
+
+freshNonParCho :: (Text, SessTyErr)
+freshNonParCho = (pack [raw|
+  proc P() {
+    new (^x, ^y) : +[a => ;];
+    ^y case {
+      a => done
+    }
+  }
+|], FreshNonParallel "y"
+  )
+
+-- This test ensures that two ends of a channel can not be passed as arguments
+-- to the same named process. When typing named processes, it's assumed that
+-- none of it's arguments are duals. This implicitly enforces dual channels
+-- to be composed in parallel.
+namedProcWithDualArgs :: (Text, SessTyErr)
+namedProcWithDualArgs = (pack [raw|
+  proc P() {
+    new (^x, ^y) : ![Int]; ;
+    DualArgProc(^x, ^y)
+  }
+|], DualChanArgs ("x", "y")
   )
 
