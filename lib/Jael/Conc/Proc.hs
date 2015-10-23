@@ -53,7 +53,7 @@ data Proc = PGet Chan Var Proc
           | PCase Chan [(Label, Proc)]
           | PSel Chan Label Proc
           | PCoRec Text [(Var, ChanEx)] Proc
-          | PFwd Chan Chan
+         -- | PFwd Chan Chan
           | PNamed Text [ChanEx]
           | PNil
           deriving (Eq, Show)
@@ -66,7 +66,7 @@ data ProcF a = PGetF Chan Var a
              | PCaseF Chan [(Label, a)]
              | PSelF Chan Label a
              | PCoRecF Text [(Var, ChanEx)] a
-             | PFwdF Chan Chan
+            -- | PFwdF Chan Chan
              | PNamedF Text [ChanEx]
              | PNilF
              deriving (Functor, Show)
@@ -82,7 +82,7 @@ instance Foldable Proc where
   project (PCase x y)    = PCaseF x y
   project (PSel x y z)   = PSelF x y z
   project (PCoRec x y z) = PCoRecF x y z
-  project (PFwd x y)     = PFwdF x y
+--  project (PFwd x y)     = PFwdF x y
   project (PNamed x y)   = PNamedF x y
   project (PNil)         = PNilF
 
@@ -95,7 +95,7 @@ instance Unfoldable Proc where
   embed (PCaseF x y)    = PCase x y
   embed (PSelF x y z)   = PSel x y z
   embed (PCoRecF x y z) = PCoRec x y z
-  embed (PFwdF x y)     = PFwd x y
+--  embed (PFwdF x y)     = PFwd x y
   embed (PNamedF x y)   = PNamed x y
   embed (PNilF)         = PNil
 

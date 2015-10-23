@@ -16,19 +16,21 @@ data ConcTyEnv = ConcTyEnv
   { cteLin   :: M.Map Chan Session
   , cteRec   :: M.Map (Chan, Text) Session
   , cteDual  :: B.Bimap Chan Chan
-  , cteBase  :: M.Map Text Ty
+  , cteBase  :: M.Map Text (Bool, Ty)
   , cteSeq   :: TyEnv
   , cteAlias :: M.Map Text Session
+  , cteProcs :: M.Map Text [(Text, TyOrSess)]
   } deriving (Show)
 
 emptyEnv :: ConcTyEnv
 emptyEnv = ConcTyEnv
-  { cteLin = M.empty
-  , cteRec = M.empty
-  , cteDual = B.empty
-  , cteBase = M.empty
-  , cteSeq = TyEnv M.empty
+  { cteLin   = M.empty
+  , cteRec   = M.empty
+  , cteDual  = B.empty
+  , cteBase  = M.empty
+  , cteSeq   = TyEnv M.empty
   , cteAlias = M.empty
+  , cteProcs = M.empty
   }
 
 chanHasDual :: Chan -> ConcTyEnv -> Bool

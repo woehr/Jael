@@ -13,6 +13,7 @@ import Jael.Conc.Proc
 import Jael.Conc.Session
 import Jael.Seq.AST
 import Jael.Seq.Env
+import Jael.Seq.Expr (freeVars)
 import Jael.Seq.TI
 import Jael.Seq.Types
 
@@ -63,7 +64,7 @@ addIfNotRedefinition k v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
  in case v of
          Linear s -> add (k, s) lEnv >>= (\lEnv' -> return $
                                            unfoldSession k s env{cteLin =lEnv'})
-         Base   t -> add (k, t) bEnv >>= (\bEnv' -> return $ env{cteBase=bEnv'})
+         Base   t -> add (k, (False, t)) bEnv >>= (\bEnv' -> return $ env{cteBase=bEnv'})
 
 updateSession :: Text -> Session -> ConcTyEnv -> ConcTyEnv
 updateSession k v env@(ConcTyEnv {cteLin=linEnv}) =
@@ -84,7 +85,7 @@ lookupNonDualChan c env@(ConcTyEnv{cteLin=linEnv}) =
 
 mkSeqEnv :: ConcTyEnv -> SessTyErrM TyEnv
 mkSeqEnv (ConcTyEnv{cteBase=bEnv, cteSeq=sEnv}) =
-  case addToEnv sEnv $ M.toList $ M.map polyTy bEnv of
+  case addToEnv sEnv $ M.toList $ M.map polyTy (map snd bEnv) of
     Left errs -> throwError $ DuplicateSeqEnvItem errs
     Right env -> return env
 
@@ -95,6 +96,20 @@ separateArgs xs = foldr
                     TorSTy t   -> (ss, (n,t):ts)
                     TorSSess s -> ((n,s):ss, ts)
   ) ([],[]) xs
+
+baseCaseEnvErrors :: ConcTyEnv -> SessTyErrM ConcTyEnv
+baseCaseEnvErrors env@(ConcTyEnv{cteLin=linEnv, cteBase=baseEnv}) =
+  let unusedLinear = M.filter (/= SEnd) linEnv
+      unusedSeq = M.map snd . M.filter (not . fst) $ baseEnv
+      returnError :: SessTyErrM ConcTyEnv
+      returnError | (not . null) unusedLinear = throwError $ UnusedLin unusedLinear
+                  | (not . null) unusedSeq = throwError $ UnusedSeq unusedSeq
+                  | otherwise = return env
+   in returnError
+
+markSeqUsed :: S.Set Text -> ConcTyEnv -> ConcTyEnv
+markSeqUsed vars env@(ConcTyEnv{cteBase=baseEnv}) =
+  env{cteBase=foldr (M.adjust (\(_,t)->(True,t))) baseEnv vars}
 
 tyCheckTopProc :: TyEnv
                -> M.Map Text Session
@@ -108,9 +123,10 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
   -- what we expect the session to be. The updateSession function does the same
   -- thing if the session after unfolding is SCoInd, SVar, or SDualVar
       env = emptyEnv
-              { cteBase  = M.fromList bs
+              { cteBase  = M.fromList $ map (\(n,t)->(n,(False,t))) bs
               , cteSeq   = sEnv
               , cteAlias = sessNames
+              , cteProcs = namedProcs
               }
    -- Just the error or throw away the returned env and return Nothing
    in either Just (const Nothing) $ tyCkProc (foldr (uncurry unfoldSession) env ls) p
@@ -141,11 +157,13 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
   env' <- case (sess, chanOrExpr) of
                (SPutTy v sCont, Right putExpr) -> do
                   completeSeqEnv <- mkSeqEnv env
+                  -- ' is a name guaranteed not to be used in the expression
                   case seqInfer completeSeqEnv (ELet "'" putExpr $ EVar "'") of
                        Left errs -> throwError $ SeqTIErrs errs
                        Right ty -> if ty /= v
                                       then throwError $ TypeMismatch c ty
-                                      else return $ updateSession c sCont env
+                                      else return $ updateSession c sCont
+                                                  $ markSeqUsed (freeVars putExpr) env
                (SPutSess v sCont, Left putChan) -> do
                   putSess <- lookupNonDualChan putChan env
                   if putSess /= v
@@ -199,9 +217,11 @@ tyCkProc env@(ConcTyEnv{cteDual=duals}) (PNewChan n1 n2 sTy pCont) =
   >>= (\e -> return e{cteDual = B.insert n1 n2 duals})
   >>= (\e -> tyCkProc e pCont)
 
-tyCkProc env@(ConcTyEnv{cteLin=linEnv}) PNil =
-  let unusedLinear = M.filter (/= SEnd) linEnv
-   in if null unusedLinear
-         then return env
-         else throwError $ UnusedLin unusedLinear
+tyCkProc env (PNamed n as) = undefined
+
+tyCkProc env (PPar ps) = undefined
+
+tyCkProc env (PCoRec n inits p) = undefined
+
+tyCkProc env PNil = baseCaseEnvErrors env
 

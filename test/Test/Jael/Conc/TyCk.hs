@@ -25,7 +25,8 @@ concTyCkTests =
   , testCase "unused linear argument" $ checkTyCkErr unusedLinearArg
   , testCase "session alias used" $ shouldTyCk sessionAlias
   , testCase "valid channel put" $ shouldTyCk channelPut
-  , testCase "unused seq from chan" $ checkTyCkErr channelGetUnusedSeq
+  , testCase "unused seq from arg and chan" $ checkTyCkErr unusedSeq
+  , testCase "sequential vars used in expr" $ shouldTyCk seqUsedInExpr
   , testCase "unused linear from chan" $ checkTyCkErr channelGetUnusedLin
   , testCase "rec def unfolding" $ checkTyCkErr recDefUnfold
   , testCase "alias has rec var with same name" $ checkTyCkErr reusedRecVarInAlias
@@ -100,10 +101,11 @@ unusedLinearArg = (pack [raw|
 
 sessionAlias :: Text
 sessionAlias = (pack [raw|
-  proc X(x: ![Int] <GetInt>) {
+  proc X(x: ![Int] <GetInt>, y: ![Int];) {
     // Put an int on x and then get an int on x.
     ^x <- 5;
-    ^x -> y;
+    ^x -> z;
+    ^y <- z; // Use z so we don't get an unused sequential variable error
     done
   }
 |])
@@ -116,14 +118,23 @@ channelPut = (pack [raw|
   }
 |])
 
-channelGetUnusedSeq :: (Text, SessTyErr)
-channelGetUnusedSeq = (pack [raw|
-  proc X(x: ?[Int];) {
-    ^x -> y;
+unusedSeq :: (Text, SessTyErr)
+unusedSeq = (pack [raw|
+  proc X(x: ?[Int];, y: Bool) {
+    ^x -> z;
     done
   }
-|], UnusedSeq $ M.fromList [("y", TInt)]
+|], UnusedSeq $ M.fromList [("y", TBool), ("z", TInt)]
   )
+
+seqUsedInExpr :: Text
+seqUsedInExpr = (pack [raw|
+  proc X(x: Bool, y: ?[Int];, z: ![Int];) {
+    ^y -> a;
+    ^z <- if x { a } else { 42 };
+    done
+  }
+|])
 
 -- Test that y being unused is an error. <GetInt> is an alias that is resolved
 -- so y is reported not as the alias but it's actual session type
