@@ -15,6 +15,7 @@ import Jael.Seq.Env
 import Jael.Seq.Expr (freeVars)
 import Jael.Seq.TI
 import Jael.Seq.Types
+import Jael.Util.UPair
 
 type SessTyErrM = Either SessTyErr
 
@@ -29,8 +30,8 @@ data SessTyErr = UnusedLin (M.Map Chan Session)
                | UnknownLabel Text
                | CaseLabelMismatch (S.Set Text)
                | NonFreshChan Text
+               | NonParallelUsage (UPair Text)
                | DualChanArgs (Text, Text)
-               | PrintThing Text
   deriving (Eq, Show)
 
 preconditionError :: a
@@ -133,7 +134,6 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
               }
    -- Just the error or throw away the returned env and return Nothing
    in either Just (const Nothing) $ tyCkProc (foldr (uncurry unfoldSession) env ls) p
-      --Just $ PrintThing $ tshow $ tyCkProc env p
 
 -- Type checks a process. Returns either a type checking error or an updated
 -- environment
@@ -155,7 +155,7 @@ tyCkProc env (PGet c name p) = do
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
 
-tyCkProc env@(ConcTyEnv{cteLin=lEnv, cteFresh=fEnv}) (PPut c chanOrExpr pCont) = do
+tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
   sess <- lookupChan c env
   env' <- case (sess, chanOrExpr) of
                (SPutTy v sCont, Right putExpr) -> do
@@ -173,7 +173,6 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv, cteFresh=fEnv}) (PPut c chanOrExpr pCont) =
                      then throwError $ ProtocolMismatch c putSess
                      else return $ updateSession c sCont env
                                      { cteLin=M.delete putChan lEnv
-                                     , cteFresh=S.delete putChan fEnv
                                      }
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
@@ -217,10 +216,10 @@ tyCkProc env (PNewVal name expr pCont) = do
                Right ty  -> addIfNotRedefinition name (Base ty) env
   tyCkProc env' pCont
 
-tyCkProc env (PNewChan n1 n2 sTy pCont) =
+tyCkProc env@(ConcTyEnv{ctePar=parEnv}) (PNewChan n1 n2 sTy pCont) =
       addIfNotRedefinition n1 (Linear sTy) env
   >>= addIfNotRedefinition n2 (Linear $ dual sTy)
-  >>= (\e -> return $ addParChans n1 n2 env)
+  >>= (\e -> return $ env{ctePar=S.insert (mkUPair n1 n2) parEnv})
   >>= (\e -> tyCkProc e pCont)
 
 tyCkProc env (PNamed n as) = undefined

@@ -14,6 +14,7 @@ import Jael.Conc.Session
 import Jael.Conc.TyCk
 import Jael.Seq.Env
 import Jael.Seq.Types
+import Jael.Util.UPair
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit
@@ -31,10 +32,11 @@ concTyCkTests =
   , testCase "rec def unfolding" $ checkTyCkErr recDefUnfold
   , testCase "alias has rec var with same name" $ checkTyCkErr reusedRecVarInAlias
   , testCase "bad label" $ checkTyCkErr badLabel
-  , testCase "fresh channel not used in parallel (get)" $ checkTyCkErr freshNonParGet
-  , testCase "fresh channel not used in parallel (put)" $ checkTyCkErr freshNonParPut
-  , testCase "fresh channel not used in parallel (sel)" $ checkTyCkErr freshNonParSel
-  , testCase "fresh channel not used in parallel (cho)" $ checkTyCkErr freshNonParCho
+  , testCase "channel not used in parallel (get)" $ checkTyCkErr nonParGet
+  , testCase "channel not used in parallel (put)" $ checkTyCkErr nonParPut
+  , testCase "channel not used in parallel (sel)" $ checkTyCkErr nonParSel
+  , testCase "channel not used in parallel (cho)" $ checkTyCkErr nonParCho
+  , testCase "non-fresh channel put on channel" $ checkTyCkErr nonFreshChanPut
   , testCase "named proc passed duals" $ checkTyCkErr namedProcWithDualArgs
   , testCase "case does not implement correct labels" $ checkTyCkErr caseMismatchedLabels
   , testCase "check channel used properly after case" $ shouldTyCk checkCaseChannelSession
@@ -205,46 +207,57 @@ badLabel = (pack [raw|
 -- a parallel composition. This is necessary for the Tcut rule of pi-DILL to be
 -- satisfied. Intuitively, it ensures that there is always a process
 -- communicating on each end of a channel.
-freshNonParGet :: (Text, SessTyErr)
-freshNonParGet = (pack [raw|
+nonParGet :: (Text, SessTyErr)
+nonParGet = (pack [raw|
   proc P() {
     new (^x, ^y) : ![Int]; ;
     // Expecting an error here before an unused linear resources error.
     ^y -> z;
     done
   }
-|], FreshNonParallel "y"
+|], NonParallelUsage $ mkUPair "x" "y"
   )
 
-freshNonParPut :: (Text, SessTyErr)
-freshNonParPut = (pack [raw|
+nonParPut :: (Text, SessTyErr)
+nonParPut = (pack [raw|
   proc P() {
     new (^x, ^y) : ![Int]; ;
     ^x <- 42;
     done
   }
-|], FreshNonParallel "x"
+|], NonParallelUsage $ mkUPair "y" "x"
   )
 
-freshNonParSel :: (Text, SessTyErr)
-freshNonParSel = (pack [raw|
+nonParSel :: (Text, SessTyErr)
+nonParSel = (pack [raw|
   proc P() {
     new (^x, ^y) : +[a => ;];
     ^x select a;
     done
   }
-|], FreshNonParallel "x"
+|], NonParallelUsage $ mkUPair "x" "y"
   )
 
-freshNonParCho :: (Text, SessTyErr)
-freshNonParCho = (pack [raw|
+nonParCho :: (Text, SessTyErr)
+nonParCho = (pack [raw|
   proc P() {
     new (^x, ^y) : +[a => ;];
     ^y case {
       a => done
     }
   }
-|], FreshNonParallel "y"
+|], NonParallelUsage $ mkUPair "y" "x"
+  )
+
+nonFreshChanPut :: (Text, SessTyErr)
+nonFreshChanPut = (pack [raw|
+  proc P(c: ![ ?[Int]; ];) {
+    new (^x, ^y) : ?[Int]?[Int];;
+    ( ^x -> i;  ^c <- x; done
+    | ^y <- 42; ^y <- 42; done
+    )
+  }
+|], NonFreshChan "x"
   )
 
 -- This test ensures that two ends of a channel can not be passed as arguments
@@ -290,7 +303,7 @@ dualsUsedInSameParProc = (pack [raw|
     | done
     )
   }
-|], undefined
+|], NonParallelUsage $ mkUPair "x" "y"
   )
 
 -- L. Caires et al. Linear logic propositions as session types, 2014
