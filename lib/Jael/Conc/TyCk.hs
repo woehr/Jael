@@ -4,7 +4,6 @@ module Jael.Conc.TyCk where
 
 import ClassyPrelude hiding (Chan, Foldable)
 import Control.Monad.Except
-import qualified Data.Bimap as B
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Util
@@ -29,7 +28,7 @@ data SessTyErr = UnusedLin (M.Map Chan Session)
                | SeqTIErrs [Text]
                | UnknownLabel Text
                | CaseLabelMismatch (S.Set Text)
-               | FreshNonParallel Text
+               | NonFreshChan Text
                | DualChanArgs (Text, Text)
                | PrintThing Text
   deriving (Eq, Show)
@@ -66,35 +65,39 @@ addIfNotRedefinition k v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
                                            unfoldSession k s env{cteLin =lEnv'})
          Base   t -> add (k, (False, t)) bEnv >>= (\bEnv' -> return $ env{cteBase=bEnv'})
 
-updateSession :: Text -> Session -> ConcTyEnv -> ConcTyEnv
-updateSession k v env@(ConcTyEnv {cteLin=linEnv}) =
-  case M.lookup k linEnv of
-       Just _ -> unfoldSession k v env
+updateSession :: Chan -> Session -> ConcTyEnv -> ConcTyEnv
+updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
+  case M.lookup c linEnv of
+       Just _ -> unfoldSession c v env{cteFresh=S.delete c freshEnv}
        Nothing -> error "It is expected that if a channel's session is being\
                        \ updated that it already exists in the environment."
 
--- Get the session associated with channel c only if the channel is defined and
--- does not have a dual in the current context.
-lookupNonDualChan :: Chan -> ConcTyEnv -> SessTyErrM Session
-lookupNonDualChan c env@(ConcTyEnv{cteLin=linEnv}) =
+-- Get the session associated with channel c
+lookupChan :: Chan -> ConcTyEnv -> SessTyErrM Session
+lookupChan c env@(ConcTyEnv{cteLin=linEnv}) =
   case M.lookup c linEnv of
-       Just s  -> if chanHasDual c env
-                     then throwError $ FreshNonParallel c
-                     else return s
+       Just s  -> return s
        Nothing -> throwError $ UndefinedChan c
+
+lookupFreshChan :: Chan -> ConcTyEnv -> SessTyErrM Session
+lookupFreshChan c env@(ConcTyEnv{cteLin=linEnv, cteFresh=freshEnv}) =
+  case (M.lookup c linEnv, c `S.member` freshEnv) of
+       (Just s, True) -> return s
+       (Just _, False) -> throwError $ NonFreshChan c
+       (Nothing, _) -> throwError $ UndefinedChan c
 
 mkSeqEnv :: ConcTyEnv -> SessTyErrM TyEnv
 mkSeqEnv (ConcTyEnv{cteBase=bEnv, cteSeq=sEnv}) =
   case addToEnv sEnv $ M.toList $ M.map polyTy (map snd bEnv) of
-    Left errs -> throwError $ DuplicateSeqEnvItem errs
-    Right env -> return env
+       Left errs -> throwError $ DuplicateSeqEnvItem errs
+       Right env -> return env
 
 -- Separate the arguments of a TopProc into linear sessions and base types
 separateArgs :: [(Text, TyOrSess)] -> ([(Chan, Session)], [(Text, Ty)])
 separateArgs xs = foldr
   (\(n, x) (ss, ts) -> case x of
-                    TorSTy t   -> (ss, (n,t):ts)
-                    TorSSess s -> ((n,s):ss, ts)
+                            TorSTy t   -> (ss, (n,t):ts)
+                            TorSSess s -> ((n,s):ss, ts)
   ) ([],[]) xs
 
 baseCaseEnvErrors :: ConcTyEnv -> SessTyErrM ConcTyEnv
@@ -137,7 +140,7 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
 tyCkProc :: ConcTyEnv -> Proc -> SessTyErrM ConcTyEnv
 tyCkProc env (PGet c name p) = do
   -- Get the session the channel c is suppose to implement
-  sess <- lookupNonDualChan c env
+  sess <- lookupChan c env
   -- Check that the session implements a "get", update the session in the
   -- environment, and introduce the new name
   env' <- case sess of
@@ -152,8 +155,8 @@ tyCkProc env (PGet c name p) = do
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
 
-tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
-  sess <- lookupNonDualChan c env
+tyCkProc env@(ConcTyEnv{cteLin=lEnv, cteFresh=fEnv}) (PPut c chanOrExpr pCont) = do
+  sess <- lookupChan c env
   env' <- case (sess, chanOrExpr) of
                (SPutTy v sCont, Right putExpr) -> do
                   completeSeqEnv <- mkSeqEnv env
@@ -165,15 +168,18 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
                                       else return $ updateSession c sCont
                                                   $ markSeqUsed (freeVars putExpr) env
                (SPutSess v sCont, Left putChan) -> do
-                  putSess <- lookupNonDualChan putChan env
+                  putSess <- lookupFreshChan putChan env
                   if putSess /= v
                      then throwError $ ProtocolMismatch c putSess
-                     else return $ updateSession c sCont env{cteLin=M.delete putChan lEnv}
+                     else return $ updateSession c sCont env
+                                     { cteLin=M.delete putChan lEnv
+                                     , cteFresh=S.delete putChan fEnv
+                                     }
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
 tyCkProc env (PSel chan lab pCont) = do
-  sess <- lookupNonDualChan chan env
+  sess <- lookupChan chan env
   env' <- case sess of
                SSelect ls -> case lookup lab ls of
                                   Just s -> return $ updateSession chan s env
@@ -182,7 +188,7 @@ tyCkProc env (PSel chan lab pCont) = do
   tyCkProc env' pCont
 
 tyCkProc env (PCase chan cases) = do
-  sess <- lookupNonDualChan chan env
+  sess <- lookupChan chan env
   case sess of
        SChoice ls ->
          let l1 = (S.fromList $ map fst ls)
@@ -211,10 +217,10 @@ tyCkProc env (PNewVal name expr pCont) = do
                Right ty  -> addIfNotRedefinition name (Base ty) env
   tyCkProc env' pCont
 
-tyCkProc env@(ConcTyEnv{cteDual=duals}) (PNewChan n1 n2 sTy pCont) =
+tyCkProc env (PNewChan n1 n2 sTy pCont) =
       addIfNotRedefinition n1 (Linear sTy) env
   >>= addIfNotRedefinition n2 (Linear $ dual sTy)
-  >>= (\e -> return e{cteDual = B.insert n1 n2 duals})
+  >>= (\e -> return $ addParChans n1 n2 env)
   >>= (\e -> tyCkProc e pCont)
 
 tyCkProc env (PNamed n as) = undefined

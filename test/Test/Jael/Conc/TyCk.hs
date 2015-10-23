@@ -38,6 +38,11 @@ concTyCkTests =
   , testCase "named proc passed duals" $ checkTyCkErr namedProcWithDualArgs
   , testCase "case does not implement correct labels" $ checkTyCkErr caseMismatchedLabels
   , testCase "check channel used properly after case" $ shouldTyCk checkCaseChannelSession
+  , testCase "duals used in same parallel proc" $ checkTyCkErr dualsUsedInSameParProc
+  -- The remainder of these tests are specific examples from papers. See the
+  -- inline comments for more details
+  , testCase "example 1" $ checkTyCkErr ex1
+  , testCase "example 2" $ checkTyCkErr ex2
   ]
 
 -- A map of aliases that will be passed to the type checking function
@@ -276,4 +281,47 @@ checkCaseChannelSession = (pack [raw|
       }
   }
 |])
+
+dualsUsedInSameParProc :: (Text, SessTyErr)
+dualsUsedInSameParProc = (pack [raw|
+  proc P(z: ![Int];) {
+    new (^x, ^y) : ![Int]; ;
+    ( ^x <- 42; ^y -> a; ^z <- a; done
+    | done
+    )
+  }
+|], undefined
+  )
+
+-- L. Caires et al. Linear logic propositions as session types, 2014
+-- From page 23, the following is typable in Gay and Hole's system but not
+-- pi-DILL. Note no deadlock.
+ex1 :: (Text, SessTyErr)
+ex1 = (pack [raw|
+  proc P() {
+    new (^xp, ^xn) : ![Int];;
+    new (^yp, ^yn) : ![Int];;
+    ( ^xp <- 42; ^yp <- 84; done
+    | ^xn -> a;  ^yn -> b;  done
+    )
+  }
+|], undefined
+  )
+
+-- L. Caires et al. Linear logic propositions as session types, 2014
+-- From page 23, the following is typable in Gay and Hole's system but not
+-- pi-DILL. Note that this time there is a deadlock because the act of sending
+-- a value on x blocks until the value can be received. Also note that a send
+-- only block in a synchronous model.
+ex2 :: (Text, SessTyErr)
+ex2 = (pack [raw|
+  proc P() {
+    new (^xp, ^xn) : ![Int];;
+    new (^yp, ^yn) : ![Int];;
+    ( ^xp <- 42; ^yp <- 84; done
+    | ^yn -> b;  ^xn -> a;  done
+    )
+  }
+|], undefined
+  )
 
