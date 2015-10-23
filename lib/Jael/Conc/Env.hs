@@ -21,3 +21,17 @@ data ConcTyEnv = ConcTyEnv
   , cteAlias :: M.Map Text Session
   } deriving (Show)
 
+emptyEnv :: ConcTyEnv
+emptyEnv = ConcTyEnv
+  { cteLin = M.empty
+  , cteRec = M.empty
+  , cteDual = B.empty
+  , cteBase = M.empty
+  , cteSeq = TyEnv M.empty
+  , cteAlias = M.empty
+  }
+
+chanHasDual :: Chan -> ConcTyEnv -> Bool
+chanHasDual c (ConcTyEnv{cteDual=dualEnv}) =
+  c `B.member` dualEnv || c `B.memberR` dualEnv
+

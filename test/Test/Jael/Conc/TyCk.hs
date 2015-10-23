@@ -6,6 +6,7 @@ module Test.Jael.Conc.TyCk
 
 import ClassyPrelude
 import qualified Data.Map as M
+import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Parser
 import Jael.Conc.Proc
@@ -34,6 +35,8 @@ concTyCkTests =
   , testCase "fresh channel not used in parallel (sel)" $ checkTyCkErr freshNonParSel
   , testCase "fresh channel not used in parallel (cho)" $ checkTyCkErr freshNonParCho
   , testCase "named proc passed duals" $ checkTyCkErr namedProcWithDualArgs
+  , testCase "case does not implement correct labels" $ checkTyCkErr caseMismatchedLabels
+  , testCase "check channel used properly after case" $ shouldTyCk checkCaseChannelSession
   ]
 
 -- A map of aliases that will be passed to the type checking function
@@ -191,20 +194,20 @@ freshNonParGet = (pack [raw|
   proc P() {
     new (^x, ^y) : ![Int]; ;
     // Expecting an error here before an unused linear resources error.
-    ^x <- 42;
+    ^y -> z;
     done
   }
-|], FreshNonParallel "x"
+|], FreshNonParallel "y"
   )
 
 freshNonParPut :: (Text, SessTyErr)
 freshNonParPut = (pack [raw|
   proc P() {
     new (^x, ^y) : ![Int]; ;
-    ^y -> z;
+    ^x <- 42;
     done
   }
-|], FreshNonParallel "y"
+|], FreshNonParallel "x"
   )
 
 freshNonParSel :: (Text, SessTyErr)
@@ -240,4 +243,26 @@ namedProcWithDualArgs = (pack [raw|
   }
 |], DualChanArgs ("x", "y")
   )
+
+caseMismatchedLabels :: (Text, SessTyErr)
+caseMismatchedLabels = (pack [raw|
+  proc P(x: &[a=>;, b=>;]) {
+    ^x case
+      { b => done
+      , c => done
+      }
+  }
+|], CaseLabelMismatch $ S.fromList ["a", "c"]
+  )
+
+-- Check that two cases that use a channel different after the case type check.
+checkCaseChannelSession :: Text
+checkCaseChannelSession = (pack [raw|
+  proc P(x: &[doNothing=>;, sendInt=>![Int];]) {
+    ^x case
+      { doNothing => done
+      , sendInt   => ^x <- 42; done
+      }
+  }
+|])
 

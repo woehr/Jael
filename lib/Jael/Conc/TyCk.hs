@@ -6,6 +6,7 @@ import ClassyPrelude hiding (Chan, Foldable)
 import Control.Monad.Except
 import qualified Data.Bimap as B
 import qualified Data.Map as M
+import qualified Data.Set as S
 import Jael.Util
 import Jael.Conc.Env
 import Jael.Conc.Proc
@@ -26,6 +27,7 @@ data SessTyErr = UnusedLin (M.Map Chan Session)
                | DuplicateSeqEnvItem [Text]
                | SeqTIErrs [Text]
                | UnknownLabel Text
+               | CaseLabelMismatch (S.Set Text)
                | FreshNonParallel Text
                | DualChanArgs (Text, Text)
                | PrintThing Text
@@ -70,10 +72,14 @@ updateSession k v env@(ConcTyEnv {cteLin=linEnv}) =
        Nothing -> error "It is expected that if a channel's session is being\
                        \ updated that it already exists in the environment."
 
-channelLookup :: Chan -> ConcTyEnv -> SessTyErrM Session
-channelLookup c (ConcTyEnv{cteLin=linEnv}) =
+-- Get the session associated with channel c only if the channel is defined and
+-- does not have a dual in the current context.
+lookupNonDualChan :: Chan -> ConcTyEnv -> SessTyErrM Session
+lookupNonDualChan c env@(ConcTyEnv{cteLin=linEnv}) =
   case M.lookup c linEnv of
-       Just s  -> return s
+       Just s  -> if chanHasDual c env
+                     then throwError $ FreshNonParallel c
+                     else return s
        Nothing -> throwError $ UndefinedChan c
 
 mkSeqEnv :: ConcTyEnv -> SessTyErrM TyEnv
@@ -101,11 +107,8 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
   -- Do some processing of the top level sessions so type checking can match on
   -- what we expect the session to be. The updateSession function does the same
   -- thing if the session after unfolding is SCoInd, SVar, or SDualVar
-      env = ConcTyEnv
-              { cteLin   = M.empty
-              , cteRec   = M.empty
-              , cteDual  = B.empty
-              , cteBase  = M.fromList bs
+      env = emptyEnv
+              { cteBase  = M.fromList bs
               , cteSeq   = sEnv
               , cteAlias = sessNames
               }
@@ -118,7 +121,7 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
 tyCkProc :: ConcTyEnv -> Proc -> SessTyErrM ConcTyEnv
 tyCkProc env (PGet c name p) = do
   -- Get the session the channel c is suppose to implement
-  sess <- channelLookup c env
+  sess <- lookupNonDualChan c env
   -- Check that the session implements a "get", update the session in the
   -- environment, and introduce the new name
   env' <- case sess of
@@ -134,7 +137,7 @@ tyCkProc env (PGet c name p) = do
   tyCkProc env' p
 
 tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
-  sess <- channelLookup c env
+  sess <- lookupNonDualChan c env
   env' <- case (sess, chanOrExpr) of
                (SPutTy v sCont, Right putExpr) -> do
                   completeSeqEnv <- mkSeqEnv env
@@ -144,7 +147,7 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
                                       then throwError $ TypeMismatch c ty
                                       else return $ updateSession c sCont env
                (SPutSess v sCont, Left putChan) -> do
-                  putSess <- channelLookup putChan env
+                  putSess <- lookupNonDualChan putChan env
                   if putSess /= v
                      then throwError $ ProtocolMismatch c putSess
                      else return $ updateSession c sCont env{cteLin=M.delete putChan lEnv}
@@ -152,7 +155,7 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
   tyCkProc env' pCont
 
 tyCkProc env (PSel chan lab pCont) = do
-  sess <- channelLookup chan env
+  sess <- lookupNonDualChan chan env
   env' <- case sess of
                SSelect ls -> case lookup lab ls of
                                   Just s -> return $ updateSession chan s env
@@ -160,7 +163,28 @@ tyCkProc env (PSel chan lab pCont) = do
                _ -> throwError $ ProtocolMismatch chan sess
   tyCkProc env' pCont
 
-tyCkProc env (PCase chan cases) = undefined
+tyCkProc env (PCase chan cases) = do
+  sess <- lookupNonDualChan chan env
+  case sess of
+       SChoice ls ->
+         let l1 = (S.fromList $ map fst ls)
+             l2 = (S.fromList $ map fst cases)
+             diffLabels = (l1 S.\\ l2) `S.union` (l2 S.\\ l1)
+         in if S.size diffLabels /= 0
+               then throwError $ CaseLabelMismatch diffLabels
+               -- Type check each process of the case statement with the
+               -- channel updated to reflect the session in the
+               -- corresponding "choice" session type.
+               else mapM
+                 (\(label, proc) -> flip tyCkProc proc $ updateSession chan
+                     (case lookup label ls of
+                           Just s -> s
+                           Nothing -> error "Should not happen because we\
+                                           \ check beforehand that the\
+                                           \ case and session labels match."
+                     ) env
+                 ) cases >> return emptyEnv
+       _ -> throwError $ ProtocolMismatch chan sess
 
 tyCkProc env (PNewVal name expr pCont) = do
   seqEnv <- mkSeqEnv env
@@ -172,8 +196,8 @@ tyCkProc env (PNewVal name expr pCont) = do
 tyCkProc env@(ConcTyEnv{cteDual=duals}) (PNewChan n1 n2 sTy pCont) =
       addIfNotRedefinition n1 (Linear sTy) env
   >>= addIfNotRedefinition n2 (Linear $ dual sTy)
-  >>= \e -> return e{cteDual = B.insert n1 n2 duals}
-  >>= \e -> tyCkProc e pCont
+  >>= (\e -> return e{cteDual = B.insert n1 n2 duals})
+  >>= (\e -> tyCkProc e pCont)
 
 tyCkProc env@(ConcTyEnv{cteLin=linEnv}) PNil =
   let unusedLinear = M.filter (/= SEnd) linEnv
