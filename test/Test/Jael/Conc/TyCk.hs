@@ -14,7 +14,6 @@ import Jael.Conc.Session
 import Jael.Conc.TyCk
 import Jael.Seq.Env
 import Jael.Seq.Types
-import Jael.Util.UPair
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit
@@ -204,7 +203,7 @@ badLabel = (pack [raw|
   )
 
 -- The following four tests check that a fresh channel is not used outside of
--- a parallel composition. This is necessary for the Tcut rule of pi-DILL to be
+-- a parallel composition. This is necessary for the Tcut rule to be
 -- satisfied. Intuitively, it ensures that there is always a process
 -- communicating on each end of a channel.
 nonParGet :: (Text, SessTyErr)
@@ -215,7 +214,7 @@ nonParGet = (pack [raw|
     ^y -> z;
     done
   }
-|], NonParallelUsage $ mkUPair "x" "y"
+|], NonParallelUsage "y"
   )
 
 nonParPut :: (Text, SessTyErr)
@@ -225,7 +224,7 @@ nonParPut = (pack [raw|
     ^x <- 42;
     done
   }
-|], NonParallelUsage $ mkUPair "y" "x"
+|], NonParallelUsage "x"
   )
 
 nonParSel :: (Text, SessTyErr)
@@ -235,7 +234,7 @@ nonParSel = (pack [raw|
     ^x select a;
     done
   }
-|], NonParallelUsage $ mkUPair "x" "y"
+|], NonParallelUsage "x"
   )
 
 nonParCho :: (Text, SessTyErr)
@@ -246,7 +245,7 @@ nonParCho = (pack [raw|
       a => done
     }
   }
-|], NonParallelUsage $ mkUPair "y" "x"
+|], NonParallelUsage "y"
   )
 
 nonFreshChanPut :: (Text, SessTyErr)
@@ -303,7 +302,7 @@ dualsUsedInSameParProc = (pack [raw|
     | done
     )
   }
-|], NonParallelUsage $ mkUPair "x" "y"
+|], ChannelInterference ("x", "y")
   )
 
 -- L. Caires et al. Linear logic propositions as session types, 2014

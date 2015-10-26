@@ -41,7 +41,6 @@ library
                        Jael.Seq.Types
                        Jael.UserDefTy
                        Jael.Util
-                       Jael.Util.UPair
 
   default-extensions:  DeriveFunctor,
                        OverloadedStrings

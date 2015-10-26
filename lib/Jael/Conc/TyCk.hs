@@ -15,7 +15,6 @@ import Jael.Seq.Env
 import Jael.Seq.Expr (freeVars)
 import Jael.Seq.TI
 import Jael.Seq.Types
-import Jael.Util.UPair
 
 type SessTyErrM = Either SessTyErr
 
@@ -30,7 +29,8 @@ data SessTyErr = UnusedLin (M.Map Chan Session)
                | UnknownLabel Text
                | CaseLabelMismatch (S.Set Text)
                | NonFreshChan Text
-               | NonParallelUsage (UPair Text)
+               | ChannelInterference (Text, Text)
+               | NonParallelUsage Text
                | DualChanArgs (Text, Text)
   deriving (Eq, Show)
 
@@ -57,14 +57,14 @@ unfoldSession k (SDualVar var) env@(ConcTyEnv{cteRec=recVars, cteAlias=als})
 unfoldSession k v env@(ConcTyEnv{cteLin=linEnv}) = env{cteLin=M.insert k v linEnv}
 
 addIfNotRedefinition :: Text -> EnvValue -> ConcTyEnv -> SessTyErrM ConcTyEnv
-addIfNotRedefinition k v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
+addIfNotRedefinition n v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
  let add = \kv m -> case addIfUnique kv m of
                          Just m' -> return m'
-                         Nothing -> throwError $ RedefinedName k
+                         Nothing -> throwError $ RedefinedName n
  in case v of
-         Linear s -> add (k, s) lEnv >>= (\lEnv' -> return $
-                                           unfoldSession k s env{cteLin =lEnv'})
-         Base   t -> add (k, (False, t)) bEnv >>= (\bEnv' -> return $ env{cteBase=bEnv'})
+         Linear s -> add (n, s) lEnv >>= (\lEnv' -> return $
+                                           unfoldSession n s env{cteLin=lEnv'})
+         Base   t -> add (n, (False, t)) bEnv >>= (\bEnv' -> return $ env{cteBase=bEnv'})
 
 updateSession :: Chan -> Session -> ConcTyEnv -> ConcTyEnv
 updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
@@ -75,17 +75,19 @@ updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
 
 -- Get the session associated with channel c
 lookupChan :: Chan -> ConcTyEnv -> SessTyErrM Session
-lookupChan c env@(ConcTyEnv{cteLin=linEnv}) =
-  case M.lookup c linEnv of
-       Just s  -> return s
-       Nothing -> throwError $ UndefinedChan c
+lookupChan c env@(ConcTyEnv{cteLin=linEnv, ctePar=parEnv}) =
+  case (M.lookup c linEnv, M.lookup c parEnv) of
+       (Just s, Just (True , _))  -> return s
+       (Just _, Just (False, _))  -> throwError $ NonParallelUsage c
+       (_, _) -> throwError $ UndefinedChan c
 
+-- Get the session associated with channel c, only if it is a fresh channel
 lookupFreshChan :: Chan -> ConcTyEnv -> SessTyErrM Session
 lookupFreshChan c env@(ConcTyEnv{cteLin=linEnv, cteFresh=freshEnv}) =
   case (M.lookup c linEnv, c `S.member` freshEnv) of
        (Just s, True) -> return s
-       (Just _, False) -> throwError $ NonFreshChan c
        (Nothing, _) -> throwError $ UndefinedChan c
+       (Just _, False) -> throwError $ NonFreshChan c
 
 mkSeqEnv :: ConcTyEnv -> SessTyErrM TyEnv
 mkSeqEnv (ConcTyEnv{cteBase=bEnv, cteSeq=sEnv}) =
@@ -219,7 +221,8 @@ tyCkProc env (PNewVal name expr pCont) = do
 tyCkProc env@(ConcTyEnv{ctePar=parEnv}) (PNewChan n1 n2 sTy pCont) =
       addIfNotRedefinition n1 (Linear sTy) env
   >>= addIfNotRedefinition n2 (Linear $ dual sTy)
-  >>= (\e -> return $ env{ctePar=S.insert (mkUPair n1 n2) parEnv})
+  >>= (\e -> return $ e{ctePar=M.insert n1 (False, S.singleton n2) $
+                               M.insert n2 (False, S.singleton n1) (ctePar e)})
   >>= (\e -> tyCkProc e pCont)
 
 tyCkProc env (PNamed n as) = undefined
