@@ -40,25 +40,27 @@ missingKey = error "Assumed map would contain key but it did not."
 -- This function is unsafe as it assumes that the channel name (k) is already in
 -- the linear environment. This function replaces the session represented by
 -- names until the session is no longer a SCoInd, SVar, or SDualVar
-unfoldSession :: Text -> Session -> ConcTyEnv -> ConcTyEnv
-unfoldSession k (SCoInd var s) env@(ConcTyEnv{cteLin=linEnv}) =
-  let kEnv@(LinEnv{leAliases=als}) = M.findWithDefault missingKey k linEnv
-   in unfoldSession k s env{
-        cteLin=M.insert k kEnv{leAliases=M.insert var s als} linEnv
-      }
+unfoldSession :: Text -> ConcTyEnv -> ConcTyEnv
+unfoldSession k env@(ConcTyEnv{cteLin=linEnv, cteAlias=alsEnv}) =
+  let kEnv@(LinEnv{leAliases=a}) = M.findWithDefault missingKey k linEnv
+      kEnv' = case leSess $ M.findWithDefault missingKey k linEnv of
+        (SCoInd var s) -> Just kEnv{ leSess=s
+                                   , leAliases=M.insert var s alsEnv}
 
-unfoldSession k (SVar var) env@(ConcTyEnv{cteLin=linEnv}) =
-  let (LinEnv{leAliases=a}) = M.findWithDefault missingKey k linEnv
-   in case M.lookup var a of
-           Just s -> unfoldSession k s env
-           Nothing -> unfoldSession k (lookupAliasUnsafe k var env) env
+        (SVar var) -> Just
+          kEnv{leSess=case M.lookup var a of
+                           Just s -> s
+                           Nothing -> M.findWithDefault missingKey var alsEnv
+              }
 
-unfoldSession k (SDualVar var) env@(ConcTyEnv{cteLin=linEnv})
-  | var `M.member` leAliases (M.findWithDefault missingKey k linEnv)
-      = error "A recursion variable should not be dualed."
-  | otherwise = unfoldSession k (dual $ lookupAliasUnsafe k var env) env
+        (SDualVar var) ->
+          if var `M.member` a
+             then error "A recursion variable should not be dualed."
+             else Just kEnv{leSess=dual $ M.findWithDefault missingKey var alsEnv}
 
-unfoldSession _ _ env = env
+        _ -> Nothing
+
+   in maybe env (\e -> unfoldSession k env{cteLin=M.insert k e linEnv}) kEnv'
 
 addIfNotRedefinition :: EnvValue -> ConcTyEnv -> SessTyErrM ConcTyEnv
 addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
@@ -67,7 +69,7 @@ addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
                          Nothing -> throwError $ RedefinedName k
  in case v of
          Linear n s -> add (n, freshLinEnv s) lEnv
-                   >>= (\lEnv' -> return $ unfoldSession n s env{cteLin=lEnv'})
+                   >>= (\lEnv' -> return $ unfoldSession n env{cteLin=lEnv'})
          DualLinear n1 n2 s -> add (n1, freshLinEnv s) lEnv
                            >>= add (n2, freshLinEnv $ dual s)
                            >>= (\lEnv' -> return $ addInterferenceUnsafe n1 n2 env{cteLin=lEnv'})
@@ -77,7 +79,8 @@ addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
 updateSession :: Chan -> Session -> ConcTyEnv -> ConcTyEnv
 updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
   case M.lookup c linEnv of
-       Just _ -> unfoldSession c v env{cteFresh=S.delete c freshEnv}
+       Just le -> unfoldSession c env{ cteLin=M.insert c le{leSess=v} linEnv
+                                     , cteFresh=S.delete c freshEnv}
        Nothing -> error "It is expected that if a channel's session is being\
                        \ updated that it already exists in the environment."
 
@@ -144,7 +147,7 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
               , cteProcs = namedProcs
               }
    -- Just the error or throw away the returned env and return Nothing
-   in either Just (const Nothing) $ tyCkProc env p
+   in either Just (const Nothing) $ tyCkProc (foldr unfoldSession env $ map fst ls) p
 
 -- Type checks a process. Returns either a type checking error or an updated
 -- environment

@@ -63,12 +63,6 @@ emptyEnv = ConcTyEnv
   , cteProcs = M.empty
   }
 
-lookupAliasUnsafe :: Chan -> Text -> ConcTyEnv -> Session
-lookupAliasUnsafe c t (ConcTyEnv{cteLin=linEnv}) =
-  M.findWithDefault (error "") t
-  $ leAliases
-  $ M.findWithDefault (error "") c linEnv
-
 -- Assume that c1 and c2 both exist in cteLin and add each to the others
 -- interference set
 addInterferenceUnsafe :: Chan -> Chan -> ConcTyEnv -> ConcTyEnv
