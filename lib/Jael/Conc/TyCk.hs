@@ -34,37 +34,45 @@ data SessTyErr = UnusedLin (M.Map Chan Session)
                | DualChanArgs (Text, Text)
   deriving (Eq, Show)
 
-preconditionError :: a
-preconditionError = error "Some assumption about a precondition has been violated."
+missingKey :: a
+missingKey = error "Assumed map would contain key but it did not."
 
--- Adds (or replaces) the session, v, with channel name, k, to the environment
--- but first unfolds it until the session is no longer a SCoInd, SVar, or
--- SDualVar and updates the environment as necessary
+-- This function is unsafe as it assumes that the channel name (k) is already in
+-- the linear environment. This function replaces the session represented by
+-- names until the session is no longer a SCoInd, SVar, or SDualVar
 unfoldSession :: Text -> Session -> ConcTyEnv -> ConcTyEnv
-unfoldSession k (SCoInd var s) env@(ConcTyEnv{cteRec=recVars}) =
-  unfoldSession k s env{cteRec=M.insert (k, var) s recVars}
+unfoldSession k (SCoInd var s) env@(ConcTyEnv{cteLin=linEnv}) =
+  let kEnv@(LinEnv{leAliases=als}) = M.findWithDefault missingKey k linEnv
+   in unfoldSession k s env{
+        cteLin=M.insert k kEnv{leAliases=M.insert var s als} linEnv
+      }
 
-unfoldSession k (SVar var) env@(ConcTyEnv{cteRec=recVars, cteAlias=als}) =
-  case M.lookup (k, var) recVars of
-       Just s -> unfoldSession k s env
-       Nothing -> unfoldSession k (M.findWithDefault preconditionError var als)
-                    env{cteRec=M.filterWithKey (\(c,_) _ -> c /= k) recVars}
+unfoldSession k (SVar var) env@(ConcTyEnv{cteLin=linEnv}) =
+  let (LinEnv{leAliases=a}) = M.findWithDefault missingKey k linEnv
+   in case M.lookup var a of
+           Just s -> unfoldSession k s env
+           Nothing -> unfoldSession k (lookupAliasUnsafe k var env) env
 
-unfoldSession k (SDualVar var) env@(ConcTyEnv{cteRec=recVars, cteAlias=als})
-  | M.member (k, var) recVars = error "A recursion variable should not be dualed."
-  | otherwise = unfoldSession k (dual $ M.findWithDefault preconditionError var als) env
+unfoldSession k (SDualVar var) env@(ConcTyEnv{cteLin=linEnv})
+  | var `M.member` leAliases (M.findWithDefault missingKey k linEnv)
+      = error "A recursion variable should not be dualed."
+  | otherwise = unfoldSession k (dual $ lookupAliasUnsafe k var env) env
 
-unfoldSession k v env@(ConcTyEnv{cteLin=linEnv}) = env{cteLin=M.insert k v linEnv}
+unfoldSession _ _ env = env
 
-addIfNotRedefinition :: Text -> EnvValue -> ConcTyEnv -> SessTyErrM ConcTyEnv
-addIfNotRedefinition n v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
- let add = \kv m -> case addIfUnique kv m of
+addIfNotRedefinition :: EnvValue -> ConcTyEnv -> SessTyErrM ConcTyEnv
+addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
+ let add = \kv@(k,_) m -> case addIfUnique kv m of
                          Just m' -> return m'
-                         Nothing -> throwError $ RedefinedName n
+                         Nothing -> throwError $ RedefinedName k
  in case v of
-         Linear s -> add (n, s) lEnv >>= (\lEnv' -> return $
-                                           unfoldSession n s env{cteLin=lEnv'})
-         Base   t -> add (n, (False, t)) bEnv >>= (\bEnv' -> return $ env{cteBase=bEnv'})
+         Linear n s -> add (n, freshLinEnv s) lEnv
+                   >>= (\lEnv' -> return $ unfoldSession n s env{cteLin=lEnv'})
+         DualLinear n1 n2 s -> add (n1, freshLinEnv s) lEnv
+                           >>= add (n2, freshLinEnv $ dual s)
+                           >>= (\lEnv' -> return $ addInterferenceUnsafe n1 n2 env{cteLin=lEnv'})
+         Base   n t -> add (n, (False, t)) bEnv
+                   >>= (\bEnv' -> return $ env{cteBase=bEnv'})
 
 updateSession :: Chan -> Session -> ConcTyEnv -> ConcTyEnv
 updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
@@ -75,17 +83,17 @@ updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
 
 -- Get the session associated with channel c
 lookupChan :: Chan -> ConcTyEnv -> SessTyErrM Session
-lookupChan c env@(ConcTyEnv{cteLin=linEnv, ctePar=parEnv}) =
-  case (M.lookup c linEnv, M.lookup c parEnv) of
-       (Just s, Just (True , _))  -> return s
-       (Just _, Just (False, _))  -> throwError $ NonParallelUsage c
-       (_, _) -> throwError $ UndefinedChan c
+lookupChan c (ConcTyEnv{cteLin=linEnv}) =
+  case (M.lookup c linEnv) of
+       Just (LinEnv{leSess=s, leConcCtx=True }) -> return s
+       Just (LinEnv{          leConcCtx=False}) -> throwError $ NonParallelUsage c
+       _ -> throwError $ UndefinedChan c
 
 -- Get the session associated with channel c, only if it is a fresh channel
 lookupFreshChan :: Chan -> ConcTyEnv -> SessTyErrM Session
-lookupFreshChan c env@(ConcTyEnv{cteLin=linEnv, cteFresh=freshEnv}) =
+lookupFreshChan c (ConcTyEnv{cteLin=linEnv, cteFresh=freshEnv}) =
   case (M.lookup c linEnv, c `S.member` freshEnv) of
-       (Just s, True) -> return s
+       (Just (LinEnv{leSess=s}), True) -> return s
        (Nothing, _) -> throwError $ UndefinedChan c
        (Just _, False) -> throwError $ NonFreshChan c
 
@@ -105,7 +113,7 @@ separateArgs xs = foldr
 
 baseCaseEnvErrors :: ConcTyEnv -> SessTyErrM ConcTyEnv
 baseCaseEnvErrors env@(ConcTyEnv{cteLin=linEnv, cteBase=baseEnv}) =
-  let unusedLinear = M.filter (/= SEnd) linEnv
+  let unusedLinear = M.filter (/= SEnd) (M.map leSess linEnv)
       unusedSeq = M.map snd . M.filter (not . fst) $ baseEnv
       returnError :: SessTyErrM ConcTyEnv
       returnError | (not . null) unusedLinear = throwError $ UnusedLin unusedLinear
@@ -129,13 +137,14 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
   -- what we expect the session to be. The updateSession function does the same
   -- thing if the session after unfolding is SCoInd, SVar, or SDualVar
       env = emptyEnv
-              { cteBase  = M.fromList $ map (\(n,t)->(n,(False,t))) bs
+              { cteLin   = M.map (\e->(freshLinEnv e){leConcCtx=True}) (M.fromList ls)
+              , cteBase  = M.fromList $ map (\(n,t)->(n,(False,t))) bs
               , cteSeq   = sEnv
               , cteAlias = sessNames
               , cteProcs = namedProcs
               }
    -- Just the error or throw away the returned env and return Nothing
-   in either Just (const Nothing) $ tyCkProc (foldr (uncurry unfoldSession) env ls) p
+   in either Just (const Nothing) $ tyCkProc env p
 
 -- Type checks a process. Returns either a type checking error or an updated
 -- environment
@@ -147,12 +156,12 @@ tyCkProc env (PGet c name p) = do
   -- environment, and introduce the new name
   env' <- case sess of
                SGetTy   v s -> do
-                  env'  <- addIfNotRedefinition name (Base v) env
+                  env'  <- addIfNotRedefinition (Base name v) env
                   -- c has to already be in the environment so an insert replaces
                   -- the old session with the updated one
                   return $ updateSession c s env'
                SGetSess v s -> do
-                  env'  <- addIfNotRedefinition name (Linear v) env
+                  env'  <- addIfNotRedefinition (Linear name v) env
                   return $ updateSession c s env'
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
@@ -188,12 +197,13 @@ tyCkProc env (PSel chan lab pCont) = do
                _ -> throwError $ ProtocolMismatch chan sess
   tyCkProc env' pCont
 
-tyCkProc env (PCase chan cases) = do
+tyCkProc env@(ConcTyEnv{cteLin=linEnv}) (PCase chan cases) = do
   sess <- lookupChan chan env
   case sess of
        SChoice ls ->
          let l1 = (S.fromList $ map fst ls)
              l2 = (S.fromList $ map fst cases)
+             -- "Symmetric difference"
              diffLabels = (l1 S.\\ l2) `S.union` (l2 S.\\ l1)
          in if S.size diffLabels /= 0
                then throwError $ CaseLabelMismatch diffLabels
@@ -215,14 +225,11 @@ tyCkProc env (PNewVal name expr pCont) = do
   seqEnv <- mkSeqEnv env
   env' <- case seqInfer seqEnv expr of
                Left errs -> throwError $ SeqTIErrs errs
-               Right ty  -> addIfNotRedefinition name (Base ty) env
+               Right ty  -> addIfNotRedefinition (Base name ty) env
   tyCkProc env' pCont
 
-tyCkProc env@(ConcTyEnv{ctePar=parEnv}) (PNewChan n1 n2 sTy pCont) =
-      addIfNotRedefinition n1 (Linear sTy) env
-  >>= addIfNotRedefinition n2 (Linear $ dual sTy)
-  >>= (\e -> return $ e{ctePar=M.insert n1 (False, S.singleton n2) $
-                               M.insert n2 (False, S.singleton n1) (ctePar e)})
+tyCkProc env (PNewChan n1 n2 sTy pCont) =
+      addIfNotRedefinition (DualLinear n1 n2 sTy) env
   >>= (\e -> tyCkProc e pCont)
 
 tyCkProc env (PNamed n as) = undefined

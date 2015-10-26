@@ -283,7 +283,7 @@ caseMismatchedLabels = (pack [raw|
 |], CaseLabelMismatch $ S.fromList ["a", "c"]
   )
 
--- Check that two cases that use a channel different after the case type check.
+-- Check that cases use a channel according to the session choices
 checkCaseChannelSession :: Text
 checkCaseChannelSession = (pack [raw|
   proc P(x: &[doNothing=>;, sendInt=>![Int];]) {
