@@ -25,7 +25,7 @@ concTyCkTests =
   , testCase "unused linear argument" $ checkTyCkErr unusedLinearArg
   , testCase "session alias used" $ shouldTyCk sessionAlias
   , testCase "valid channel put" $ shouldTyCk channelPut
-  , testCase "unused seq from arg and chan" $ checkTyCkErr unusedSeq
+  , testCase "unused seq from arg and chan" $ checkTyCkErr unusedSeqVars
   , testCase "sequential vars used in expr" $ shouldTyCk seqUsedInExpr
   , testCase "unused linear from chan" $ checkTyCkErr channelGetUnusedLin
   , testCase "rec def unfolding" $ checkTyCkErr recDefUnfold
@@ -40,10 +40,15 @@ concTyCkTests =
   , testCase "case does not implement correct labels" $ checkTyCkErr caseMismatchedLabels
   , testCase "check channel used properly after case" $ shouldTyCk checkCaseChannelSession
   , testCase "duals used in same parallel proc" $ checkTyCkErr dualsUsedInSameParProc
+  , testCase "put channel interference" $ checkTyCkErr putChannelInterference
+  , testCase "check type errors in cases" $ checkTyCkErr caseTypeErrors
+  , testCase "check resource errors within cases" $ checkTyCkErr caseResourceErrors
+  , testCase "check all cases use resources the same" $ checkTyCkErr casesWithDifferingUsages
   -- The remainder of these tests are specific examples from papers. See the
   -- inline comments for more details
   , testCase "example 1" $ checkTyCkErr ex1
   , testCase "example 2" $ checkTyCkErr ex2
+  , testCase "example 3" $ shouldTyCk ex3
   ]
 
 -- A map of aliases that will be passed to the type checking function
@@ -102,7 +107,9 @@ emptyProc = (pack [raw|
 unusedLinearArg :: (Text, SessTyErr)
 unusedLinearArg = (pack [raw|
   proc X(x: ?[Int];){ done }
-|], UnusedLin $ M.fromList [("x", SGetTy TInt SEnd)]
+|], UnusedResources{ unusedLin=M.fromList [("x", SGetTy TInt SEnd)]
+                   , unusedSeq=M.empty
+                   }
   )
 
 sessionAlias :: Text
@@ -124,13 +131,15 @@ channelPut = (pack [raw|
   }
 |])
 
-unusedSeq :: (Text, SessTyErr)
-unusedSeq = (pack [raw|
+unusedSeqVars :: (Text, SessTyErr)
+unusedSeqVars = (pack [raw|
   proc X(x: ?[Int];, y: Bool) {
     ^x -> z;
     done
   }
-|], UnusedSeq $ M.fromList [("y", TBool), ("z", TInt)]
+|], UnusedResources{ unusedSeq=M.fromList [("y", TBool), ("z", TInt)]
+                   , unusedLin=M.empty
+                   }
   )
 
 seqUsedInExpr :: Text
@@ -150,7 +159,9 @@ channelGetUnusedLin = (pack [raw|
     ^x -> y;
     done
   }
-|], UnusedLin $ M.fromList [("y", SGetTy TInt SEnd)]
+|], UnusedResources{ unusedLin=M.fromList [("y", SGetTy TInt SEnd)]
+                   , unusedSeq=M.empty
+                   }
   )
 
 -- Test that a recursive session definition is unfolded when defined and used
@@ -163,10 +174,12 @@ recDefUnfold = (pack [raw|
     ^x -> z;
     done
   }
-|], UnusedLin $ M.fromList
-      [ ("x", SPutTy TInt $ SGetTy TInt $ SVar "X")
-      , ("y", SPutTy TInt $ SGetTy TInt $ SVar "X")
-      ]
+|], UnusedResources{ unusedLin=M.fromList
+                      [ ("x", SPutTy TInt $ SGetTy TInt $ SVar "X")
+                      , ("y", SPutTy TInt $ SGetTy TInt $ SVar "X")
+                      ]
+                   , unusedSeq=M.fromList [("z", TInt)]
+                   }
   )
 
 -- The session AltTxRxInt is defined with a recursion variable X. By defining
@@ -186,10 +199,12 @@ reusedRecVarInAlias = (pack [raw|
     ^y select a;
     done
   }
-|], UnusedLin $ M.fromList
-      [ ("x", SPutTy TInt $ SGetTy TInt $ SVar "X")
-      , ("y", SSelect [("a", SVar "X"), ("b", SVar "AltTxRxInt")])
-      ]
+|], UnusedResources{ unusedLin=M.fromList
+                      [ ("x", SPutTy TInt $ SGetTy TInt $ SVar "X")
+                      , ("y", SSelect [("a", SVar "X"), ("b", SVar "AltTxRxInt")])
+                      ]
+                   , unusedSeq=M.fromList [("z", TInt)]
+                   }
   )
 
 badLabel :: (Text, SessTyErr)
@@ -252,16 +267,16 @@ nonFreshChanPut :: (Text, SessTyErr)
 nonFreshChanPut = (pack [raw|
   proc P(c: ![ ?[Int]; ];) {
     new (^x, ^y) : ?[Int]?[Int];;
-    ( ^x -> i;  ^c <- x; done
+    ( ^x -> i;  ^c <- ^x; done
     | ^y <- 42; ^y <- 42; done
     )
   }
 |], NonFreshChan "x"
   )
 
--- This test ensures that two ends of a channel can not be passed as arguments
+-- This test ensures that interferring channels can not be passed as arguments
 -- to the same named process. When typing named processes, it's assumed that
--- none of it's arguments are duals. This implicitly enforces dual channels
+-- none of it's arguments interfere. This implicitly enforces dual channels
 -- to be composed in parallel.
 namedProcWithDualArgs :: (Text, SessTyErr)
 namedProcWithDualArgs = (pack [raw|
@@ -269,7 +284,7 @@ namedProcWithDualArgs = (pack [raw|
     new (^x, ^y) : ![Int]; ;
     DualArgProc(^x, ^y)
   }
-|], DualChanArgs ("x", "y")
+|], InterferringProcArgs "DualArgProc" $ S.fromList ["x", "y"]
   )
 
 caseMismatchedLabels :: (Text, SessTyErr)
@@ -302,7 +317,48 @@ dualsUsedInSameParProc = (pack [raw|
     | done
     )
   }
-|], ChannelInterference ("x", "y")
+|], ChannelInterference "x" $ S.fromList ["y"]
+  )
+
+putChannelInterference :: (Text, SessTyErr)
+putChannelInterference = (pack [raw|
+  proc P(dummy: ![Int];) {
+    new (^xp, ^xn) : ![ ![Int]; ]; ;
+    new (^yp, ^yn) : ![Int] ; ;
+    new (^zp, ^zn) : ![ ![Int]; ]; ;
+    ( ^xp <- ^yp; done
+
+    // ^xn receives ^yp which is bound to a
+    // we can't use yn in this process because it would interfere with xn
+    // since xp and yp were used together.
+    | ^xn -> a; ^zp <- a; done
+
+    // ^zn receives ^yp which is bound to b
+    // Now we can use yp and yn in sequence causes a deadlock without any of the
+    // x, y, or z channel duals being used together directly.
+    | ^zn -> b; ^b <- 42; ^yn -> c; ^dummy <- c; done
+    )
+  }
+|], ChannelInterference "xp" $ S.fromList ["yp"]
+  )
+
+caseTypeErrors :: (Text, SessTyErr)
+caseTypeErrors = (pack [raw|
+|], CaseProcErrs $ M.fromList [ ("a", undefined)
+                              , ("b", undefined)
+                              ]
+  )
+
+caseResourceErrors :: (Text, SessTyErr)
+caseResourceErrors = (pack [raw|
+|], CaseProcErrs $ M.fromList [ ("a", undefined)
+                              , ("b", undefined)
+                              ]
+  )
+
+casesWithDifferingUsages :: (Text, SessTyErr)
+casesWithDifferingUsages = (pack [raw|
+|], CasesUseDifferentLinearResources
   )
 
 -- L. Caires et al. Linear logic propositions as session types, 2014
@@ -317,7 +373,7 @@ ex1 = (pack [raw|
     | ^xn -> a;  ^yn -> b;  done
     )
   }
-|], undefined
+|], ChannelInterference "xn" $ S.fromList ["yn"]
   )
 
 -- L. Caires et al. Linear logic propositions as session types, 2014
@@ -334,6 +390,19 @@ ex2 = (pack [raw|
     | ^yn -> b;  ^xn -> a;  done
     )
   }
-|], undefined
+|], ChannelInterference "xn" $ S.fromList ["yn"]
   )
+
+-- L. Caires et al. Linear logic propositions as session types, 2014
+-- From page 23, this is essentially ex1 in a "globally coordinated" form that
+-- is typable in their system.
+ex3 :: Text
+ex3 = (pack [raw|
+  proc P(dummy: ![Int];) {
+    new (^nxy_p, ^nxy_n) : ![Int]![Int];;
+    ( ^nxy_p <- 41; ^nxy_p <- 42; done
+    | ^nxy_n -> x;  ^nxy_n -> y;  ^dummy <- x+y; done
+    )
+  }
+|])
 

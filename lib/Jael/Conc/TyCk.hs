@@ -3,7 +3,8 @@
 module Jael.Conc.TyCk where
 
 import ClassyPrelude hiding (Chan, Foldable)
-import Control.Monad.Except
+import Control.Monad.Except hiding (foldM, mapM_)
+import qualified Data.List as L (head)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Util
@@ -18,8 +19,9 @@ import Jael.Seq.Types
 
 type SessTyErrM = Either SessTyErr
 
-data SessTyErr = UnusedLin (M.Map Chan Session)
-               | UnusedSeq (M.Map Text Ty)
+data SessTyErr = UnusedResources { unusedLin :: M.Map Chan Session
+                                 , unusedSeq :: M.Map Text Ty
+                                 }
                | UndefinedChan Chan
                | RedefinedName Text
                | ProtocolMismatch Chan Session
@@ -29,9 +31,12 @@ data SessTyErr = UnusedLin (M.Map Chan Session)
                | UnknownLabel Text
                | CaseLabelMismatch (S.Set Text)
                | NonFreshChan Text
-               | ChannelInterference (Text, Text)
+               | ChannelInterference Text (S.Set Text)
                | NonParallelUsage Text
-               | DualChanArgs (Text, Text)
+               | InterferringProcArgs Text (S.Set Text)
+               | CaseProcErrs (M.Map Label SessTyErr)
+               -- TODO: Return some information about which cases are offending
+               | CasesUseDifferentLinearResources
   deriving (Eq, Show)
 
 missingKey :: a
@@ -48,10 +53,8 @@ unfoldSession k env@(ConcTyEnv{cteLin=linEnv, cteAlias=alsEnv}) =
                                    , leAliases=M.insert var s alsEnv}
 
         (SVar var) -> Just
-          kEnv{leSess=case M.lookup var a of
-                           Just s -> s
-                           Nothing -> M.findWithDefault missingKey var alsEnv
-              }
+          kEnv{leSess=fromMaybe (M.findWithDefault missingKey var alsEnv)
+                                (M.lookup var a)}
 
         (SDualVar var) ->
           if var `M.member` a
@@ -65,13 +68,13 @@ unfoldSession k env@(ConcTyEnv{cteLin=linEnv, cteAlias=alsEnv}) =
 addIfNotRedefinition :: EnvValue -> ConcTyEnv -> SessTyErrM ConcTyEnv
 addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
  let add = \kv@(k,_) m -> case addIfUnique kv m of
-                         Just m' -> return m'
-                         Nothing -> throwError $ RedefinedName k
+                            Just m' -> return m'
+                            Nothing -> throwError $ RedefinedName k
  in case v of
-         Linear n s -> add (n, freshLinEnv s) lEnv
+         Linear n s -> add (n, newLinEnv s Nothing) lEnv
                    >>= (\lEnv' -> return $ unfoldSession n env{cteLin=lEnv'})
-         DualLinear n1 n2 s -> add (n1, freshLinEnv s) lEnv
-                           >>= add (n2, freshLinEnv $ dual s)
+         DualLinear n1 n2 s -> add (n1, newLinEnv s (Just n2)) lEnv
+                           >>= add (n2, newLinEnv (dual s) (Just n1))
                            >>= (\lEnv' -> return $ addInterferenceUnsafe n1 n2 env{cteLin=lEnv'})
          Base   n t -> add (n, (False, t)) bEnv
                    >>= (\bEnv' -> return $ env{cteBase=bEnv'})
@@ -87,7 +90,7 @@ updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
 -- Get the session associated with channel c
 lookupChan :: Chan -> ConcTyEnv -> SessTyErrM Session
 lookupChan c (ConcTyEnv{cteLin=linEnv}) =
-  case (M.lookup c linEnv) of
+  case M.lookup c linEnv of
        Just (LinEnv{leSess=s, leConcCtx=True }) -> return s
        Just (LinEnv{          leConcCtx=False}) -> throwError $ NonParallelUsage c
        _ -> throwError $ UndefinedChan c
@@ -108,21 +111,19 @@ mkSeqEnv (ConcTyEnv{cteBase=bEnv, cteSeq=sEnv}) =
 
 -- Separate the arguments of a TopProc into linear sessions and base types
 separateArgs :: [(Text, TyOrSess)] -> ([(Chan, Session)], [(Text, Ty)])
-separateArgs xs = foldr
+separateArgs = foldr
   (\(n, x) (ss, ts) -> case x of
                             TorSTy t   -> (ss, (n,t):ts)
                             TorSSess s -> ((n,s):ss, ts)
-  ) ([],[]) xs
+  ) ([],[])
 
-baseCaseEnvErrors :: ConcTyEnv -> SessTyErrM ConcTyEnv
-baseCaseEnvErrors env@(ConcTyEnv{cteLin=linEnv, cteBase=baseEnv}) =
-  let unusedLinear = M.filter (/= SEnd) (M.map leSess linEnv)
-      unusedSeq = M.map snd . M.filter (not . fst) $ baseEnv
-      returnError :: SessTyErrM ConcTyEnv
-      returnError | (not . null) unusedLinear = throwError $ UnusedLin unusedLinear
-                  | (not . null) unusedSeq = throwError $ UnusedSeq unusedSeq
-                  | otherwise = return env
-   in returnError
+envErrors :: ConcTyEnv -> SessTyErrM ConcTyEnv
+envErrors env@(ConcTyEnv{cteLin=linEnv, cteBase=baseEnv}) =
+  let uLin = M.filter (/= SEnd) (M.map leSess linEnv)
+      uSeq = M.map snd . M.filter (not . fst) $ baseEnv
+   in if (not . null) uLin || (not . null) uSeq
+         then throwError UnusedResources { unusedLin = uLin, unusedSeq = uSeq}
+         else return env
 
 markSeqUsed :: S.Set Text -> ConcTyEnv -> ConcTyEnv
 markSeqUsed vars env@(ConcTyEnv{cteBase=baseEnv}) =
@@ -140,14 +141,16 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
   -- what we expect the session to be. The updateSession function does the same
   -- thing if the session after unfolding is SCoInd, SVar, or SDualVar
       env = emptyEnv
-              { cteLin   = M.map (\e->(freshLinEnv e){leConcCtx=True}) (M.fromList ls)
+              { cteLin   = M.map (\s->(newLinEnv s Nothing){leConcCtx=True}) (M.fromList ls)
               , cteBase  = M.fromList $ map (\(n,t)->(n,(False,t))) bs
               , cteSeq   = sEnv
               , cteAlias = sessNames
               , cteProcs = namedProcs
               }
-   -- Just the error or throw away the returned env and return Nothing
-   in either Just (const Nothing) $ tyCkProc (foldr unfoldSession env $ map fst ls) p
+      envOrErr = tyCkProc (foldr (unfoldSession . fst) env ls) p
+   in case envOrErr of
+           Left err -> Just err
+           Right env' -> either Just (const Nothing) $ envErrors env'
 
 -- Type checks a process. Returns either a type checking error or an updated
 -- environment
@@ -185,9 +188,16 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
                   putSess <- lookupFreshChan putChan env
                   if putSess /= v
                      then throwError $ ProtocolMismatch c putSess
-                     else return $ updateSession c sCont env
-                                     { cteLin=M.delete putChan lEnv
-                                     }
+                     else do
+                       -- putChan must be fresh so it must also have a dual
+                       -- That dual, and the continuation session of c (sCont)
+                       -- must be used in parallel according to the typing rules
+                       -- to prevent interference. Specifically, a process in
+                       -- parallel could receive the sent channel and use the
+                       -- other end of c
+                       return $ updateSession c sCont env
+                         { cteLin=M.delete putChan lEnv
+                         }
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
@@ -200,7 +210,7 @@ tyCkProc env (PSel chan lab pCont) = do
                _ -> throwError $ ProtocolMismatch chan sess
   tyCkProc env' pCont
 
-tyCkProc env@(ConcTyEnv{cteLin=linEnv}) (PCase chan cases) = do
+tyCkProc env (PCase chan cases) = do
   sess <- lookupChan chan env
   case sess of
        SChoice ls ->
@@ -213,15 +223,49 @@ tyCkProc env@(ConcTyEnv{cteLin=linEnv}) (PCase chan cases) = do
                -- Type check each process of the case statement with the
                -- channel updated to reflect the session in the
                -- corresponding "choice" session type.
-               else mapM
-                 (\(label, proc) -> flip tyCkProc proc $ updateSession chan
-                     (case lookup label ls of
-                           Just s -> s
-                           Nothing -> error "Should not happen because we\
-                                           \ check beforehand that the\
-                                           \ case and session labels match."
-                     ) env
-                 ) cases >> return emptyEnv
+               else do
+                 let (caseErrMap, residualEnvMap) = M.mapEitherWithKey
+                      (\label proc -> flip tyCkProc proc $ updateSession chan
+                        (fromMaybe (error "Should not happen because we check\
+                                         \ beforehand that the case and session\
+                                         \ labels match.")
+                                   (lookup label ls)
+                        ) env
+                      ) (M.fromList cases)
+                 when (M.size caseErrMap /= 0)
+                      (throwError $ CaseProcErrs caseErrMap)
+                 -- The first map for each value in splitEs is what remains of
+                 -- the original, input, environment. The second map is the
+                 -- residual environment left after typing.
+                 let splitEs = M.map (\e@(ConcTyEnv{cteLin=le, cteBase=be}) ->
+                      let (origLin, residLin) =
+                           M.partitionWithKey (\k _ -> k `M.member` le) le
+                          (origBase, residBase) =
+                           M.partitionWithKey (\k _ -> k `M.member` be) be
+                       in ( e{cteLin=origLin, cteBase=origBase}
+                          , e{cteLin=residLin, cteBase=residBase}
+                          )
+                      ) residualEnvMap
+                 -- Finally, since this is a base case for processes, we need to
+                 -- check for any unused resources and remove used resources
+                 -- from the environment so they don't leak into other processes
+                 -- (specifically, when typing a concurrent process).
+                 let residualEnvErrs = fst $ M.mapEither (envErrors . snd) splitEs
+                 when (M.size residualEnvErrs /= 0)
+                      (throwError $ CaseProcErrs residualEnvErrs)
+                 -- All cases must use an environment identically otherwise it's
+                 -- an error. Consider if it didn't and the case was one of
+                 -- several processes being run in parallel: we wouldn't be able
+                 -- to determine which of the resulting environments needed to
+                 -- be used to type the next concurrent process.
+                 let retEnv = fst . snd . L.head . M.toList $ splitEs
+                 foldM (\e1 e2 ->
+                         let lin1 = M.map leSess (cteLin e1)
+                             lin2 = M.map leSess (cteLin e2)
+                          in if lin1 /= lin2
+                                then throwError $ CasesUseDifferentLinearResources
+                                else return e1
+                       ) retEnv (M.map fst splitEs)
        _ -> throwError $ ProtocolMismatch chan sess
 
 tyCkProc env (PNewVal name expr pCont) = do
@@ -233,13 +277,53 @@ tyCkProc env (PNewVal name expr pCont) = do
 
 tyCkProc env (PNewChan n1 n2 sTy pCont) =
       addIfNotRedefinition (DualLinear n1 n2 sTy) env
-  >>= (\e -> tyCkProc e pCont)
+  >>= (\e -> return e{cteFresh=S.insert n1 $ S.insert n2 $ cteFresh e})
+  >>= flip tyCkProc pCont
+
+tyCkProc env (PPar ps) = do
+  -- Mark all channels as now in a concurrent context, this means that newly
+  -- introduced channels can now be used
+  let env' = env{cteLin=M.map (\le -> le{leConcCtx=True}) (cteLin env)}
+  -- Type check each process individually. After checking each, look at the
+  -- returned environment to determine which channels were used. Make sure that
+  -- the used channels do not interfere with each other
+  finalEnv <- foldM
+    (\e p -> do
+      newEnv <- tyCkProc e p
+      -- the lin map of newEnv should be a super-set of e and any sessions of
+      -- newEnv that differ from those of e implies the corresponding channels
+      -- were used. Of these used channels, we check that none of them were
+      -- interferring in e
+      -- First, determine which channels were used
+      let usedChans = M.keysSet
+           $ M.filter id
+           $ M.intersectionWith ((/=) `on` leSess) (cteLin e) (cteLin newEnv)
+      -- Check for channel interference for each channel used
+      mapM_ (\c -> do
+              let intSet = leIntSet $ fromMaybe (error "") (M.lookup c $ cteLin e)
+                  intChans = intSet `S.intersection` usedChans
+              when (S.size intChans /= 0)
+                   (throwError $ ChannelInterference c intChans)
+            ) usedChans
+      -- Based on the channels used, update newEnv to reflect new constraints
+      -- Basically, the set of duals of usedChans now all interfere with each
+      -- other. Keep in mind that we don't always know the dual of a channel,
+      -- e.g. when we receive a session over a channel or when one is an
+      -- argument to a named proc. In the first case, the type system ensures
+      -- non-interference by making sure than the dual of a session sent over a
+      -- channel is non-interferring with the continuation of the session that
+      -- sent it (see the T(circled cross) rule). In the second case, I ensure
+      -- that all arguments to a named session are non-interferring and are
+      -- being used in a concurrent context (since we have no way of knowing
+      -- how the named process uses the channels we can't rely on it to use them
+      -- in any specific manner).
+      return newEnv
+    ) env' ps
+  error $ show (cteLin finalEnv)
 
 tyCkProc env (PNamed n as) = undefined
 
-tyCkProc env (PPar ps) = undefined
-
 tyCkProc env (PCoRec n inits p) = undefined
 
-tyCkProc env PNil = baseCaseEnvErrors env
+tyCkProc env PNil = return env
 

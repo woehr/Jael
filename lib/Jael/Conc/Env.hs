@@ -23,13 +23,19 @@ type InterferenceSet = S.Set Chan
 
 data LinEnv = LinEnv
   { leSess    :: Session
+  , leDual    :: Maybe Chan
   , leConcCtx :: ConcCtx
   , leAliases :: AliasMap
   , leIntSet  :: InterferenceSet
   } deriving (Show)
 
-freshLinEnv :: Session -> LinEnv
-freshLinEnv s = LinEnv{leSess=s, leConcCtx=False, leAliases=M.empty, leIntSet=S.empty}
+newLinEnv :: Session -> Maybe Chan -> LinEnv
+newLinEnv s dualChan = LinEnv{ leSess    = s
+                             , leDual    = dualChan
+                             , leConcCtx = False
+                             , leAliases = M.empty
+                             , leIntSet  = S.empty
+                             }
 
 data ConcTyEnv = ConcTyEnv
   {
