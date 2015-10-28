@@ -188,7 +188,7 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
                   putSess <- lookupFreshChan putChan env
                   if putSess /= v
                      then throwError $ ProtocolMismatch c putSess
-                     else do
+                     else
                        -- putChan must be fresh so it must also have a dual
                        -- That dual, and the continuation session of c (sCont)
                        -- must be used in parallel according to the typing rules
@@ -220,10 +220,10 @@ tyCkProc env (PCase chan cases) = do
              diffLabels = (l1 S.\\ l2) `S.union` (l2 S.\\ l1)
          in if S.size diffLabels /= 0
                then throwError $ CaseLabelMismatch diffLabels
-               -- Type check each process of the case statement with the
-               -- channel updated to reflect the session in the
-               -- corresponding "choice" session type.
                else do
+                 -- Type check each process of the case statement with the
+                 -- channel updated to reflect the session in the
+                 -- corresponding "choice" session type.
                  let (caseErrMap, residualEnvMap) = M.mapEitherWithKey
                       (\label proc -> flip tyCkProc proc $ updateSession chan
                         (fromMaybe (error "Should not happen because we check\
@@ -232,38 +232,41 @@ tyCkProc env (PCase chan cases) = do
                                    (lookup label ls)
                         ) env
                       ) (M.fromList cases)
-                 when (M.size caseErrMap /= 0)
-                      (throwError $ CaseProcErrs caseErrMap)
                  -- The first map for each value in splitEs is what remains of
-                 -- the original, input, environment. The second map is the
-                 -- residual environment left after typing.
+                 -- the original input environment. The second map contains the
+                 -- components of the environment that the case used.
                  let splitEs = M.map (\e@(ConcTyEnv{cteLin=le, cteBase=be}) ->
-                      let (origLin, residLin) =
-                           M.partitionWithKey (\k _ -> k `M.member` le) le
-                          (origBase, residBase) =
-                           M.partitionWithKey (\k _ -> k `M.member` be) be
-                       in ( e{cteLin=origLin, cteBase=origBase}
-                          , e{cteLin=residLin, cteBase=residBase}
+                      let (unusedLin, usedLin) =
+                           M.partitionWithKey (\k v -> case M.lookup k (cteLin env) of
+                                                            Just l -> leSess l == leSess v
+                                                            Nothing -> False
+                                              ) le
+                          -- Linear resources have to be removed from the original
+                          -- env when used, where as base types don't have to be
+                          (origBase, resBase) =
+                           M.partitionWithKey (\k _ -> k `M.member` cteBase env) be
+                       in ( e{cteLin=unusedLin, cteBase=origBase}
+                          , e{cteLin=usedLin, cteBase=resBase}
                           )
                       ) residualEnvMap
-                 -- Finally, since this is a base case for processes, we need to
-                 -- check for any unused resources and remove used resources
-                 -- from the environment so they don't leak into other processes
-                 -- (specifically, when typing a concurrent process).
-                 let residualEnvErrs = fst $ M.mapEither (envErrors . snd) splitEs
-                 when (M.size residualEnvErrs /= 0)
-                      (throwError $ CaseProcErrs residualEnvErrs)
+                 -- combine the maps of errors so we report more to the user
+                 let allCaseErrs = caseErrMap `M.union`
+                      fst (M.mapEither (envErrors . snd) splitEs)
+                 when (M.size allCaseErrs /= 0)
+                      (throwError $ CaseProcErrs allCaseErrs)
                  -- All cases must use an environment identically otherwise it's
                  -- an error. Consider if it didn't and the case was one of
                  -- several processes being run in parallel: we wouldn't be able
                  -- to determine which of the resulting environments needed to
                  -- be used to type the next concurrent process.
+                 -- This line takes one of the unused environments from the case
                  let retEnv = fst . snd . L.head . M.toList $ splitEs
+                 -- Make sure that all linear sessions were used in the same way
                  foldM (\e1 e2 ->
                          let lin1 = M.map leSess (cteLin e1)
                              lin2 = M.map leSess (cteLin e2)
                           in if lin1 /= lin2
-                                then throwError $ CasesUseDifferentLinearResources
+                                then throwError CasesUseDifferentLinearResources
                                 else return e1
                        ) retEnv (M.map fst splitEs)
        _ -> throwError $ ProtocolMismatch chan sess
@@ -287,7 +290,8 @@ tyCkProc env (PPar ps) = do
   -- Type check each process individually. After checking each, look at the
   -- returned environment to determine which channels were used. Make sure that
   -- the used channels do not interfere with each other
-  finalEnv <- foldM
+  --finalEnv <- foldM
+  foldM
     (\e p -> do
       newEnv <- tyCkProc e p
       -- the lin map of newEnv should be a super-set of e and any sessions of
@@ -300,7 +304,10 @@ tyCkProc env (PPar ps) = do
            $ M.intersectionWith ((/=) `on` leSess) (cteLin e) (cteLin newEnv)
       -- Check for channel interference for each channel used
       mapM_ (\c -> do
-              let intSet = leIntSet $ fromMaybe (error "") (M.lookup c $ cteLin e)
+              let intSet = leIntSet $ fromMaybe
+                    (error "Expected channel to be in the environment since\
+                          \ usedChans is derived from environment keys.")
+                    (M.lookup c $ cteLin e)
                   intChans = intSet `S.intersection` usedChans
               when (S.size intChans /= 0)
                    (throwError $ ChannelInterference c intChans)
@@ -319,7 +326,7 @@ tyCkProc env (PPar ps) = do
       -- in any specific manner).
       return newEnv
     ) env' ps
-  error $ show (cteLin finalEnv)
+  --error $ show (cteLin finalEnv)
 
 tyCkProc env (PNamed n as) = undefined
 

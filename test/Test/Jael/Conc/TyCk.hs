@@ -42,7 +42,6 @@ concTyCkTests =
   , testCase "duals used in same parallel proc" $ checkTyCkErr dualsUsedInSameParProc
   , testCase "put channel interference" $ checkTyCkErr putChannelInterference
   , testCase "check type errors in cases" $ checkTyCkErr caseTypeErrors
-  , testCase "check resource errors within cases" $ checkTyCkErr caseResourceErrors
   , testCase "check all cases use resources the same" $ checkTyCkErr casesWithDifferingUsages
   -- The remainder of these tests are specific examples from papers. See the
   -- inline comments for more details
@@ -342,22 +341,77 @@ putChannelInterference = (pack [raw|
 |], ChannelInterference "xp" $ S.fromList ["yp"]
   )
 
+-- Check errors in cases. In this test, a has a type error isolated within the
+-- case, b has a type error using external resources, c doesn't use a linear
+-- resource within the case, d doesn't use an external linear resource, and
+-- e has no errors.
+-- Cases are type checked before being checked that they use the environment in
+-- the same way so the test doesn't need to worry about that.
 caseTypeErrors :: (Text, SessTyErr)
 caseTypeErrors = (pack [raw|
-|], CaseProcErrs $ M.fromList [ ("a", undefined)
-                              , ("b", undefined)
-                              ]
-  )
-
-caseResourceErrors :: (Text, SessTyErr)
-caseResourceErrors = (pack [raw|
-|], CaseProcErrs $ M.fromList [ ("a", undefined)
-                              , ("b", undefined)
+  proc P( x: &[ a => ;
+              , b => ;
+              , c => ;
+              , d => ;
+              , e => ;
+              ]
+        , y: ?[Bool];
+        , z: ![Int];
+        )
+  {
+    new (^a, ^b) : ![Int]![Int];;
+    ( ^x case
+        { a => new (^c, ^d) : ![Int];;
+               // Note that the channel z and the base variable z don't conflict
+               // because we know that the value from y isn't a channel
+               // It might be a good idea to change this since it's confusing.
+               ( ^y -> z; ^d <- z; done // ^d is used incorrectly
+               | ^b -> w; ^b -> ww; ^c <- w; ^z <- ww; done
+               )
+        , b => ^z <- true; done
+        , c => new (^c, ^d) : ![Int];;
+               ( ^c <- 42; done
+               | ^z <- 42; done
+               )
+        , d => ^b -> w; ^z <- w; done // b is only partly used
+        , e => done
+        }
+    | ^a <- 42; ^a <- 42; done
+    )
+  }
+|], CaseProcErrs $ M.fromList [ ("a", ProtocolMismatch "d" $ SGetTy TInt SEnd)
+                              , ("b", TypeMismatch "z" TBool)
+                              , ("c", UnusedResources
+                                        { unusedLin=M.fromList [("d", SGetTy TInt SEnd)]
+                                        , unusedSeq=M.empty
+                                        }
+                                )
+                              , ("d", UnusedResources
+                                        { unusedLin=M.fromList [("b", SGetTy TInt SEnd)]
+                                        , unusedSeq=M.empty
+                                        }
+                                )
                               ]
   )
 
 casesWithDifferingUsages :: (Text, SessTyErr)
 casesWithDifferingUsages = (pack [raw|
+  proc P( c: &[ a => ;
+              , b => ;
+              ]
+        , dummy: ![Int];
+        )
+  {
+    new (^x, ^y) : ![Int]?[Int];;
+    ( ^c case
+        { a => ^x <- 42; ^x -> z; ^dummy <- z; done
+        , b => done
+        }
+    | SomeProc(^y)
+    | done // should we be able to use x here or not? case a consumed x but
+           // case b didn't
+    )
+  }
 |], CasesUseDifferentLinearResources
   )
 
