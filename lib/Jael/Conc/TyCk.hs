@@ -294,6 +294,15 @@ tyCkProc env (PPar ps) = do
   foldM
     (\e p -> do
       newEnv <- tyCkProc e p
+      -- The first thing we'll consider is that the resulting environment
+      -- contains both resources from e and newly introduced resources. Of these
+      -- two "classes" of resources, only the ones originally from e can be
+      -- passed on to type the next process. Anything newly introduced must be
+      -- used properly (linearity must be respected). Other than checking it for
+      -- errors, we don't need to keep this environment.
+      _ <- envErrors newEnv{ cteLin=cteLin newEnv M.\\ cteLin e
+                           , cteBase = cteBase newEnv M.\\ cteBase e
+                           }
       -- the lin map of newEnv should be a super-set of e and any sessions of
       -- newEnv that differ from those of e implies the corresponding channels
       -- were used. Of these used channels, we check that none of them were
@@ -302,7 +311,7 @@ tyCkProc env (PPar ps) = do
       let usedChans = M.keysSet
            $ M.filter id
            $ M.intersectionWith ((/=) `on` leSess) (cteLin e) (cteLin newEnv)
-      -- Check for channel interference for each channel used
+      -- Then, check for channel interference for each channel used
       mapM_ (\c -> do
               let intSet = leIntSet $ fromMaybe
                     (error "Expected channel to be in the environment since\

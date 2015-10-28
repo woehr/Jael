@@ -330,7 +330,7 @@ putChannelInterference = (pack [raw|
     // ^xn receives ^yp which is bound to a
     // we can't use yn in this process because it would interfere with xn
     // since xp and yp were used together.
-    | ^xn -> a; ^zp <- a; done
+    | ^xn -> a; ^zp <- ^a; done
 
     // ^zn receives ^yp which is bound to b
     // Now we can use yp and yn in sequence causes a deadlock without any of the
@@ -420,11 +420,11 @@ casesWithDifferingUsages = (pack [raw|
 -- pi-DILL. Note no deadlock.
 ex1 :: (Text, SessTyErr)
 ex1 = (pack [raw|
-  proc P() {
+  proc P(dummy: ![Int];) {
     new (^xp, ^xn) : ![Int];;
     new (^yp, ^yn) : ![Int];;
     ( ^xp <- 42; ^yp <- 84; done
-    | ^xn -> a;  ^yn -> b;  done
+    | ^xn -> a;  ^yn -> b; ^dummy <- a+b; done
     )
   }
 |], ChannelInterference "xn" $ S.fromList ["yn"]
@@ -437,11 +437,11 @@ ex1 = (pack [raw|
 -- only block in a synchronous model.
 ex2 :: (Text, SessTyErr)
 ex2 = (pack [raw|
-  proc P() {
+  proc P(dummy: ![Int];) {
     new (^xp, ^xn) : ![Int];;
     new (^yp, ^yn) : ![Int];;
     ( ^xp <- 42; ^yp <- 84; done
-    | ^yn -> b;  ^xn -> a;  done
+    | ^yn -> b;  ^xn -> a; ^dummy <- a+b; done
     )
   }
 |], ChannelInterference "xn" $ S.fromList ["yn"]
