@@ -36,6 +36,7 @@ concTyCkTests =
   , testCase "channel not used in parallel (sel)" $ checkTyCkErr nonParSel
   , testCase "channel not used in parallel (cho)" $ checkTyCkErr nonParCho
   , testCase "non-fresh channel put on channel" $ checkTyCkErr nonFreshChanPut
+  , testCase "received channel non parallel usage" $ shouldTyCk nonParallelChanRx
   , testCase "named proc passed duals" $ checkTyCkErr namedProcWithDualArgs
   , testCase "named proc insufficient args" $ checkTyCkErr namedProcInsufficientArgs
   , testCase "named proc channel type err" $ checkTyCkErr namedProcWrongChanArg
@@ -105,9 +106,9 @@ parseTopProc (Ok (GTopDefGProcDef (GProcDef _ as p))) = gToTopProc (as, p)
 parseTopProc x = error $ "Not a TopProc definition or invalid syntax:\n" ++ show x
 
 emptyProc :: Text
-emptyProc = (pack [raw|
+emptyProc = pack [raw|
   proc X(){ done }
-|])
+|]
 
 unusedLinearArg :: (Text, SessTyErr)
 unusedLinearArg = (pack [raw|
@@ -118,7 +119,7 @@ unusedLinearArg = (pack [raw|
   )
 
 sessionAlias :: Text
-sessionAlias = (pack [raw|
+sessionAlias = pack [raw|
   proc X(x: ![Int] <GetInt>, y: ![Int];) {
     // Put an int on x and then get an int on x.
     ^x <- 5;
@@ -126,15 +127,15 @@ sessionAlias = (pack [raw|
     ^y <- z; // Use z so we don't get an unused sequential variable error
     done
   }
-|])
+|]
 
 channelPut :: Text
-channelPut = (pack [raw|
+channelPut = pack [raw|
   proc X(x: ![Int];) {
     ^x <- 42;
     done
   }
-|])
+|]
 
 unusedSeqVars :: (Text, SessTyErr)
 unusedSeqVars = (pack [raw|
@@ -148,13 +149,13 @@ unusedSeqVars = (pack [raw|
   )
 
 seqUsedInExpr :: Text
-seqUsedInExpr = (pack [raw|
+seqUsedInExpr = pack [raw|
   proc X(x: Bool, y: ?[Int];, z: ![Int];) {
     ^y -> a;
     ^z <- if x { a } else { 42 };
     done
   }
-|])
+|]
 
 -- Test that y being unused is an error. <GetInt> is an alias that is resolved
 -- so y is reported not as the alias but it's actual session type
@@ -324,11 +325,11 @@ namedProcWrongExprArg = (pack [raw|
   )
 
 namedProcConsume :: Text
-namedProcConsume = (pack [raw|
+namedProcConsume = pack [raw|
   proc P(a: Int, b: Bool, x: ![Int];, y: ![Bool];) {
     ProcArgTest(a, b, ^x, ^y)
   }
-|])
+|]
 
 parEnvSplit :: (Text, SessTyErr)
 parEnvSplit = (pack [raw|
@@ -359,14 +360,14 @@ caseMismatchedLabels = (pack [raw|
 
 -- Check that cases use a channel according to the session choices
 checkCaseChannelSession :: Text
-checkCaseChannelSession = (pack [raw|
+checkCaseChannelSession = pack [raw|
   proc P(x: &[doNothing=>;, sendInt=>![Int];]) {
     ^x case
       { doNothing => done
       , sendInt   => ^x <- 42; done
       }
   }
-|])
+|]
 
 dualsUsedInSameParProc :: (Text, SessTyErr)
 dualsUsedInSameParProc = (pack [raw|
@@ -390,7 +391,13 @@ putChannelInterference = (pack [raw|
     // ^xn receives ^yp which is bound to a
     // we can't use yn in this process because it would interfere with xn
     // since xp and yp were used together.
-    | ^xn -> a; ^zp <- ^a; done
+    // A channel coming from a channel can not be considered fresh since we
+    // don't know how it was used previously. a: ![Int];, so we can use the
+    // forwarding process to send a fresh channel that behaves the same as a
+    | ^xn -> a; new (^forwardedA, ^aNeg) : ![Int];;
+                ( ^aNeg -> valFromA; ^a <- valFromA; done
+                | ^zp <- ^forwardedA; done
+                )
 
     // ^zn receives ^yp which is bound to b
     // Now we can use yp and yn in sequence causes a deadlock without any of the
@@ -400,6 +407,18 @@ putChannelInterference = (pack [raw|
   }
 |], ChannelInterference "xp" $ S.fromList ["yp"]
   )
+
+-- Test that after receiving a channel it doesn't have to be used in parallel
+-- See the pi-DILL implication rule or the pi-CLL upside-down ampersand rule.
+nonParallelChanRx :: Text
+nonParallelChanRx = pack [raw|
+  proc P(a: ?[ ![Int]; ] ![Bool];) {
+    ^a -> rxdChan;
+    ^a <- true;
+    ^rxdChan <- 42;
+    done
+  }
+|]
 
 -- Check errors in cases. In this test, a has a type error isolated within the
 -- case, b has a type error using external resources, c doesn't use a linear
@@ -511,12 +530,12 @@ ex2 = (pack [raw|
 -- From page 23, this is essentially ex1 in a "globally coordinated" form that
 -- is typable in their system.
 ex3 :: Text
-ex3 = (pack [raw|
+ex3 = pack [raw|
   proc P(dummy: ![Int];) {
     new (^nxy_p, ^nxy_n) : ![Int]![Int];;
     ( ^nxy_p <- 41; ^nxy_p <- 42; done
     | ^nxy_n -> x;  ^nxy_n -> y;  ^dummy <- x+y; done
     )
   }
-|])
+|]
 

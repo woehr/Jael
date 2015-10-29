@@ -75,11 +75,11 @@ addOrNameErr k v m =
 addIfNotRedefinition :: EnvValue -> ConcTyEnv -> SessTyErrM ConcTyEnv
 addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
  case v of
-      Linear n s -> addOrNameErr n (newLinEnv s Nothing) lEnv
-               >>= (\lEnv' -> return $ unfoldSession n env{cteLin=lEnv'})
-      DualLinear n1 n2 s -> addOrNameErr n1 (newLinEnv s (Just n2)) lEnv
-                        >>= addOrNameErr n2 (newLinEnv (dual s) (Just n1))
-                        >>= (\lEnv' -> return $ addInterferenceUnsafe n1 n2 env{cteLin=lEnv'})
+      RxdLinear n s -> addOrNameErr n (newLinEnv s Nothing True) lEnv
+                   >>= (\lEnv' -> return $ unfoldSession n env{cteLin=lEnv'})
+      NewLinear n1 n2 s -> addOrNameErr n1 (newLinEnv s (Just n2) False) lEnv
+                       >>= addOrNameErr n2 (newLinEnv (dual s) (Just n1) False)
+                       >>= (\lEnv' -> return $ addInterferenceUnsafe n1 n2 env{cteLin=lEnv'})
       Base n t -> addOrNameErr n (False, t) bEnv
               >>= (\bEnv' -> return $ env{cteBase=bEnv'})
 
@@ -162,7 +162,7 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
   -- what we expect the session to be. The updateSession function does the same
   -- thing if the session after unfolding is SCoInd, SVar, or SDualVar
       env = emptyEnv
-              { cteLin   = M.map (\s->(newLinEnv s Nothing){leConcCtx=True}) (M.fromList ls)
+              { cteLin   = M.map (\s->newLinEnv s Nothing True) (M.fromList ls)
               , cteBase  = M.fromList $ map (\(n,t)->(n,(False,t))) bs
               , cteSeq   = sEnv
               , cteAlias = sessNames
@@ -188,7 +188,7 @@ tyCkProc env (PGet c name p) = do
                   -- the old session with the updated one
                   return $ updateSession c s env'
                SGetSess v s -> do
-                  env'  <- addIfNotRedefinition (Linear name v) env
+                  env'  <- addIfNotRedefinition (RxdLinear name v) env
                   return $ updateSession c s env'
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
@@ -293,7 +293,7 @@ tyCkProc env (PNewVal name expr pCont) = do
   tyCkProc env' pCont
 
 tyCkProc env (PNewChan n1 n2 sTy pCont) =
-      addIfNotRedefinition (DualLinear n1 n2 sTy) env
+      addIfNotRedefinition (NewLinear n1 n2 sTy) env
   >>= (\e -> return e{cteFresh=S.insert n1 $ S.insert n2 $ cteFresh e})
   >>= flip tyCkProc pCont
 

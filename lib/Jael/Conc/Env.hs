@@ -9,8 +9,8 @@ import Jael.Conc.Proc
 import Jael.Conc.Session
 import Jael.Seq.Types
 
-data EnvValue = DualLinear Chan Chan Session
-              | Linear Chan Session
+data EnvValue = NewLinear Chan Chan Session
+              | RxdLinear Chan Session
               | Base Text Ty
   deriving (Show)
 
@@ -29,13 +29,13 @@ data LinEnv = LinEnv
   , leIntSet  :: InterferenceSet
   } deriving (Show)
 
-newLinEnv :: Session -> Maybe Chan -> LinEnv
-newLinEnv s dualChan = LinEnv{ leSess    = s
-                             , leDual    = dualChan
-                             , leConcCtx = False
-                             , leAliases = M.empty
-                             , leIntSet  = S.empty
-                             }
+newLinEnv :: Session -> Maybe Chan -> ConcCtx -> LinEnv
+newLinEnv s dualChan cc = LinEnv{ leSess    = s
+                                , leDual    = dualChan
+                                , leConcCtx = cc
+                                , leAliases = M.empty
+                                , leIntSet  = S.empty
+                                }
 
 data ConcTyEnv = ConcTyEnv
   {
