@@ -129,6 +129,23 @@ markSeqUsed :: S.Set Text -> ConcTyEnv -> ConcTyEnv
 markSeqUsed vars env@(ConcTyEnv{cteBase=baseEnv}) =
   env{cteBase=foldr (M.adjust (\(_,t)->(True,t))) baseEnv vars}
 
+-- Take an old env and an updated env and return the used and unused parts of
+-- the updated one.
+splitEnvs :: ConcTyEnv -> ConcTyEnv -> (ConcTyEnv, ConcTyEnv)
+splitEnvs origEnv newEnv@(ConcTyEnv{cteLin=le, cteBase=be}) = do
+  let (unusedLin, usedLin) =
+        M.partitionWithKey (\k v -> case M.lookup k (cteLin origEnv) of
+                                         Just l -> leSess l == leSess v
+                                         Nothing -> False
+                           ) le
+  -- Linear resources have to be removed from the original
+  -- env when used, where as base types don't have to be
+  let (origBase, resBase) =
+        M.partitionWithKey (\k _ -> k `M.member` cteBase origEnv) be
+   in ( newEnv{cteLin=unusedLin, cteBase=origBase}
+      , newEnv{cteLin=usedLin, cteBase=resBase}
+      )
+
 tyCheckTopProc :: TyEnv
                -> M.Map Text Session
                -> M.Map Text [(Text, TyOrSess)]
@@ -235,20 +252,7 @@ tyCkProc env (PCase chan cases) = do
                  -- The first map for each value in splitEs is what remains of
                  -- the original input environment. The second map contains the
                  -- components of the environment that the case used.
-                 let splitEs = M.map (\e@(ConcTyEnv{cteLin=le, cteBase=be}) ->
-                      let (unusedLin, usedLin) =
-                           M.partitionWithKey (\k v -> case M.lookup k (cteLin env) of
-                                                            Just l -> leSess l == leSess v
-                                                            Nothing -> False
-                                              ) le
-                          -- Linear resources have to be removed from the original
-                          -- env when used, where as base types don't have to be
-                          (origBase, resBase) =
-                           M.partitionWithKey (\k _ -> k `M.member` cteBase env) be
-                       in ( e{cteLin=unusedLin, cteBase=origBase}
-                          , e{cteLin=usedLin, cteBase=resBase}
-                          )
-                      ) residualEnvMap
+                 let splitEs = M.map (splitEnvs env) residualEnvMap
                  -- combine the maps of errors so we report more to the user
                  let allCaseErrs = caseErrMap `M.union`
                       fst (M.mapEither (envErrors . snd) splitEs)
@@ -296,18 +300,18 @@ tyCkProc env (PPar ps) = do
       newEnv <- tyCkProc e p
       -- The first thing we'll consider is that the resulting environment
       -- contains both resources from e and newly introduced resources. Of these
-      -- two "classes" of resources, only the ones originally from e can be
-      -- passed on to type the next process. Anything newly introduced must be
-      -- used properly (linearity must be respected). Other than checking it for
-      -- errors, we don't need to keep this environment.
-      _ <- envErrors newEnv{ cteLin=cteLin newEnv M.\\ cteLin e
-                           , cteBase = cteBase newEnv M.\\ cteBase e
-                           }
+      -- resources, the ones used in e and the ones newly introduced must
+      -- respect linearity. The unused resources will be passed on to type the
+      -- next process.
+      let (unusedEnv, usedEnv) = splitEnvs e newEnv
+      _ <- envErrors usedEnv
       -- the lin map of newEnv should be a super-set of e and any sessions of
       -- newEnv that differ from those of e implies the corresponding channels
       -- were used. Of these used channels, we check that none of them were
       -- interferring in e
       -- First, determine which channels were used
+      -- We are not interested in the channels introduced in p since they were
+      -- already typed when tyCkProc was run on it.
       let usedChans = M.keysSet
            $ M.filter id
            $ M.intersectionWith ((/=) `on` leSess) (cteLin e) (cteLin newEnv)
@@ -333,9 +337,19 @@ tyCkProc env (PPar ps) = do
       -- being used in a concurrent context (since we have no way of knowing
       -- how the named process uses the channels we can't rely on it to use them
       -- in any specific manner).
-      return newEnv
+      let dualChans = S.fromList $ mapMaybe (\c -> leDual $ M.findWithDefault
+                                      (error "Chans are derived from this env\
+                                      \ so this can't happen.")
+                                      c (cteLin newEnv)
+                              ) (S.toList usedChans)
+      return $ foldr (\c e@(ConcTyEnv{cteLin=l}) ->
+                       case M.lookup c l of
+                            Just le@(LinEnv{leIntSet=intSet}) ->
+                              -- record update disaster
+                              e{cteLin=M.insert c le{leIntSet=intSet `S.union` (c `S.delete` dualChans)} l}
+                            Nothing -> e
+                     ) unusedEnv dualChans
     ) env' ps
-  --error $ show (cteLin finalEnv)
 
 tyCkProc env (PNamed n as) = undefined
 
