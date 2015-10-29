@@ -40,6 +40,8 @@ concTyCkTests =
   , testCase "named proc insufficient args" $ checkTyCkErr namedProcInsufficientArgs
   , testCase "named proc channel type err" $ checkTyCkErr namedProcWrongChanArg
   , testCase "named proc expr type err" $ checkTyCkErr namedProcWrongExprArg
+  , testCase "named proc consumes resources" $ shouldTyCk namedProcConsume
+  , testCase "parallel composition splits env correctly" $ checkTyCkErr parEnvSplit
   , testCase "case does not implement correct labels" $ checkTyCkErr caseMismatchedLabels
   , testCase "check channel used properly after case" $ shouldTyCk checkCaseChannelSession
   , testCase "duals used in same parallel proc" $ checkTyCkErr dualsUsedInSameParProc
@@ -287,7 +289,10 @@ namedProcWithDualArgs = (pack [raw|
     new (^x, ^y) : ![Int]; ;
     DualArgProc(^x, ^y)
   }
-|], InterferringProcArgs "DualArgProc" $ S.fromList ["x", "y"]
+|], InterferingProcArgs "DualArgProc" $ M.fromList
+      [ ("x", S.fromList ["y"])
+      , ("y", S.fromList ["x"])
+      ]
   )
 
 namedProcInsufficientArgs :: (Text, SessTyErr)
@@ -316,6 +321,29 @@ namedProcWrongExprArg = (pack [raw|
     ProcArgTest(y, 42, ^a, ^b)
   }
 |], ProcArgTypeMismatch $ S.fromList ["a1", "a2"]
+  )
+
+namedProcConsume :: Text
+namedProcConsume = (pack [raw|
+  proc P(a: Int, b: Bool, x: ![Int];, y: ![Bool];) {
+    ProcArgTest(a, b, ^x, ^y)
+  }
+|])
+
+parEnvSplit :: (Text, SessTyErr)
+parEnvSplit = (pack [raw|
+  proc P(dummy: ![Int];) {
+    answer = 42;
+    new (^w, ^x) : ![Int];;
+    new (^y, ^z) : ![Int];;
+    ( DualArgProc(^w, ^z)
+    // w was used by the first process in the composition, DualArgProc, and
+    // can no longer be used in the remainder of the composition
+    | ^w <- 42; done
+    // There are other errors but the above is expected to be hit first
+    )
+  }
+|], UndefinedChan "w"
   )
 
 caseMismatchedLabels :: (Text, SessTyErr)

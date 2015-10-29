@@ -4,7 +4,6 @@ module Jael.Conc.TyCk where
 
 import ClassyPrelude hiding (Chan, Foldable)
 import Control.Monad.Except hiding (foldM, mapM_)
-import qualified Data.List as L (head)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Util
@@ -33,7 +32,7 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Chan Session
                | NonFreshChan Text
                | ChannelInterference Text (S.Set Text)
                | NonParallelUsage Text
-               | InterferringProcArgs Text (S.Set Text)
+               | InterferingProcArgs Text (M.Map Chan (S.Set Chan))
                | CaseProcErrs (M.Map Label SessTyErr)
                -- TODO: Return some information about which cases are offending
                | CasesUseDifferentLinearResources
@@ -269,7 +268,13 @@ tyCkProc env (PCase chan cases) = do
                  -- to determine which of the resulting environments needed to
                  -- be used to type the next concurrent process.
                  -- This line takes one of the unused environments from the case
-                 let retEnv = fst . snd . L.head . M.toList $ splitEs
+                 let retEnv = fst . snd $
+                      case M.toList splitEs of
+                           x:_ -> x
+                           []  -> error "Should not happen because the grammar\
+                                       \ ensures cases exist. Previous errors\
+                                       \ that could cause splitEs to be empty\
+                                       \ would have errored out prior to this."
                  -- Make sure that all linear sessions were used in the same way
                  foldM (\e1 e2 ->
                          let lin1 = M.map leSess (cteLin e1)
@@ -362,6 +367,7 @@ tyCkProc env (PNamed n as) = do
                           (M.lookup n (cteProcs env))
   when (length procSig /= length as)
        $ throwError $ InsufficientProcArgs n
+
   argTypeMismatches <-
     foldr (\((argName, argType), argVal) m -> do
       acc <- m
@@ -384,8 +390,41 @@ tyCkProc env (PNamed n as) = do
            _ -> return $ argName:acc
       ) (return []) (zip procSig as)
   unless (null argTypeMismatches)
-       $ throwError $ ProcArgTypeMismatch (S.fromList argTypeMismatches)
-  undefined
+         $ throwError $ ProcArgTypeMismatch (S.fromList argTypeMismatches)
+
+  -- Make sure that all the channels passed to a process are non-interfering
+  let chanArgSet = S.fromList $ lefts as
+  let interferingArgMap = foldr
+        (\c m ->
+          let cEnv = M.findWithDefault
+                       (error "Should error before this point if channel is\
+                             \ not in the linear environemnt.")
+                       c (cteLin env)
+              interferingChans = leIntSet cEnv `S.intersection` chanArgSet
+           in if null interferingChans
+                 then m
+                 else M.insert c interferingChans m
+        ) M.empty chanArgSet
+  unless (null interferingArgMap)
+         $ throwError $ InterferingProcArgs n interferingArgMap
+
+  -- Should be good at this point. Update the environment to reflect what has
+  -- been used/consumed by the named proc
+  return $ foldr (\ce env'@(ConcTyEnv{cteLin=le}) ->
+    case ce of
+         -- Note that the channels are being marked as used by setting their
+         -- session type to SEnd rather than deleting them so that the
+         -- used/unused split operation behaves correctly.
+         -- TODO: Fix the split operation to handle both SEnd and removed
+         -- sessions
+         Left c -> let cEnv = M.findWithDefault
+                                (error "Should error before this point if\
+                                      \ channel is not in the linear\
+                                      \ environemnt.")
+                                c le
+                    in env'{cteLin=M.insert c cEnv{leSess=SEnd} le}
+         Right e -> markSeqUsed (freeVars e) env'
+    ) env as
 
 tyCkProc env (PCoRec n inits p) = undefined
 
