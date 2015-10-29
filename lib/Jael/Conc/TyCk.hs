@@ -37,6 +37,8 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Chan Session
                | CaseProcErrs (M.Map Label SessTyErr)
                -- TODO: Return some information about which cases are offending
                | CasesUseDifferentLinearResources
+               | InsufficientProcArgs Text
+               | ProcArgTypeMismatch (S.Set Text)
   deriving (Eq, Show)
 
 missingKey :: a
@@ -65,19 +67,22 @@ unfoldSession k env@(ConcTyEnv{cteLin=linEnv, cteAlias=alsEnv}) =
 
    in maybe env (\e -> unfoldSession k env{cteLin=M.insert k e linEnv}) kEnv'
 
+addOrNameErr :: Text -> a -> M.Map Text a -> SessTyErrM (M.Map Text a)
+addOrNameErr k v m =
+  case addIfUnique (k, v) m of
+       Just m' -> return m'
+       Nothing -> throwError $ RedefinedName k
+
 addIfNotRedefinition :: EnvValue -> ConcTyEnv -> SessTyErrM ConcTyEnv
 addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
- let add = \kv@(k,_) m -> case addIfUnique kv m of
-                            Just m' -> return m'
-                            Nothing -> throwError $ RedefinedName k
- in case v of
-         Linear n s -> add (n, newLinEnv s Nothing) lEnv
-                   >>= (\lEnv' -> return $ unfoldSession n env{cteLin=lEnv'})
-         DualLinear n1 n2 s -> add (n1, newLinEnv s (Just n2)) lEnv
-                           >>= add (n2, newLinEnv (dual s) (Just n1))
-                           >>= (\lEnv' -> return $ addInterferenceUnsafe n1 n2 env{cteLin=lEnv'})
-         Base   n t -> add (n, (False, t)) bEnv
-                   >>= (\bEnv' -> return $ env{cteBase=bEnv'})
+ case v of
+      Linear n s -> addOrNameErr n (newLinEnv s Nothing) lEnv
+               >>= (\lEnv' -> return $ unfoldSession n env{cteLin=lEnv'})
+      DualLinear n1 n2 s -> addOrNameErr n1 (newLinEnv s (Just n2)) lEnv
+                        >>= addOrNameErr n2 (newLinEnv (dual s) (Just n1))
+                        >>= (\lEnv' -> return $ addInterferenceUnsafe n1 n2 env{cteLin=lEnv'})
+      Base n t -> addOrNameErr n (False, t) bEnv
+              >>= (\bEnv' -> return $ env{cteBase=bEnv'})
 
 updateSession :: Chan -> Session -> ConcTyEnv -> ConcTyEnv
 updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
@@ -133,7 +138,7 @@ markSeqUsed vars env@(ConcTyEnv{cteBase=baseEnv}) =
 -- the updated one.
 splitEnvs :: ConcTyEnv -> ConcTyEnv -> (ConcTyEnv, ConcTyEnv)
 splitEnvs origEnv newEnv@(ConcTyEnv{cteLin=le, cteBase=be}) = do
-  let (unusedLin, usedLin) =
+  let (unused, used) =
         M.partitionWithKey (\k v -> case M.lookup k (cteLin origEnv) of
                                          Just l -> leSess l == leSess v
                                          Nothing -> False
@@ -142,8 +147,8 @@ splitEnvs origEnv newEnv@(ConcTyEnv{cteLin=le, cteBase=be}) = do
   -- env when used, where as base types don't have to be
   let (origBase, resBase) =
         M.partitionWithKey (\k _ -> k `M.member` cteBase origEnv) be
-   in ( newEnv{cteLin=unusedLin, cteBase=origBase}
-      , newEnv{cteLin=usedLin, cteBase=resBase}
+   in ( newEnv{cteLin=unused, cteBase=origBase}
+      , newEnv{cteLin=used, cteBase=resBase}
       )
 
 tyCheckTopProc :: TyEnv
@@ -342,16 +347,45 @@ tyCkProc env (PPar ps) = do
                                       \ so this can't happen.")
                                       c (cteLin newEnv)
                               ) (S.toList usedChans)
-      return $ foldr (\c e@(ConcTyEnv{cteLin=l}) ->
+      return $ foldr (\c e'@(ConcTyEnv{cteLin=l}) ->
                        case M.lookup c l of
                             Just le@(LinEnv{leIntSet=intSet}) ->
                               -- record update disaster
-                              e{cteLin=M.insert c le{leIntSet=intSet `S.union` (c `S.delete` dualChans)} l}
-                            Nothing -> e
+                              e'{cteLin=M.insert c le{leIntSet=intSet `S.union` (c `S.delete` dualChans)} l}
+                            Nothing -> e'
                      ) unusedEnv dualChans
     ) env' ps
 
-tyCkProc env (PNamed n as) = undefined
+tyCkProc env (PNamed n as) = do
+  let procSig = fromMaybe (error "Previous analysis should have identified\
+                                \ unknown names.")
+                          (M.lookup n (cteProcs env))
+  when (length procSig /= length as)
+       $ throwError $ InsufficientProcArgs n
+  argTypeMismatches <-
+    foldr (\((argName, argType), argVal) m -> do
+      acc <- m
+      case (argType, argVal) of
+           -- Make sure the type of e matches t
+           (TorSTy t  , Right expr) -> do
+             seqEnv <- mkSeqEnv env
+             case seqInfer seqEnv expr of
+                  Left errs -> throwError $ SeqTIErrs errs
+                  Right ty  -> if t == ty
+                                  then return acc
+                                  else return $ argName:acc
+           -- Make sure the type of c matches s
+           (TorSSess s,  Left c) -> case M.lookup c (cteLin env) of
+                                         Just le -> if s == leSess le
+                                                       then return acc
+                                                       else return $ argName:acc
+                                         Nothing -> throwError $ UndefinedChan c
+           -- Expected either type or session but got the opposite
+           _ -> return $ argName:acc
+      ) (return []) (zip procSig as)
+  unless (null argTypeMismatches)
+       $ throwError $ ProcArgTypeMismatch (S.fromList argTypeMismatches)
+  undefined
 
 tyCkProc env (PCoRec n inits p) = undefined
 

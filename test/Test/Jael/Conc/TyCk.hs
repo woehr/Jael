@@ -37,6 +37,9 @@ concTyCkTests =
   , testCase "channel not used in parallel (cho)" $ checkTyCkErr nonParCho
   , testCase "non-fresh channel put on channel" $ checkTyCkErr nonFreshChanPut
   , testCase "named proc passed duals" $ checkTyCkErr namedProcWithDualArgs
+  , testCase "named proc insufficient args" $ checkTyCkErr namedProcInsufficientArgs
+  , testCase "named proc channel type err" $ checkTyCkErr namedProcWrongChanArg
+  , testCase "named proc expr type err" $ checkTyCkErr namedProcWrongExprArg
   , testCase "case does not implement correct labels" $ checkTyCkErr caseMismatchedLabels
   , testCase "check channel used properly after case" $ shouldTyCk checkCaseChannelSession
   , testCase "duals used in same parallel proc" $ checkTyCkErr dualsUsedInSameParProc
@@ -73,6 +76,7 @@ testProcs =
                Right g -> gToProcArg g
   ) $ M.fromList
         [ ("DualArgProc", ["arg1: ![Int];", "arg2: ?[Int];"])
+        , ("ProcArgTest", ["a1: Int", "a2: Bool", "a3: ![Int];", "a4: ![Bool];"])
         ]
 
 doTyCk :: Text -> Maybe SessTyErr
@@ -284,6 +288,34 @@ namedProcWithDualArgs = (pack [raw|
     DualArgProc(^x, ^y)
   }
 |], InterferringProcArgs "DualArgProc" $ S.fromList ["x", "y"]
+  )
+
+namedProcInsufficientArgs :: (Text, SessTyErr)
+namedProcInsufficientArgs = (pack [raw|
+  proc P(a: Int) {
+    ProcArgTest(a)
+  }
+|], InsufficientProcArgs "ProcArgTest"
+  )
+
+namedProcWrongChanArg :: (Text, SessTyErr)
+namedProcWrongChanArg = (pack [raw|
+  proc P(a: ![Int];, b: ![Bool];) {
+    y = true;
+    // Should type check as ProcArgTest(42, y, ^a, ^b)
+    ProcArgTest(42, y, ^b, ^a)
+  }
+|], ProcArgTypeMismatch $ S.fromList ["a3", "a4"]
+  )
+
+namedProcWrongExprArg :: (Text, SessTyErr)
+namedProcWrongExprArg = (pack [raw|
+  proc P(a: ![Int];, b: ![Bool];) {
+    y = true;
+    // Should type check as ProcArgTest(42, y, ^a, ^b)
+    ProcArgTest(y, 42, ^a, ^b)
+  }
+|], ProcArgTypeMismatch $ S.fromList ["a1", "a2"]
   )
 
 caseMismatchedLabels :: (Text, SessTyErr)
