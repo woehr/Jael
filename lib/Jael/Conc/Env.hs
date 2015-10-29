@@ -73,8 +73,14 @@ emptyEnv = ConcTyEnv
 -- interference set
 addInterferenceUnsafe :: Chan -> Chan -> ConcTyEnv -> ConcTyEnv
 addInterferenceUnsafe c1 c2 env@(ConcTyEnv{cteLin=linEnv}) =
-  let c1env@(LinEnv{leIntSet=intSet1}) = M.findWithDefault (error "") c1 linEnv
-      c2env@(LinEnv{leIntSet=intSet2}) = M.findWithDefault (error "") c2 linEnv
+  let c1env@(LinEnv{leIntSet=intSet1}) =
+        M.findWithDefault (error $ "Expected " ++ unpack c1 ++ " to be in the\
+                                  \ linear environment but it was not.")
+                          c1 linEnv
+      c2env@(LinEnv{leIntSet=intSet2}) =
+        M.findWithDefault (error $ "Expected " ++ unpack c2 ++ " to be in the\
+                                  \ linear environment but it was not.")
+                          c2 linEnv
    in env{cteLin=M.insert c1 c1env{leIntSet=S.insert c2 intSet1}
                $ M.insert c2 c2env{leIntSet=S.insert c1 intSet2} linEnv}
 

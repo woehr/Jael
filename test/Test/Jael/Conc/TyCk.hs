@@ -36,6 +36,7 @@ concTyCkTests =
   , testCase "channel not used in parallel (sel)" $ checkTyCkErr nonParSel
   , testCase "channel not used in parallel (cho)" $ checkTyCkErr nonParCho
   , testCase "non-fresh channel put on channel" $ checkTyCkErr nonFreshChanPut
+  , testCase "sent channel consumed" $ checkTyCkErr sentChannelConsumed
   , testCase "received channel non parallel usage" $ shouldTyCk nonParallelChanRx
   , testCase "named proc passed duals" $ checkTyCkErr namedProcWithDualArgs
   , testCase "named proc insufficient args" $ checkTyCkErr namedProcInsufficientArgs
@@ -47,6 +48,8 @@ concTyCkTests =
   , testCase "check channel used properly after case" $ shouldTyCk checkCaseChannelSession
   , testCase "duals used in same parallel proc" $ checkTyCkErr dualsUsedInSameParProc
   , testCase "put channel interference" $ checkTyCkErr putChannelInterference
+  , testCase "put channel continuation used in parallel" $ checkTyCkErr putChannelParContinuation
+  , testCase "make sure rx'd channels are not considered fresh" $ checkTyCkErr nonFreshChanRx
   , testCase "check type errors in cases" $ checkTyCkErr caseTypeErrors
   , testCase "check all cases use resources the same" $ checkTyCkErr casesWithDifferingUsages
   -- The remainder of these tests are specific examples from papers. See the
@@ -280,6 +283,19 @@ nonFreshChanPut = (pack [raw|
 |], NonFreshChan "x"
   )
 
+sentChannelConsumed :: (Text, SessTyErr)
+sentChannelConsumed = (pack [raw|
+  proc P(c: ![ ?[Int]; ];) {
+    new (^x, ^y) : ?[Int];;
+    ( ^c <- ^x; done
+    // anInt is unused but ^x being used should error first.
+    | ^x -> anInt; done
+    | ^y <- 42; done
+    )
+  }
+|], UndefinedChan "x"
+  )
+
 -- This test ensures that interferring channels can not be passed as arguments
 -- to the same named process. When typing named processes, it's assumed that
 -- none of it's arguments interfere. This implicitly enforces dual channels
@@ -382,6 +398,46 @@ dualsUsedInSameParProc = (pack [raw|
 
 putChannelInterference :: (Text, SessTyErr)
 putChannelInterference = (pack [raw|
+  proc P( x: ![![Int];]![Int];
+        , dummy: ![Int];
+        )
+  {
+    new (^yp, ^yn) : ![Int];;
+    ^x <- ^yp;
+    // x and yn need to be used in parallel now according rule T(circle cross)
+    ( ^x <- 42;
+      ^yn -> z;
+      ^dummy <- z;
+      done
+    | done
+    )
+  }
+|], ChannelInterference "x" $ S.fromList ["yn"]
+  )
+
+-- Test as above except check that the continuation of the session on which the
+-- channel is put is used in a parallel context
+putChannelParContinuation :: (Text, SessTyErr)
+putChannelParContinuation = (pack [raw|
+  proc P( x: ![![Int];]![Int];
+        , dummy: ![Int];
+        )
+  {
+    new (^yp, ^yn) : ![Int];;
+    ^x <- ^yp;
+    // x and yn need to be used in parallel now according rule T(circle cross)
+    ^x <- 42;
+    ( ^yn -> z;
+      ^dummy <- z;
+      done
+    | done
+    )
+  }
+|], NonParallelUsage "x"
+  )
+
+nonFreshChanRx :: (Text, SessTyErr)
+nonFreshChanRx = (pack [raw|
   proc P(dummy: ![Int];) {
     new (^xp, ^xn) : ![ ![Int]; ]; ;
     new (^yp, ^yn) : ![Int] ; ;
@@ -391,13 +447,13 @@ putChannelInterference = (pack [raw|
     // ^xn receives ^yp which is bound to a
     // we can't use yn in this process because it would interfere with xn
     // since xp and yp were used together.
-    // A channel coming from a channel can not be considered fresh since we
-    // don't know how it was used previously. a: ![Int];, so we can use the
-    // forwarding process to send a fresh channel that behaves the same as a
-    | ^xn -> a; new (^forwardedA, ^aNeg) : ![Int];;
-                ( ^aNeg -> valFromA; ^a <- valFromA; done
-                | ^zp <- ^forwardedA; done
-                )
+    // A session coming from a channel can not be considered fresh since we
+    // don't know how it was used previously.
+    // Using a forwarding process here is what is needed for this to type check
+    // and would also prevent a deadlock.
+    | ^xn -> a;
+      ^zp <- ^a;
+      done
 
     // ^zn receives ^yp which is bound to b
     // Now we can use yp and yn in sequence causes a deadlock without any of the
@@ -405,7 +461,7 @@ putChannelInterference = (pack [raw|
     | ^zn -> b; ^b <- 42; ^yn -> c; ^dummy <- c; done
     )
   }
-|], ChannelInterference "xp" $ S.fromList ["yp"]
+|], NonFreshChan "a"
   )
 
 -- Test that after receiving a channel it doesn't have to be used in parallel

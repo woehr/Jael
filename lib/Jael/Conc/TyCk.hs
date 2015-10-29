@@ -27,11 +27,12 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Chan Session
                | TypeMismatch Chan Ty
                | DuplicateSeqEnvItem [Text]
                | SeqTIErrs [Text]
-               | UnknownLabel Text
-               | CaseLabelMismatch (S.Set Text)
+               | UnknownLabel Label
+               | CaseLabelMismatch (S.Set Label)
                | NonFreshChan Text
-               | ChannelInterference Text (S.Set Text)
-               | NonParallelUsage Text
+               | PutChanDualNotFound Chan
+               | ChannelInterference Chan (S.Set Chan)
+               | NonParallelUsage Chan
                | InterferingProcArgs Text (M.Map Chan (S.Set Chan))
                | CaseProcErrs (M.Map Label SessTyErr)
                -- TODO: Return some information about which cases are offending
@@ -96,7 +97,7 @@ lookupChan :: Chan -> ConcTyEnv -> SessTyErrM Session
 lookupChan c (ConcTyEnv{cteLin=linEnv}) =
   case M.lookup c linEnv of
        Just (LinEnv{leSess=s, leConcCtx=True }) -> return s
-       Just (LinEnv{          leConcCtx=False}) -> throwError $ NonParallelUsage c
+       Just (LinEnv{leConcCtx=False}) -> throwError $ NonParallelUsage c
        _ -> throwError $ UndefinedChan c
 
 -- Get the session associated with channel c, only if it is a fresh channel
@@ -138,6 +139,11 @@ markSeqUsed vars env@(ConcTyEnv{cteBase=baseEnv}) =
 splitEnvs :: ConcTyEnv -> ConcTyEnv -> (ConcTyEnv, ConcTyEnv)
 splitEnvs origEnv newEnv@(ConcTyEnv{cteLin=le, cteBase=be}) = do
   let (unused, used) =
+        -- This partitioning works if a resource is deleted from newEnv (e.g.,
+        -- session is sent over a channel) and if a resource is used (i.e., its
+        -- session becomes SEnd). This is important because some operations
+        -- update the env by deleting the channel name while others destructure
+        -- the session until it hits the SEnd case.
         M.partitionWithKey (\k v -> case M.lookup k (cteLin origEnv) of
                                          Just l -> leSess l == leSess v
                                          Nothing -> False
@@ -184,8 +190,8 @@ tyCkProc env (PGet c name p) = do
   env' <- case sess of
                SGetTy   v s -> do
                   env'  <- addIfNotRedefinition (Base name v) env
-                  -- c has to already be in the environment so an insert replaces
-                  -- the old session with the updated one
+                  -- c has to already be in the environment so an insert
+                  -- replaces the old session with the updated one
                   return $ updateSession c s env'
                SGetSess v s -> do
                   env'  <- addIfNotRedefinition (RxdLinear name v) env
@@ -203,8 +209,9 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
                        Left errs -> throwError $ SeqTIErrs errs
                        Right ty -> if ty /= v
                                       then throwError $ TypeMismatch c ty
-                                      else return $ updateSession c sCont
-                                                  $ markSeqUsed (freeVars putExpr) env
+                                      else return
+                                            $ updateSession c sCont
+                                            $ markSeqUsed (freeVars putExpr) env
                (SPutSess v sCont, Left putChan) -> do
                   putSess <- lookupFreshChan putChan env
                   if putSess /= v
@@ -213,12 +220,35 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
                        -- putChan must be fresh so it must also have a dual
                        -- That dual, and the continuation session of c (sCont)
                        -- must be used in parallel according to the typing rules
-                       -- to prevent interference. Specifically, a process in
-                       -- parallel could receive the sent channel and use the
-                       -- other end of c
-                       return $ updateSession c sCont env
-                         { cteLin=M.delete putChan lEnv
-                         }
+                       -- to prevent interference.
+                       let putChanEnv = M.findWithDefault
+                                          (error "putChan must be in the env or\
+                                                \ we would have errored prior.")
+                                          putChan lEnv
+                           putChanDual = fromMaybe (error "putChan must have a\
+                                                         \ dual since it must\
+                                                         \ be fresh.")
+                                                   (leDual putChanEnv)
+                           -- What might not necessarily be true is whether
+                           -- the dual channel is actually in the current
+                           -- environment. It could have been used in some other
+                           -- process prior to the placement of putChan on c
+                        in do
+                           unless (putChanDual `M.member` lEnv)
+                                  $ throwError $ PutChanDualNotFound putChanDual
+                           -- Remove the session placed on the channel from the
+                           -- environment; update the type of the session;
+                           -- mark the session as no longer in a concurrent
+                           -- context to satisfy rule T(circle cross)
+                           return $ (\e -> e{cteLin=M.adjust
+                                               (\le -> le{leConcCtx=False})
+                                               c
+                                               (cteLin e)
+                                            }
+                                    )
+                                  $ updateSession c sCont
+                                  $ addInterferenceUnsafe putChanDual c
+                                      env {cteLin=M.delete putChan lEnv}
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
@@ -412,17 +442,7 @@ tyCkProc env (PNamed n as) = do
   -- been used/consumed by the named proc
   return $ foldr (\ce env'@(ConcTyEnv{cteLin=le}) ->
     case ce of
-         -- Note that the channels are being marked as used by setting their
-         -- session type to SEnd rather than deleting them so that the
-         -- used/unused split operation behaves correctly.
-         -- TODO: Fix the split operation to handle both SEnd and removed
-         -- sessions
-         Left c -> let cEnv = M.findWithDefault
-                                (error "Should error before this point if\
-                                      \ channel is not in the linear\
-                                      \ environemnt.")
-                                c le
-                    in env'{cteLin=M.insert c cEnv{leSess=SEnd} le}
+         Left  c -> env'{cteLin=M.delete c le}
          Right e -> markSeqUsed (freeVars e) env'
     ) env as
 
