@@ -6,7 +6,6 @@ import ClassyPrelude hiding (Chan, Foldable)
 import Control.Monad.Except hiding (foldM, mapM_)
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Jael.Util
 import Jael.Conc.Env
 import Jael.Conc.Proc
 import Jael.Conc.Session
@@ -67,22 +66,28 @@ unfoldSession k env@(ConcTyEnv{cteLin=linEnv, cteAlias=alsEnv}) =
 
    in maybe env (\e -> unfoldSession k env{cteLin=M.insert k e linEnv}) kEnv'
 
-addOrNameErr :: Text -> a -> M.Map Text a -> SessTyErrM (M.Map Text a)
-addOrNameErr k v m =
-  case addIfUnique (k, v) m of
-       Just m' -> return m'
-       Nothing -> throwError $ RedefinedName k
-
 addIfNotRedefinition :: EnvValue -> ConcTyEnv -> SessTyErrM ConcTyEnv
 addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
- case v of
-      RxdLinear n s -> addOrNameErr n (newLinEnv s Nothing True) lEnv
-                   >>= (\lEnv' -> return $ unfoldSession n env{cteLin=lEnv'})
-      NewLinear n1 n2 s -> addOrNameErr n1 (newLinEnv s (Just n2) False) lEnv
-                       >>= addOrNameErr n2 (newLinEnv (dual s) (Just n1) False)
-                       >>= (\lEnv' -> return $ addInterferenceUnsafe n1 n2 env{cteLin=lEnv'})
-      Base n t -> addOrNameErr n (False, t) bEnv
-              >>= (\bEnv' -> return $ env{cteBase=bEnv'})
+  let nameExists n = n `M.member` lEnv || n `M.member` bEnv
+  in case v of
+       RxdLinear n s
+         | nameExists n -> throwError $ RedefinedName n
+         | otherwise -> return $ unfoldSession n $ env{
+                          cteLin=M.insert n (newLinEnv s Nothing True) lEnv
+                        }
+
+       NewLinear n1 n2 s
+         | nameExists n1 -> throwError $ RedefinedName n1
+         | nameExists n2 -> throwError $ RedefinedName n2
+         | otherwise ->
+             return $ addInterferenceUnsafe n1 n2 env{
+               cteLin=M.insert n1 (newLinEnv       s  (Just n2) False) $
+                      M.insert n2 (newLinEnv (dual s) (Just n1) False) lEnv
+             }
+
+       Base n t
+         | nameExists n -> throwError $ RedefinedName n
+         | otherwise -> return $ env{cteBase=M.insert n (False, t) bEnv}
 
 updateSession :: Chan -> Session -> ConcTyEnv -> ConcTyEnv
 updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =

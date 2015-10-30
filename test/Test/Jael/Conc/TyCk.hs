@@ -470,11 +470,11 @@ nonParallelChanRx = pack [raw|
 caseTypeErrors :: (Text, SessTyErr)
 caseTypeErrors = (pack [raw|
   proc P( ^x: &[ a =>
-              , b =>
-              , c =>
-              , d =>
-              , e =>
-              ]
+               , b =>
+               , c =>
+               , d =>
+               , e =>
+               ]
         , ^y: ?[Bool]
         , ^z: ![Int]
         )
@@ -482,10 +482,7 @@ caseTypeErrors = (pack [raw|
     new (^a, ^b) : ![Int]![Int];
     ( ^x case
         { a => new (^c, ^d) : ![Int];
-               // Note that the channel z and the base variable z don't conflict
-               // because we know that the value from y isn't a channel
-               // It might be a good idea to change this since it's confusing.
-               ( ^y -> z; ^d <- z; // ^d is used incorrectly
+               ( ^y -> w; ^d <- w; // ^d is used incorrectly
                | ^b -> w; ^b -> ww; ^c <- w; ^z <- ww;
                )
         , b => ^z <- true;
@@ -517,8 +514,8 @@ caseTypeErrors = (pack [raw|
 casesWithDifferingUsages :: (Text, SessTyErr)
 casesWithDifferingUsages = (pack [raw|
   proc P( ^c: &[ a =>
-              , b =>
-              ]
+               , b =>
+               ]
         , ^dummy: ![Int]
         )
   {
