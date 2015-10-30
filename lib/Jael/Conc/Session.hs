@@ -5,6 +5,7 @@ module Jael.Conc.Session where
 
 import ClassyPrelude hiding (Foldable)
 import Data.Functor.Foldable
+import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
 import Jael.UserDefTy
@@ -26,11 +27,11 @@ instance UserDefTy Session where
   envItems _ = []
 
 data SessDefErr = SessDefErr
-  { sessErrDupInd  :: (S.Set Text)
-  , sessErrDupLab  :: (S.Set Text)
-  , sessErrUnused  :: (S.Set Text)
-  , sessErrDualRec :: (S.Set Text)
-  , sessErrNoBehaviour :: (S.Set Text)
+  { sessErrDupInd      :: S.Set Text
+  , sessErrDupLab      :: S.Set Text
+  , sessErrUnused      :: S.Set Text
+  , sessErrDualRec     :: S.Set Text
+  , sessErrNoBehaviour :: S.Set Text
   } deriving (Eq, Show)
 
 data Session = SGetTy Ty Session
@@ -140,8 +141,8 @@ varUsage = cata alg
         alg (SPutTyF _ y) = y
         alg (SGetSessF xs ys) = varUsage xs `tupListMerge` ys
         alg (SPutSessF xs ys) = varUsage xs `tupListMerge` ys
-        alg (SChoiceF xs) = foldr tupListMerge ([], [], []) (map snd xs)
-        alg (SSelectF xs) = foldr tupListMerge ([], [], []) (map snd xs)
+        alg (SChoiceF xs) = foldr (tupListMerge . snd) ([], [], []) xs
+        alg (SSelectF xs) = foldr (tupListMerge . snd) ([], [], []) xs
 
 -- Finds any duplicate labels in a single select or choice. Across several
 -- select or choice, labels can be reused.
@@ -153,8 +154,8 @@ dupLabels = cata alg
         alg (SPutTyF _ y) = y
         alg (SGetSessF xs ys) = dupLabels xs `S.union` ys
         alg (SPutSessF xs ys) = dupLabels xs `S.union` ys
-        alg (SChoiceF xs) = S.unions $ (S.fromList $ repeated $ map fst xs):(map snd xs)
-        alg (SSelectF xs) = S.unions $ (S.fromList $ repeated $ map fst xs):(map snd xs)
+        alg (SChoiceF xs) = S.unions $ S.fromList (repeated $ map fst xs):map snd xs
+        alg (SSelectF xs) = S.unions $ S.fromList (repeated $ map fst xs):map snd xs
         alg _ = S.empty
 
 -- TODO: Is `rec X. <X>` the only case?
@@ -170,6 +171,38 @@ trivialRecursionVars (SPutSess xs ys) = trivialRecursionVars xs `S.union` trivia
 trivialRecursionVars (SChoice xs) = S.unions $ map (trivialRecursionVars . snd) xs
 trivialRecursionVars (SSelect xs) = S.unions $ map (trivialRecursionVars . snd) xs
 trivialRecursionVars _ = S.empty
+
+replaceVarInSession  :: (Text, Session) -> Session -> Session
+replaceVarInSession (var, replacement) = cata alg
+  where alg s@(SVarF n) = if var == n
+                             then replacement
+                             else embed s
+        alg s = embed s
+
+isDual :: Session -> Session -> Bool
+isDual (SCoInd n1 s1) (SCoInd n2 s2) = isDual (replaceVarInSession (n1, SEnd) s1)
+                                              (replaceVarInSession (n2, SEnd) s2)
+isDual (SGetTy t1 s1)   (SPutTy t2 s2)   = t1 == t2 && isDual s1 s2
+isDual (SPutTy t1 s1)   (SGetTy t2 s2)   = t1 == t2 && isDual s1 s2
+isDual (SGetSess t1 s1) (SPutSess t2 s2) = t1 == t2 && isDual s1 s2
+isDual (SPutSess t1 s1) (SGetSess t2 s2) = t1 == t2 && isDual s1 s2
+isDual (SChoice xs1) (SSelect xs2) =
+  let m1 = M.fromList xs1
+      m2 = M.fromList xs2
+   in M.keysSet m1 == M.keysSet m2 && and (M.intersectionWith isDual m1 m2)
+isDual (SSelect xs1) (SChoice xs2) =
+  let m1 = M.fromList xs1
+      m2 = M.fromList xs2
+   in M.keysSet m1 == M.keysSet m2 && and (M.intersectionWith isDual m1 m2)
+isDual (SVar n1) (SDualVar n2) = n1 == n2
+isDual (SDualVar n1) (SVar n2) = n1 == n2
+isDual (SEnd) (SEnd) = True
+isDual _ _ = False
+
+unfoldSession :: Session -> Session
+unfoldSession inSess@(SCoInd var inCont) =
+  replaceVarInSession (var, inSess) inCont
+unfoldSession s = s
 
 freeIndVars :: Session -> S.Set Text
 freeIndVars = freeIndVars' . varUsage
@@ -193,11 +226,11 @@ validateSession s =
       unused = unusedIndVars' usages
       dualedRecs = S.fromList dualedVars `S.intersection` S.fromList varsDefd
       trivialRec = trivialRecursionVars s
-   in if (length dupInd     /= 0) ||
-         (S.size dupLabs    /= 0) ||
-         (S.size unused     /= 0) ||
-         (S.size dualedRecs /= 0) ||
-         (S.size trivialRec /= 0)
+   in if (not . null) dupInd     ||
+         (not . null) dupLabs    ||
+         (not . null) unused     ||
+         (not . null) dualedRecs ||
+         (not . null) trivialRec
         then Just SessDefErr
               { sessErrDupInd = S.fromList dupInd
               , sessErrDupLab = dupLabs

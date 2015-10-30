@@ -36,6 +36,8 @@ concTyCkTests =
   , testCase "channel not used in parallel (sel)" $ checkTyCkErr nonParSel
   , testCase "channel not used in parallel (cho)" $ checkTyCkErr nonParCho
   , testCase "non-fresh channel put on channel" $ checkTyCkErr nonFreshChanPut
+  , testCase "forward chan to avoid non-fresh" $ shouldTyCk chanFwdToMakeFresh
+  , testCase "forward recursive channel" $ shouldTyCk coRecFwd
   , testCase "sent channel consumed" $ checkTyCkErr sentChannelConsumed
   , testCase "received channel non parallel usage" $ shouldTyCk nonParallelChanRx
   , testCase "named proc passed duals" $ checkTyCkErr namedProcWithDualArgs
@@ -178,8 +180,10 @@ recDefUnfold = (pack [raw|
     ^x -> z;
   }
 |], UnusedResources{ unusedLin=M.fromList
-                      [ ("x", SPutTy TInt $ SGetTy TInt $ SVar "X")
-                      , ("y", SPutTy TInt $ SGetTy TInt $ SVar "X")
+                      [ ("x", SPutTy TInt $ SGetTy TInt $ SCoInd "X"
+                            $ SPutTy TInt $ SGetTy TInt $ SVar "X")
+                      , ("y", SPutTy TInt $ SGetTy TInt $ SCoInd "X"
+                            $ SPutTy TInt $ SGetTy TInt $ SVar "X")
                       ]
                    , unusedSeq=M.fromList [("z", TInt)]
                    }
@@ -202,8 +206,16 @@ reusedRecVarInAlias = (pack [raw|
     ^y select a;
   }
 |], UnusedResources{ unusedLin=M.fromList
-                      [ ("x", SPutTy TInt $ SGetTy TInt $ SVar "X")
-                      , ("y", SSelect [("a", SVar "X"), ("b", SVar "AltTxRxInt")])
+                      [ ("x", SPutTy TInt $ SGetTy TInt $ SCoInd "X"
+                            $ SPutTy TInt $ SGetTy TInt $ SVar "X")
+                      , ("y", SSelect [ ("a", SCoInd "X" (
+                                                SSelect [ ("a", SVar "X")
+                                                        , ("b", SVar "AltTxRxInt")
+                                                        ])
+                                        )
+                                      , ("b", SVar "AltTxRxInt")
+                                      ]
+                        )
                       ]
                    , unusedSeq=M.fromList [("z", TInt)]
                    }
@@ -444,11 +456,57 @@ nonFreshChanRx = (pack [raw|
     // ^zn receives ^yp which is bound to b
     // Now we can use yp and yn in sequence causes a deadlock without any of the
     // x, y, or z channel duals being used together directly.
-    | ^zn -> b; ^b <- 42; ^yn -> c; ^dummy <- c;
+    | ^zn -> ^b; ^b <- 42; ^yn -> c; ^dummy <- c;
     )
   }
 |], NonFreshChan "a"
   )
+
+-- Similar to nonFreshChanRx, except this process will type check because it
+-- forwards a to a fresh channel that can be sent over zp.
+chanFwdToMakeFresh :: Text
+chanFwdToMakeFresh = pack [raw|
+  proc P(^dummy: ![Int]) {
+    new (^xp, ^xn) : ![ ![Int] ];
+    new (^yp, ^yn) : ![Int];
+    new (^zp, ^zn) : ![ ![Int] ];
+    ( ^xp <- ^yp;
+
+    // ^xn receives ^yp which is bound to a
+    // we can't use yn in this process because it would interfere with xn
+    // since xp and yp were used together.
+    // Using a forwarding process here allows us to send a fresh channel with
+    // the same behaviour as a on zp.
+    | ^xn -> ^a;
+      new (^fwdAp, ^fwdAn) : ![Int];
+      ^zp <- ^fwdAp;
+      ( ^a <-> ^fwdAn
+      |
+      )
+
+    // ^zn receives ^yp which is bound to b
+    // Now we can use yp and yn in sequence.
+    // Note however that there is no deadlock because yp and yn aren't being
+    // used directly but through the forwarding process which will first receive
+    // 42 and immidiately send it on a (which is yp).
+    | ^zn -> ^b; ^b <- 42; ^yn -> c; ^dummy <- c;
+    )
+  }
+|]
+
+-- Try to forward co-recusive sessions
+-- Added this test because I suspect that the way I unfolded session aliases
+-- would cause a problem. Basically, the fact that an alias refers to a
+-- corecurisve session is important and can't be lost during unfolding.
+coRecFwd :: Text
+coRecFwd = pack [raw|
+  proc P( ^x: rec X. ![Int] <X>
+        , ^y: rec Y. ?[Int] <Y>
+        )
+  {
+    ^x <-> ^y
+  }
+|]
 
 -- Test that after receiving a channel it doesn't have to be used in parallel
 -- See the pi-DILL implication rule or the pi-CLL upside-down ampersand rule.

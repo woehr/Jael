@@ -214,6 +214,7 @@ GProcParamChan. GProcParam ::= GChan ;
 separator GProcParam "," ;
 
 GProcNamed. GProc1 ::= GProcName "(" [GProcParam] ")" ;
+GProcFwd.   GProc1 ::= GChan "<->" GChan ;
 GProcInact. GProc1 ::= ;
 
 GParElem. GParElem ::= GProc1 ;

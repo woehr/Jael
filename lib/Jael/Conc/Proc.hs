@@ -55,7 +55,7 @@ data Proc = PGetChan Chan Chan Proc
           | PCase Chan [(Label, Proc)]
           | PSel Chan Label Proc
           | PCoRec Text [(Var, ChanEx)] Proc
-         -- | PFwd Chan Chan
+          | PFwd Chan Chan
           | PNamed Text [ChanEx]
           | PNil
           deriving (Eq, Show)
@@ -70,7 +70,7 @@ data ProcF a = PGetChanF Chan Chan a
              | PCaseF Chan [(Label, a)]
              | PSelF Chan Label a
              | PCoRecF Text [(Var, ChanEx)] a
-            -- | PFwdF Chan Chan
+             | PFwdF Chan Chan
              | PNamedF Text [ChanEx]
              | PNilF
              deriving (Functor, Show)
@@ -88,7 +88,7 @@ instance Foldable Proc where
   project (PCase x y)    = PCaseF x y
   project (PSel x y z)   = PSelF x y z
   project (PCoRec x y z) = PCoRecF x y z
---  project (PFwd x y)     = PFwdF x y
+  project (PFwd x y)     = PFwdF x y
   project (PNamed x y)   = PNamedF x y
   project (PNil)         = PNilF
 
@@ -103,7 +103,7 @@ instance Unfoldable Proc where
   embed (PCaseF x y)    = PCase x y
   embed (PSelF x y z)   = PSel x y z
   embed (PCoRecF x y z) = PCoRec x y z
---  embed (PFwdF x y)     = PFwd x y
+  embed (PFwdF x y)     = PFwd x y
   embed (PNamedF x y)   = PNamed x y
   embed (PNilF)         = PNil
 
@@ -153,6 +153,8 @@ gToProc = ana coalg
               ) = PNamedF (pack x) (map gProcParamToEx params)
         coalg (GProcInact
               ) = PNilF
+        coalg (GProcFwd (GChan (GScopedIdent c1)) (GChan (GScopedIdent c2))
+              ) = PFwdF (gScopedToText c1) (gScopedToText c2)
         coalg (GProcPar e1 es
               ) = PParF (gParElemToProc e1 : map gParElemToProc es)
 
@@ -160,7 +162,7 @@ procDeps :: TopProc -> S.Set Text
 procDeps (TopProc _ p) = cata alg p
   where alg :: Base Proc (S.Set Text) -> S.Set Text
         alg (PNamedF n _)   = S.singleton n
-        alg (PCoRecF n _ x) = n `S.delete` x
+        alg (PCoRecF n _ x) = S.delete n x
         alg (PNewChanF _ _ _ x) = x
         alg (PNewValF _ _ x) = x
         alg (PGetChanF    _ _ x) = x
@@ -193,6 +195,7 @@ procFreeVars = cata alg
         alg (PSelF  c _ p) = c `S.insert` p
         alg (PCaseF c  xs) = c `S.insert` S.unions (map snd xs)
         alg (PParF xs) = S.unions xs
+        alg (PFwdF x y) = S.fromList [x, y]
         alg _ = S.empty
 
 coRecCapturedVars :: Proc -> M.Map Text (S.Set Text)
