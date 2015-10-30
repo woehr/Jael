@@ -51,19 +51,19 @@ valid = (pack [raw|
   ^xp <- true;
   ^xn select label;
   ^xp case
-    { p1 => done
-    , p2 => ( done
+    { p1 =>
+    , p2 => (
             | SomeProc(^xp)
             | SomeProc()
             | new (^a, ^b) : <dual Proto2>;
-              ( ^z <- a; done
-              | ^z -> b; done
+              ( ^z <- a;
+              | ^z -> b;
               )
             )
     , p3 => rec X(j=x, k=1)
               { ^j <- k;
                 ( X(^j, k+1)
-                | done
+                |
                 )
               }
     }
@@ -105,10 +105,10 @@ freeVars = (pack [raw|
   proc X(x:Int) {
     ^a <- x;
     ( Y(b)
-    | ^y case { p1 => c = d + e; done
-              , p2 => ^z select p3; done
+    | ^y case { p1 => c = d + e;
+              , p2 => ^z select p3;
               }
-    | ^f -> x; done
+    | ^f -> x;
     )
   }
 |], ProcDefErr
@@ -122,7 +122,7 @@ freeVars = (pack [raw|
 dupArgs :: (Text, ProcDefErr)
 dupArgs = (pack [raw|
   proc X(x:Int, x:Bool) {
-    rec Y(y={}, y={}) { done }
+    rec Y(y={}, y={}) { }
   }
 |], ProcDefErr
       { pErrFreeVars = S.empty
@@ -138,7 +138,7 @@ coRecCapt = (pack [raw|
     rec Y(x=x, z=z) {
       ^y <- a + x; // a is undefined so it shouldn't show up in the capture error
       rec Z(x=x) {
-        bar = x + y + z; done
+        bar = x + y + z;
       }
     }
   }
@@ -161,8 +161,8 @@ ambiguousRecName = (pack [raw|
     rec X(x=x, z=z) {
       rec Y(x=x) {
         rec Y(x=x) {
-          ( rec Z(x=x) { done }
-          | rec Z(x=x) { done }
+          ( rec Z(x=x) { }
+          | rec Z(x=x) { }
           )
         }
       }

@@ -26,19 +26,18 @@ comprehensiveCase = (pack [raw|
   ^xp <- true;
   ^xn select label;
   ^xp case
-    { p1 => done
-    , p2 => ( done
+    { p1 =>
+    , p2 => (
             | SomeProc(x)
             | SomeProc()
             | new (^a, ^b) : <dual Proto2>;
               ^z <- a;
               ^z -> b;
-              done
             )
     , p3 => rec X(j=^x, k=1)
               { ^j <- k;
                 ( X(j, k+1)
-                | done
+                |
                 )
               }
     }

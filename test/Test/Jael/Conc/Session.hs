@@ -42,13 +42,13 @@ checkSessionDual = checkParsedTree (liftM (dual . gToSession) . pGSession)
 testDual :: (Text, Session)
 testDual = (pack [raw|
   ![Int]
-  ?[ ![Int] ?[Int] ; ]
-  +[ a => ;
-   , b => ![Int] ;
-   , c => ?[ ![Int] ?[Int] ; ] ;
-   , d => &[ a => ;
-           , b => ![Int] ;
-           , c => ?[ ![Int] ?[Int] ; ] ;
+  ?[ ![Int] ?[Int] ]
+  +[ a =>
+   , b => ![Int]
+   , c => ?[ ![Int] ?[Int] ]
+   , d => &[ a =>
+           , b => ![Int]
+           , c => ?[ ![Int] ?[Int] ]
            ]
    , e => rec X. ?[Bool] ![Int] <X>
    ]
@@ -80,9 +80,9 @@ testDualVars = (pack [raw|
 dupIndVar :: (Text, SessDefErr)
 dupIndVar = (pack [raw|
   rec X. &[ a=> rec X. ![{}] <X>
-          , b=> ?[Int];
-          , c=> +[ a=>;
-                 , b=>;
+          , b=> ?[Int]
+          , c=> +[ a=>
+                 , b=>
                  ]
           ]
 |], SessDefErr
@@ -97,12 +97,12 @@ dupIndVar = (pack [raw|
 dupLabel :: (Text, SessDefErr)
 dupLabel = (pack [raw|
   rec X. &[ a=> <X>
-          , b=> ?[Int];
-          , c=> +[ a=>;
-                 , a=>;
-                 , b=>;
+          , b=> ?[Int]
+          , c=> +[ a=>
+                 , a=>
+                 , b=>
                  ]
-          , c=>;
+          , c=>
           ]
 |], SessDefErr
       { sessErrDupInd = S.empty
@@ -116,9 +116,9 @@ dupLabel = (pack [raw|
 unusedRecVar :: (Text, SessDefErr)
 unusedRecVar = (pack [raw|
   rec X. &[ a=> rec Y. <Z>
-          , b=> ?[Int];
-          , c=> +[ a=>;
-                 , b=>;
+          , b=> ?[Int]
+          , c=> +[ a=>
+                 , b=>
                  ]
           ]
 |], SessDefErr

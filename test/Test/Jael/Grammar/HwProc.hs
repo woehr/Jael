@@ -23,7 +23,6 @@ hwProcTop = (pack [raw|
     init = {
       letExpr = 2+4;
       ^c::x::y::z <- y;
-      done
     }
   }
 |], GHwProc (GProcName (UIdent "SomeDev"))

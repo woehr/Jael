@@ -56,7 +56,7 @@ GSessPut. GSession2 ::= "!" "[" GSessOrTy "]" GSession1 ;
 GSessSel. GSession2 ::= "+" "[" [GSessChoice] "]" ;
 GSessCho. GSession2 ::= "&" "[" [GSessChoice] "]" ;
 
-GSessEnd. GSession3 ::= ";" ;
+GSessEnd. GSession3 ::= ;
 -- recursion variable surrounded in <> to distinguish it from GTNamed in
 -- GSessGet and GSessPut
 GSessVar.     GSession3 ::= "<" UIdent ">" ;
@@ -212,7 +212,7 @@ GProcParam. GProcParam ::= GChanOrExpr ;
 separator GProcParam "," ;
 
 GProcNamed. GProc1 ::= GProcName "(" [GProcParam] ")" ;
-GProcInact. GProc1 ::= "done" ;
+GProcInact. GProc1 ::= ;
 
 GParElem. GParElem ::= GProc1 ;
 separator nonempty GParElem "|" ;
