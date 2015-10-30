@@ -81,8 +81,8 @@ testProcs =
                Left err -> error (unpack err)
                Right g -> gToProcArg g
   ) $ M.fromList
-        [ ("DualArgProc", ["arg1: ![Int]", "arg2: ?[Int]"])
-        , ("ProcArgTest", ["a1: Int", "a2: Bool", "a3: ![Int]", "a4: ![Bool]"])
+        [ ("DualArgProc", ["^arg1: ![Int]", "^arg2: ?[Int]"])
+        , ("ProcArgTest", ["a1: Int", "a2: Bool", "^a3: ![Int]", "^a4: ![Bool]"])
         ]
 
 doTyCk :: Text -> Maybe SessTyErr
@@ -115,7 +115,7 @@ emptyProc = pack [raw|
 
 unusedLinearArg :: (Text, SessTyErr)
 unusedLinearArg = (pack [raw|
-  proc X(x: ?[Int]){ }
+  proc X(^x: ?[Int]){ }
 |], UnusedResources{ unusedLin=M.fromList [("x", SGetTy TInt SEnd)]
                    , unusedSeq=M.empty
                    }
@@ -123,7 +123,7 @@ unusedLinearArg = (pack [raw|
 
 sessionAlias :: Text
 sessionAlias = pack [raw|
-  proc X(x: ![Int] <GetInt>, y: ![Int]) {
+  proc X(^x: ![Int] <GetInt>, ^y: ![Int]) {
     // Put an int on x and then get an int on x.
     ^x <- 5;
     ^x -> z;
@@ -133,14 +133,14 @@ sessionAlias = pack [raw|
 
 channelPut :: Text
 channelPut = pack [raw|
-  proc X(x: ![Int]) {
+  proc X(^x: ![Int]) {
     ^x <- 42;
   }
 |]
 
 unusedSeqVars :: (Text, SessTyErr)
 unusedSeqVars = (pack [raw|
-  proc X(x: ?[Int], y: Bool) {
+  proc X(^x: ?[Int], y: Bool) {
     ^x -> z;
   }
 |], UnusedResources{ unusedSeq=M.fromList [("y", TBool), ("z", TInt)]
@@ -150,7 +150,7 @@ unusedSeqVars = (pack [raw|
 
 seqUsedInExpr :: Text
 seqUsedInExpr = pack [raw|
-  proc X(x: Bool, y: ?[Int], z: ![Int]) {
+  proc X(x: Bool, ^y: ?[Int], ^z: ![Int]) {
     ^y -> a;
     ^z <- if x { a } else { 42 };
   }
@@ -160,8 +160,8 @@ seqUsedInExpr = pack [raw|
 -- so y is reported not as the alias but it's actual session type
 channelGetUnusedLin :: (Text, SessTyErr)
 channelGetUnusedLin = (pack [raw|
-  proc X(x: ?[<GetInt>]) {
-    ^x -> y;
+  proc X(^x: ?[<GetInt>]) {
+    ^x -> ^y;
   }
 |], UnusedResources{ unusedLin=M.fromList [("y", SGetTy TInt SEnd)]
                    , unusedSeq=M.empty
@@ -173,7 +173,7 @@ channelGetUnusedLin = (pack [raw|
 -- all and the second when the recursive definition needs its variable unfolded
 recDefUnfold :: (Text, SessTyErr)
 recDefUnfold = (pack [raw|
-  proc P(x: <AltTxRxInt>, y: <AltTxRxInt>) {
+  proc P(^x: <AltTxRxInt>, ^y: <AltTxRxInt>) {
     ^x <- 42;
     ^x -> z;
   }
@@ -192,8 +192,8 @@ recDefUnfold = (pack [raw|
 -- ambiguity.
 reusedRecVarInAlias :: (Text, SessTyErr)
 reusedRecVarInAlias = (pack [raw|
-  proc P( x: rec X. +[a => <X>, b => <AltTxRxInt>]
-        , y: rec X. +[a => <X>, b => <AltTxRxInt>]
+  proc P( ^x: rec X. +[a => <X>, b => <AltTxRxInt>]
+        , ^y: rec X. +[a => <X>, b => <AltTxRxInt>]
         )
   {
     ^x select b;
@@ -211,7 +211,7 @@ reusedRecVarInAlias = (pack [raw|
 
 badLabel :: (Text, SessTyErr)
 badLabel = (pack [raw|
-  proc P( x: +[a => , b => ![Int]])
+  proc P( ^x: +[a => , b => ![Int]])
   {
     ^x select c;
   }
@@ -263,7 +263,7 @@ nonParCho = (pack [raw|
 
 nonFreshChanPut :: (Text, SessTyErr)
 nonFreshChanPut = (pack [raw|
-  proc P(c: ![ ?[Int] ]) {
+  proc P(^c: ![ ?[Int] ]) {
     new (^x, ^y) : ?[Int]?[Int];
     ( ^x -> i;  ^c <- ^x;
     | ^y <- 42; ^y <- 42;
@@ -274,7 +274,7 @@ nonFreshChanPut = (pack [raw|
 
 sentChannelConsumed :: (Text, SessTyErr)
 sentChannelConsumed = (pack [raw|
-  proc P(c: ![ ?[Int] ]) {
+  proc P(^c: ![ ?[Int] ]) {
     new (^x, ^y) : ?[Int];
     ( ^c <- ^x;
     // anInt is unused but ^x being used should error first.
@@ -311,7 +311,7 @@ namedProcInsufficientArgs = (pack [raw|
 
 namedProcWrongChanArg :: (Text, SessTyErr)
 namedProcWrongChanArg = (pack [raw|
-  proc P(a: ![Int], b: ![Bool]) {
+  proc P(^a: ![Int], ^b: ![Bool]) {
     y = true;
     // Should type check as ProcArgTest(42, y, ^a, ^b)
     ProcArgTest(42, y, ^b, ^a)
@@ -321,7 +321,7 @@ namedProcWrongChanArg = (pack [raw|
 
 namedProcWrongExprArg :: (Text, SessTyErr)
 namedProcWrongExprArg = (pack [raw|
-  proc P(a: ![Int], b: ![Bool]) {
+  proc P(^a: ![Int], ^b: ![Bool]) {
     y = true;
     // Should type check as ProcArgTest(42, y, ^a, ^b)
     ProcArgTest(y, 42, ^a, ^b)
@@ -331,14 +331,14 @@ namedProcWrongExprArg = (pack [raw|
 
 namedProcConsume :: Text
 namedProcConsume = pack [raw|
-  proc P(a: Int, b: Bool, x: ![Int], y: ![Bool]) {
+  proc P(a: Int, b: Bool, ^x: ![Int], ^y: ![Bool]) {
     ProcArgTest(a, b, ^x, ^y)
   }
 |]
 
 parEnvSplit :: (Text, SessTyErr)
 parEnvSplit = (pack [raw|
-  proc P(dummy: ![Int]) {
+  proc P(^dummy: ![Int]) {
     answer = 42;
     new (^w, ^x) : ![Int];
     new (^y, ^z) : ![Int];
@@ -354,7 +354,7 @@ parEnvSplit = (pack [raw|
 
 caseMismatchedLabels :: (Text, SessTyErr)
 caseMismatchedLabels = (pack [raw|
-  proc P(x: &[a=>, b=>]) {
+  proc P(^x: &[a=>, b=>]) {
     ^x case
       { b =>
       , c =>
@@ -366,7 +366,7 @@ caseMismatchedLabels = (pack [raw|
 -- Check that cases use a channel according to the session choices
 checkCaseChannelSession :: Text
 checkCaseChannelSession = pack [raw|
-  proc P(x: &[doNothing=>, sendInt=>![Int]]) {
+  proc P(^x: &[doNothing=>, sendInt=>![Int]]) {
     ^x case
       { doNothing =>
       , sendInt   => ^x <- 42;
@@ -376,7 +376,7 @@ checkCaseChannelSession = pack [raw|
 
 dualsUsedInSameParProc :: (Text, SessTyErr)
 dualsUsedInSameParProc = (pack [raw|
-  proc P(z: ![Int]) {
+  proc P(^z: ![Int]) {
     new (^x, ^y) : ![Int];
     ( ^x <- 42; ^y -> a; ^z <- a;
     |
@@ -387,8 +387,8 @@ dualsUsedInSameParProc = (pack [raw|
 
 putChannelInterference :: (Text, SessTyErr)
 putChannelInterference = (pack [raw|
-  proc P( x: ![![Int]]![Int]
-        , dummy: ![Int]
+  proc P( ^x: ![![Int]]![Int]
+        , ^dummy: ![Int]
         )
   {
     new (^yp, ^yn) : ![Int];
@@ -407,8 +407,8 @@ putChannelInterference = (pack [raw|
 -- channel is put is used in a parallel context
 putChannelParContinuation :: (Text, SessTyErr)
 putChannelParContinuation = (pack [raw|
-  proc P( x: ![![Int]]![Int]
-        , dummy: ![Int]
+  proc P( ^x: ![![Int]]![Int]
+        , ^dummy: ![Int]
         )
   {
     new (^yp, ^yn) : ![Int];
@@ -425,7 +425,7 @@ putChannelParContinuation = (pack [raw|
 
 nonFreshChanRx :: (Text, SessTyErr)
 nonFreshChanRx = (pack [raw|
-  proc P(dummy: ![Int]) {
+  proc P(^dummy: ![Int]) {
     new (^xp, ^xn) : ![ ![Int] ];
     new (^yp, ^yn) : ![Int] ;
     new (^zp, ^zn) : ![ ![Int] ];
@@ -438,7 +438,7 @@ nonFreshChanRx = (pack [raw|
     // don't know how it was used previously.
     // Using a forwarding process here is what is needed for this to type check
     // and would also prevent a deadlock.
-    | ^xn -> a;
+    | ^xn -> ^a;
       ^zp <- ^a;
 
     // ^zn receives ^yp which is bound to b
@@ -454,8 +454,8 @@ nonFreshChanRx = (pack [raw|
 -- See the pi-DILL implication rule or the pi-CLL upside-down ampersand rule.
 nonParallelChanRx :: Text
 nonParallelChanRx = pack [raw|
-  proc P(a: ?[ ![Int] ] ![Bool]) {
-    ^a -> rxdChan;
+  proc P(^a: ?[ ![Int] ] ![Bool]) {
+    ^a -> ^rxdChan;
     ^a <- true;
     ^rxdChan <- 42;
   }
@@ -469,14 +469,14 @@ nonParallelChanRx = pack [raw|
 -- the same way so the test doesn't need to worry about that.
 caseTypeErrors :: (Text, SessTyErr)
 caseTypeErrors = (pack [raw|
-  proc P( x: &[ a =>
+  proc P( ^x: &[ a =>
               , b =>
               , c =>
               , d =>
               , e =>
               ]
-        , y: ?[Bool]
-        , z: ![Int]
+        , ^y: ?[Bool]
+        , ^z: ![Int]
         )
   {
     new (^a, ^b) : ![Int]![Int];
@@ -516,10 +516,10 @@ caseTypeErrors = (pack [raw|
 
 casesWithDifferingUsages :: (Text, SessTyErr)
 casesWithDifferingUsages = (pack [raw|
-  proc P( c: &[ a =>
+  proc P( ^c: &[ a =>
               , b =>
               ]
-        , dummy: ![Int]
+        , ^dummy: ![Int]
         )
   {
     new (^x, ^y) : ![Int]?[Int];
@@ -540,7 +540,7 @@ casesWithDifferingUsages = (pack [raw|
 -- pi-DILL. Note no deadlock.
 ex1 :: (Text, SessTyErr)
 ex1 = (pack [raw|
-  proc P(dummy: ![Int]) {
+  proc P(^dummy: ![Int]) {
     new (^xp, ^xn) : ![Int];
     new (^yp, ^yn) : ![Int];
     ( ^xp <- 42; ^yp <- 84;
@@ -557,7 +557,7 @@ ex1 = (pack [raw|
 -- only block in a synchronous model.
 ex2 :: (Text, SessTyErr)
 ex2 = (pack [raw|
-  proc P(dummy: ![Int]) {
+  proc P(^dummy: ![Int]) {
     new (^xp, ^xn) : ![Int];
     new (^yp, ^yn) : ![Int];
     ( ^xp <- 42; ^yp <- 84;
@@ -572,7 +572,7 @@ ex2 = (pack [raw|
 -- is typable in their system.
 ex3 :: Text
 ex3 = pack [raw|
-  proc P(dummy: ![Int]) {
+  proc P(^dummy: ![Int]) {
     new (^nxy_p, ^nxy_n) : ![Int]![Int];
     ( ^nxy_p <- 41; ^nxy_p <- 42;
     | ^nxy_n -> x;  ^nxy_n -> y;  ^dummy <- x+y;

@@ -45,8 +45,10 @@ instance UserDefTy TopProc where
   typeDeps _ = S.empty
   envItems _ = []
 
-data Proc = PGet Chan Var Proc
-          | PPut Chan ChanEx Proc
+data Proc = PGetChan Chan Chan Proc
+          | PPutChan Chan Chan Proc
+          | PGetVal  Chan Text Proc
+          | PPutVal  Chan Ex   Proc
           | PNewVal Text Ex Proc
           | PNewChan Text Text Session Proc
           | PPar [Proc]
@@ -58,8 +60,10 @@ data Proc = PGet Chan Var Proc
           | PNil
           deriving (Eq, Show)
 
-data ProcF a = PGetF Chan Var a
-             | PPutF Chan ChanEx a
+data ProcF a = PGetChanF Chan Chan a
+             | PPutChanF Chan Chan a
+             | PGetValF  Chan Text a
+             | PPutValF  Chan Ex   a
              | PNewValF Text Ex a
              | PNewChanF Text Text Session a
              | PParF [a]
@@ -74,9 +78,11 @@ data ProcF a = PGetF Chan Var a
 type instance Base Proc = ProcF
 
 instance Foldable Proc where
-  project (PGet x y z)   = PGetF x y z
-  project (PPut x y z)   = PPutF x y z
-  project (PNewVal x y z) = PNewValF x y z
+  project (PGetChan x y z) = PGetChanF x y z
+  project (PPutChan x y z) = PPutChanF x y z
+  project (PGetVal x y z)  = PGetValF x y z
+  project (PPutVal x y z)  = PPutValF x y z
+  project (PNewVal x y z)  = PNewValF x y z
   project (PNewChan w x y z) = PNewChanF w x y z
   project (PPar x)       = PParF x
   project (PCase x y)    = PCaseF x y
@@ -87,8 +93,10 @@ instance Foldable Proc where
   project (PNil)         = PNilF
 
 instance Unfoldable Proc where
-  embed (PGetF x y z)   = PGet x y z
-  embed (PPutF x y z)   = PPut x y z
+  embed (PGetChanF x y z) = PGetChan x y z
+  embed (PPutChanF x y z) = PPutChan x y z
+  embed (PGetValF x y z)  = PGetVal x y z
+  embed (PPutValF x y z)  = PPutVal x y z
   embed (PNewValF x y z) = PNewVal x y z
   embed (PNewChanF w x y z) = PNewChan w x y z
   embed (PParF x)       = PPar x
@@ -105,18 +113,20 @@ gScopedToText = intercalate "::" . map (\(GScopeElem (LIdent x)) -> pack x)
 gChoiceToProc :: [GConcChoice] -> [(Text, GProc)]
 gChoiceToProc = map (\(GConcChoice (GChoiceLabel (LIdent x)) p) -> (pack x, p))
 
-gToChanEx :: GChanOrExpr -> ChanEx
-gToChanEx (GChanOrExprC (GChan (GScopedIdent c))) = Left (gScopedToText c)
-gToChanEx (GChanOrExprE ex) = Right (gToEx ex)
-
 gToInitList :: [GRecInitializer] -> [(Text, ChanEx)]
-gToInitList = map (\(GRecInitializer (LIdent x) y) -> (pack x, gToChanEx y))
+gToInitList = map (\i -> case i of
+    (GRecInitializerChan (LIdent x) (GChan (GScopedIdent c))) ->
+      (pack x, Left $ gScopedToText c)
+    (GRecInitializerExpr (LIdent x) y) -> (pack x, Right $ gToEx y)
+  )
 
 gParElemToProc :: GParElem -> GProc
 gParElemToProc (GParElem p) = p
 
 gProcParamToEx :: GProcParam -> ChanEx
-gProcParamToEx (GProcParam x) = gToChanEx x
+gProcParamToEx (GProcParamChan (GChan (GScopedIdent c))) =
+  Left $ gScopedToText c
+gProcParamToEx (GProcParamExpr x) = Right $ gToEx x
 
 gToProc :: GProc -> Proc
 gToProc = ana coalg
@@ -125,10 +135,14 @@ gToProc = ana coalg
               ) = PNewChanF (pack x) (pack y) (gToSession s) p
         coalg (GProcLet (LIdent x) y p
               ) = PNewValF (pack x) (gToEx y) p
-        coalg (GProcGet (GChan (GScopedIdent xs)) (LIdent y) p
-              ) = PGetF (gScopedToText xs) (pack y) p
-        coalg (GProcPut (GChan (GScopedIdent xs)) cex p
-              ) = PPutF (gScopedToText xs) (gToChanEx cex) p
+        coalg (GProcGetExpr (GChan (GScopedIdent xs)) (LIdent y) p
+              ) = PGetValF (gScopedToText xs) (pack y) p
+        coalg (GProcGetChan (GChan (GScopedIdent xs)) (LIdent y) p
+              ) = PGetChanF (gScopedToText xs) (pack y) p
+        coalg (GProcPutExpr (GChan (GScopedIdent xs)) ex p
+              ) = PPutValF (gScopedToText xs) (gToEx ex) p
+        coalg (GProcPutChan (GChan (GScopedIdent xs)) (GChan (GScopedIdent c)) p
+              ) = PPutChanF (gScopedToText xs) (gScopedToText c) p
         coalg (GProcSel (GChan (GScopedIdent xs)) (GChoiceLabel (LIdent y)) p
               ) = PSelF (gScopedToText xs) (pack y) p
         coalg (GProcCho (GChan (GScopedIdent xs)) ys
@@ -149,8 +163,10 @@ procDeps (TopProc _ p) = cata alg p
         alg (PCoRecF n _ x) = n `S.delete` x
         alg (PNewChanF _ _ _ x) = x
         alg (PNewValF _ _ x) = x
-        alg (PGetF    _ _ x) = x
-        alg (PPutF    _ _ x) = x
+        alg (PGetChanF    _ _ x) = x
+        alg (PPutChanF    _ _ x) = x
+        alg (PGetValF    _ _ x) = x
+        alg (PPutValF    _ _ x) = x
         alg (PSelF    _ _ x) = x
         alg (PCaseF _ xs) = S.unions (map snd xs)
         alg (PParF    xs) = S.unions xs
@@ -167,11 +183,13 @@ procFreeVars = cata alg
   where alg :: Base Proc (S.Set Text) -> S.Set Text
         alg (PNamedF _ as) = S.unions $ map cexFreeVars as
         alg (PCoRecF _ as p) = S.unions (map (cexFreeVars . snd) as)
-                              `S.union` (p S.\\ (S.fromList $ map fst as))
+                              `S.union` (p S.\\ S.fromList (map fst as))
         alg (PNewChanF v v' _ p) = v `S.delete` (v' `S.delete` p)
         alg (PNewValF  v e  p) = v `S.delete` (p `S.union` freeVars e)
-        alg (PGetF  c v p) = c `S.insert` (v `S.insert` p)
-        alg (PPutF  c e p) = c `S.insert` (cexFreeVars e `S.union` p)
+        alg (PGetChanF  c v p) = c `S.insert` (v `S.insert` p)
+        alg (PPutChanF  c v p) = c `S.insert` (v `S.insert` p)
+        alg (PGetValF  c e p) = c `S.insert` (e `S.insert` p)
+        alg (PPutValF  c e p) = c `S.insert` (freeVars e `S.union` p)
         alg (PSelF  c _ p) = c `S.insert` p
         alg (PCaseF c  xs) = c `S.insert` S.unions (map snd xs)
         alg (PParF xs) = S.unions xs
@@ -179,10 +197,10 @@ procFreeVars = cata alg
 
 coRecCapturedVars :: Proc -> M.Map Text (S.Set Text)
 coRecCapturedVars = para alg
-  where alg :: Base Proc (Proc, (M.Map Text (S.Set Text)))
+  where alg :: Base Proc (Proc, M.Map Text (S.Set Text))
             -> M.Map Text (S.Set Text)
         alg (PCoRecF n as (p, m)) =
-          let free = (procFreeVars p) S.\\ (S.fromList $ map fst as)
+          let free = procFreeVars p S.\\ S.fromList (map fst as)
            in if S.size free /= 0
                  then M.insert n free m
                  else m
@@ -190,8 +208,10 @@ coRecCapturedVars = para alg
         alg (PCaseF _ xs) = M.unions $ map (snd . snd) xs
         alg (PNewChanF _ _ _ (_, x)) = x
         alg (PNewValF _ _ (_, x)) = x
-        alg (PGetF  _ _ (_, x)) = x
-        alg (PPutF  _ _ (_, x)) = x
+        alg (PGetChanF  _ _ (_, x)) = x
+        alg (PPutChanF  _ _ (_, x)) = x
+        alg (PGetValF  _ _ (_, x)) = x
+        alg (PPutValF  _ _ (_, x)) = x
         alg (PSelF  _ _ (_, x)) = x
         alg _ = M.empty
 
@@ -203,8 +223,10 @@ recDupArgs = cata alg
         alg (PCaseF _  xs) = S.unions $ map snd xs
         alg (PNewChanF _ _ _ x) = x
         alg (PNewValF _ _ x) = x
-        alg (PGetF  _ _ x) = x
-        alg (PPutF  _ _ x) = x
+        alg (PGetChanF  _ _ x) = x
+        alg (PPutChanF  _ _ x) = x
+        alg (PGetValF  _ _ x) = x
+        alg (PPutValF  _ _ x) = x
         alg (PSelF  _ _ x) = x
         alg _ = S.empty
 
@@ -218,8 +240,10 @@ ambigCoRecDef = para alg
         alg (PCaseF _  xs) = S.unions $ map (snd . snd) xs
         alg (PNewChanF _ _ _ (_, x)) = x
         alg (PNewValF _ _ (_, x)) = x
-        alg (PGetF  _ _ (_, x)) = x
-        alg (PPutF  _ _ (_, x)) = x
+        alg (PGetChanF  _ _ (_, x)) = x
+        alg (PPutChanF  _ _ (_, x)) = x
+        alg (PGetValF  _ _ (_, x)) = x
+        alg (PPutValF  _ _ (_, x)) = x
         alg (PSelF  _ _ (_, x)) = x
         alg _ = S.empty
 
@@ -231,8 +255,10 @@ coRecNames = cata alg
         alg (PCaseF _  xs) = S.unions $ map snd xs
         alg (PNewChanF _ _ _ x) = x
         alg (PNewValF _ _ x) = x
-        alg (PGetF  _ _ x) = x
-        alg (PPutF  _ _ x) = x
+        alg (PGetChanF  _ _ x) = x
+        alg (PPutChanF  _ _ x) = x
+        alg (PGetValF  _ _ x) = x
+        alg (PPutValF  _ _ x) = x
         alg (PSelF  _ _ x) = x
         alg _ = S.empty
 
@@ -242,9 +268,9 @@ redefinedCoRecVar :: S.Set Text -> Proc -> S.Set Text
 redefinedCoRecVar ns p = ns `S.intersection` coRecNames p
 
 gToProcArg :: GProcArg -> (Text, TyOrSess)
-gToProcArg (GProcArg (LIdent i) (GSessTy x)) =
+gToProcArg (GProcArgType (LIdent i) x) =
   (pack i, TorSTy (gToType x))
-gToProcArg (GProcArg (LIdent i) (GSessSess x)) =
+gToProcArg (GProcArgSess (LIdent i) x) =
   (pack i, TorSSess (gToSession x))
 
 gToTopProc :: ([GProcArg], GProc) -> TopProc
@@ -253,18 +279,18 @@ gToTopProc (as, p) = TopProc (map gToProcArg as) (gToProc p)
 validateTopProc :: TopProc -> Maybe ProcDefErr
 validateTopProc (TopProc as p) =
   let dupArgs = S.fromList (repeated $ map fst as) `S.union` recDupArgs p
-      free = (procFreeVars p) S.\\ (S.fromList $ map fst as)
+      free = procFreeVars p S.\\ S.fromList (map fst as)
       varCapt = coRecCapturedVars p
       ambigNames = ambigCoRecDef p
    in if S.size dupArgs    /= 0 ||
          S.size free       /= 0 ||
          M.size varCapt    /= 0 ||
          S.size ambigNames /= 0
-         then Just $ ProcDefErr
-                      { pErrDupArgs = dupArgs
-                      , pErrFreeVars = free
-                      , pErrCoRecVarCapture = M.map (S.\\ free) varCapt
-                      , pErrAmbiguousRecName = ambigNames
-                      }
+         then Just ProcDefErr
+                     { pErrDupArgs = dupArgs
+                     , pErrFreeVars = free
+                     , pErrCoRecVarCapture = M.map (S.\\ free) varCapt
+                     , pErrAmbiguousRecName = ambigNames
+                     }
          else Nothing
 

@@ -9,7 +9,6 @@ import ClassyPrelude
 import Jael.Grammar
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
---import Test.HUnit
 import Test.Jael.Util
 
 gProcTests :: [T.Test]
@@ -32,9 +31,9 @@ comprehensiveCase = (pack [raw|
             | SomeProc()
             | new (^a, ^b) : <dual Proto2>;
               ^z <- a;
-              ^z -> b;
+              ^z -> ^b;
             )
-    , p3 => rec X(j=^x, k=1)
+    , p3 => rec X(^j=^x, k=1)
               { ^j <- k;
                 ( X(j, k+1)
                 |
@@ -44,9 +43,9 @@ comprehensiveCase = (pack [raw|
 |], GProcNew (LIdent "xp") (LIdent "xn")
              (GSessVar (UIdent "SomeProto"))
   $ GProcLet (LIdent "y") (GEInt (DecInt "5"))
-  $ GProcGet (GChan (GScopedIdent [GScopeElem (LIdent "xp")])) (LIdent "z")
-  $ GProcPut (GChan (GScopedIdent [GScopeElem (LIdent "xn")])) (GChanOrExprE $ GEVar (LIdent "y"))
-  $ GProcPut (GChan (GScopedIdent [GScopeElem (LIdent "xp")])) (GChanOrExprE $ GETrue)
+  $ GProcGetExpr (GChan (GScopedIdent [GScopeElem (LIdent "xp")])) (LIdent "z")
+  $ GProcPutExpr (GChan (GScopedIdent [GScopeElem (LIdent "xn")])) (GEVar (LIdent "y"))
+  $ GProcPutExpr (GChan (GScopedIdent [GScopeElem (LIdent "xp")])) (GETrue)
   $ GProcSel (GChan (GScopedIdent [GScopeElem (LIdent "xn")])) (GChoiceLabel (LIdent "label"))
   $ GProcCho (GChan (GScopedIdent [GScopeElem (LIdent "xp")]))
       [ GConcChoice (GChoiceLabel (LIdent "p1"))
@@ -54,26 +53,26 @@ comprehensiveCase = (pack [raw|
       , GConcChoice (GChoiceLabel (LIdent "p2"))
           $ GProcPar (GParElem GProcInact)
                      [ GParElem (GProcNamed (GProcName (UIdent "SomeProc"))
-                                  [GProcParam (GChanOrExprE $ GEVar (LIdent "x"))]
+                                  [GProcParamExpr (GEVar (LIdent "x"))]
                                 )
                      , GParElem (GProcNamed (GProcName (UIdent "SomeProc"))
                                   []
                                 )
                      , GParElem
                        $ GProcNew (LIdent "a") (LIdent "b") (GSessVarDual (UIdent "Proto2"))
-                       $ GProcPut (GChan (GScopedIdent [GScopeElem (LIdent "z")])) (GChanOrExprE $ GEVar (LIdent "a"))
-                       $ GProcGet (GChan (GScopedIdent [GScopeElem (LIdent "z")])) (LIdent "b")
+                       $ GProcPutExpr (GChan (GScopedIdent [GScopeElem (LIdent "z")])) (GEVar (LIdent "a"))
+                       $ GProcGetChan (GChan (GScopedIdent [GScopeElem (LIdent "z")])) (LIdent "b")
                        $ GProcInact
                      ]
       , GConcChoice (GChoiceLabel (LIdent "p3"))
           $ GProcRec (GProcName (UIdent "X"))
-              [ GRecInitializer (LIdent "j") (GChanOrExprC $ GChan (GScopedIdent [GScopeElem (LIdent "x")]))
-              , GRecInitializer (LIdent "k") (GChanOrExprE $ GEInt (DecInt "1"))
+              [ GRecInitializerChan (LIdent "j") (GChan (GScopedIdent [GScopeElem (LIdent "x")]))
+              , GRecInitializerExpr (LIdent "k") (GEInt (DecInt "1"))
               ]
-          $ GProcPut (GChan (GScopedIdent [GScopeElem (LIdent "j")])) (GChanOrExprE $ GEVar (LIdent "k"))
+          $ GProcPutExpr (GChan (GScopedIdent [GScopeElem (LIdent "j")])) (GEVar (LIdent "k"))
           $ GProcPar (GParElem (GProcNamed (GProcName (UIdent "X"))
-                         [ GProcParam (GChanOrExprE $ GEVar (LIdent "j"))
-                         , GProcParam (GChanOrExprE $ GEPlus (GEVar (LIdent "k")) (GEInt (DecInt "1")))
+                         [ GProcParamExpr (GEVar (LIdent "j"))
+                         , GProcParamExpr (GEPlus (GEVar (LIdent "k")) (GEInt (DecInt "1")))
                          ]
                      ))
                      [GParElem GProcInact]

@@ -182,7 +182,19 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
 -- Type checks a process. Returns either a type checking error or an updated
 -- environment
 tyCkProc :: ConcTyEnv -> Proc -> SessTyErrM ConcTyEnv
-tyCkProc env (PGet c name p) = do
+tyCkProc env (PGetChan c name p) = do
+  -- Get the session the channel c is suppose to implement
+  sess <- lookupChan c env
+  -- Check that the session implements a "get", update the session in the
+  -- environment, and introduce the new name
+  env' <- case sess of
+               SGetSess v s -> do
+                  env'  <- addIfNotRedefinition (RxdLinear name v) env
+                  return $ updateSession c s env'
+               _ -> throwError $ ProtocolMismatch c sess
+  tyCkProc env' p
+
+tyCkProc env (PGetVal c name p) = do
   -- Get the session the channel c is suppose to implement
   sess <- lookupChan c env
   -- Check that the session implements a "get", update the session in the
@@ -193,62 +205,65 @@ tyCkProc env (PGet c name p) = do
                   -- c has to already be in the environment so an insert
                   -- replaces the old session with the updated one
                   return $ updateSession c s env'
-               SGetSess v s -> do
-                  env'  <- addIfNotRedefinition (RxdLinear name v) env
-                  return $ updateSession c s env'
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
 
-tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPut c chanOrExpr pCont) = do
+tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPutChan c putChan pCont) = do
   sess <- lookupChan c env
-  env' <- case (sess, chanOrExpr) of
-               (SPutTy v sCont, Right putExpr) -> do
-                  completeSeqEnv <- mkSeqEnv env
-                  -- ' is a name guaranteed not to be used in the expression
-                  case seqInfer completeSeqEnv (ELet "'" putExpr $ EVar "'") of
-                       Left errs -> throwError $ SeqTIErrs errs
-                       Right ty -> if ty /= v
-                                      then throwError $ TypeMismatch c ty
-                                      else return
-                                            $ updateSession c sCont
-                                            $ markSeqUsed (freeVars putExpr) env
-               (SPutSess v sCont, Left putChan) -> do
-                  putSess <- lookupFreshChan putChan env
-                  if putSess /= v
-                     then throwError $ ProtocolMismatch c putSess
-                     else
-                       -- putChan must be fresh so it must also have a dual
-                       -- That dual, and the continuation session of c (sCont)
-                       -- must be used in parallel according to the typing rules
-                       -- to prevent interference.
-                       let putChanEnv = M.findWithDefault
-                                          (error "putChan must be in the env or\
-                                                \ we would have errored prior.")
-                                          putChan lEnv
-                           putChanDual = fromMaybe (error "putChan must have a\
-                                                         \ dual since it must\
-                                                         \ be fresh.")
-                                                   (leDual putChanEnv)
-                           -- What might not necessarily be true is whether
-                           -- the dual channel is actually in the current
-                           -- environment. It could have been used in some other
-                           -- process prior to the placement of putChan on c
-                        in do
-                           unless (putChanDual `M.member` lEnv)
-                                  $ throwError $ PutChanDualNotFound putChanDual
-                           -- Remove the session placed on the channel from the
-                           -- environment; update the type of the session;
-                           -- mark the session as no longer in a concurrent
-                           -- context to satisfy rule T(circle cross)
-                           return $ (\e -> e{cteLin=M.adjust
-                                               (\le -> le{leConcCtx=False})
-                                               c
-                                               (cteLin e)
-                                            }
-                                    )
-                                  $ updateSession c sCont
-                                  $ addInterferenceUnsafe putChanDual c
-                                      env {cteLin=M.delete putChan lEnv}
+  env' <- case sess of
+               SPutSess v sCont -> do
+                 putSess <- lookupFreshChan putChan env
+                 if putSess /= v
+                    then throwError $ ProtocolMismatch c putSess
+                    else
+                      -- putChan must be fresh so it must also have a dual
+                      -- That dual, and the continuation session of c (sCont)
+                      -- must be used in parallel according to the typing rules
+                      -- to prevent interference.
+                      let putChanEnv = M.findWithDefault
+                                         (error "putChan must be in the env or\
+                                               \ we would have errored prior.")
+                                         putChan lEnv
+                          putChanDual = fromMaybe (error "putChan must have a\
+                                                        \ dual since it must\
+                                                        \ be fresh.")
+                                                  (leDual putChanEnv)
+                          -- What might not necessarily be true is whether
+                          -- the dual channel is actually in the current
+                          -- environment. It could have been used in some other
+                          -- process prior to the placement of putChan on c
+                       in do
+                          unless (putChanDual `M.member` lEnv)
+                                 $ throwError $ PutChanDualNotFound putChanDual
+                          -- Remove the session placed on the channel from the
+                          -- environment; update the type of the session;
+                          -- mark the session as no longer in a concurrent
+                          -- context to satisfy rule T(circle cross)
+                          return $ (\e -> e{cteLin=M.adjust
+                                              (\le -> le{leConcCtx=False})
+                                              c
+                                              (cteLin e)
+                                           }
+                                   )
+                                 $ updateSession c sCont
+                                 $ addInterferenceUnsafe putChanDual c
+                                     env {cteLin=M.delete putChan lEnv}
+               _ -> throwError $ ProtocolMismatch c sess
+  tyCkProc env' pCont
+
+tyCkProc env (PPutVal c putExpr pCont) = do
+  sess <- lookupChan c env
+  env' <- case sess of
+               SPutTy v sCont -> do
+                 completeSeqEnv <- mkSeqEnv env
+                 -- ' is a name guaranteed not to be used in the expression
+                 case seqInfer completeSeqEnv (ELet "'" putExpr $ EVar "'") of
+                      Left errs -> throwError $ SeqTIErrs errs
+                      Right ty -> if ty /= v
+                                     then throwError $ TypeMismatch c ty
+                                     else return
+                                           $ updateSession c sCont
+                                           $ markSeqUsed (freeVars putExpr) env
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 

@@ -182,33 +182,35 @@ GProcName. GProcName ::= UIdent ;
 -- Builtin channels can have "::" in their name
 GChan.  GChan ::= "^" GScopedIdent ;
 
-GChanOrExprC. GChanOrExpr ::= GChan ;
-GChanOrExprE. GChanOrExpr ::= GExpr ;
-
-GProcNew.   GProc1 ::= "new" "(" "^" LIdent "," "^" LIdent ")"
+GProcNew.     GProc1 ::= "new" "(" "^" LIdent "," "^" LIdent ")"
   ":" GSession   ";" GProc1 ;
 
-GProcLet.   GProc1 ::= LIdent "="  GExpr           ";" GProc1 ;
-GProcGet.   GProc1 ::= GChan  "->" LIdent          ";" GProc1 ;
+GProcLet.     GProc1 ::= LIdent "="      GExpr       ";" GProc1 ;
+GProcGetExpr. GProc1 ::= GChan  "->"     LIdent      ";" GProc1 ;
+GProcGetChan. GProc1 ::= GChan  "->" "^" LIdent      ";" GProc1 ;
 
-GProcPut.   GProc1 ::= GChan  "<-" GChanOrExpr     ";" GProc1 ;
-GProcSel.   GProc1 ::= GChan "select" GChoiceLabel ";" GProc1 ;
+GProcPutExpr. GProc1 ::= GChan  "<-"     GExpr       ";" GProc1 ;
+GProcPutChan. GProc1 ::= GChan  "<-"     GChan       ";" GProc1 ;
 
-GConcChoice. GConcChoice ::= GChoiceLabel "=>" GProc ;
+GProcSel.     GProc1 ::= GChan "select" GChoiceLabel ";" GProc1 ;
+
+GConcChoice.  GConcChoice ::= GChoiceLabel "=>" GProc ;
 separator nonempty GConcChoice "," ;
 
-GProcCho.   GProc1 ::= GChan "case"
+GProcCho.     GProc1 ::= GChan "case"
   "{"
     [ GConcChoice ]
   "}" ;
 
-GRecInitializer. GRecInitializer ::= LIdent "=" GChanOrExpr ;
+GRecInitializerExpr. GRecInitializer ::=     LIdent "=" GExpr ;
+GRecInitializerChan. GRecInitializer ::= "^" LIdent "=" GChan ;
 separator nonempty GRecInitializer "," ;
 
 GProcRec.   GProc1 ::= "rec" GProcName "(" [GRecInitializer] ")"
   "{" GProc "}" ;
 
-GProcParam. GProcParam ::= GChanOrExpr ;
+GProcParamExpr. GProcParam ::= GExpr ;
+GProcParamChan. GProcParam ::= GChan ;
 separator GProcParam "," ;
 
 GProcNamed. GProc1 ::= GProcName "(" [GProcParam] ")" ;
@@ -232,7 +234,8 @@ GFuncName. GFuncName ::= LIdent ;
 GFuncArg.  GFuncArg  ::= LIdent ;
 separator nonempty GFuncArg "," ;
 
-GProcArg.  GProcArg ::= LIdent ":" GSessOrTy ;
+GProcArgSess.  GProcArg ::= "^" LIdent ":" GSession ;
+GProcArgType.  GProcArg ::=     LIdent ":" GType ;
 separator GProcArg "," ;
 
 GGlobal.  GGlobal  ::= LIdent "=" GExpr ";" ;

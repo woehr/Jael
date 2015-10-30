@@ -56,7 +56,7 @@ valid = (pack [raw|
             | SomeProc(^xp)
             | SomeProc()
             | new (^a, ^b) : <dual Proto2>;
-              ( ^z <- a;
+              ( ^z <- ^a;
               | ^z -> b;
               )
             )
@@ -69,9 +69,9 @@ valid = (pack [raw|
     }
 |], PNewChan "xp" "xn" (SVar "SomeProto")
   $ PNewVal "y" (ELit (LInt 5))
-  $ PGet "xp" "z"
-  $ PPut "xn" (Right $ EVar "y")
-  $ PPut "xp" (Right $ ELit (LBool True))
+  $ PGetVal "xp" "z"
+  $ PPutVal "xn" (EVar "y")
+  $ PPutVal "xp" (ELit $ LBool True)
   $ PSel "xn" "label"
   $ PCase "xp"
       [ ("p1", PNil)
@@ -81,15 +81,15 @@ valid = (pack [raw|
                 , PNamed "SomeProc" []
                 , PNewChan "a" "b" (SDualVar "Proto2")
                 $ PPar
-                    [ PPut "z" (Right $ EVar "a") PNil
-                    , PGet "z" "b" PNil
+                    [ PPutChan "z" "a" PNil
+                    , PGetVal "z" "b" PNil
                     ]
                 ]
         )
       , ("p3", PCoRec "X" [ ("j", Right $ EVar "x")
                           , ("k", Right $ ELit (LInt 1))
                           ]
-               ( PPut "j" (Right $ EVar "k")
+               ( PPutVal "j" (EVar "k")
                $ PPar [ PNamed "X" [ Left "j"
                                    , Right $ EApp (EApp (EPrm PAdd) (EVar "k")) (ELit (LInt 1))
                                    ]
