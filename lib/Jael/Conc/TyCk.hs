@@ -52,9 +52,6 @@ unfoldAlias :: Text -> ConcTyEnv -> ConcTyEnv
 unfoldAlias k env@(ConcTyEnv{cteLin=linEnv, cteAlias=alsEnv}) =
   let kEnv@(LinEnv{leAliases=a}) = M.findWithDefault missingKey k linEnv
       kEnv' = case leSess $ M.findWithDefault missingKey k linEnv of
-        s@(SCoInd _ _) -> Just
-          kEnv{leSess=unfoldSession s}
-
         (SVar var) -> Just
           kEnv{leSess=fromMaybe (M.findWithDefault missingKey var alsEnv)
                                 (M.lookup var a)}
@@ -98,10 +95,12 @@ updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
                        \ updated that it already exists in the environment."
 
 -- Get the session associated with channel c
+-- Note: For the purpose of making use of the channel, that is, this returns
+-- corecursive sessions that have unfolded variables.
 lookupChan :: Chan -> ConcTyEnv -> SessTyErrM Session
 lookupChan c (ConcTyEnv{cteLin=linEnv}) =
   case M.lookup c linEnv of
-       Just (LinEnv{leSess=s, leConcCtx=True }) -> return s
+       Just (LinEnv{leSess=s, leConcCtx=True }) -> return $ unfoldSession s
        Just (LinEnv{leConcCtx=False}) -> throwError $ NonParallelUsage c
        _ -> throwError $ UndefinedChan c
 
@@ -419,7 +418,32 @@ tyCkProc env (PPar ps) = do
                      ) unusedEnv dualChans
     ) env' ps
 
-tyCkProc env (PNamed n as) = do
+tyCkProc env (PCoRec n inits p) = undefined
+
+tyCkProc env (PNamed n as) =
+  -- Is what we're trying to type a recursion variable or a named process?
+  case M.lookup n (cteRec env) of
+       Just env'  -> typeRecursionVar env env' n as
+       Nothing    -> typeNamedProc env n as
+
+tyCkProc env@(ConcTyEnv{cteLin=linEnv}) (PFwd c1 c2) = do
+  s1 <- lookupChan c1 env
+  s2 <- lookupChan c2 env
+  unless (s1 `isDual` s2)
+    $ throwError $ FordwardedChansNotDual c1 c2
+  return env{cteLin=M.delete c1 $ M.delete c2 linEnv}
+
+tyCkProc env PNil = return env
+
+-- Helper functions to keep things a bit cleaner
+
+-- The current env, the env in which the recursive definition was made, the
+-- recursion variable, and the parameters to the recursive call
+typeRecursionVar :: ConcTyEnv -> ConcTyEnv -> Text -> [ChanEx] -> SessTyErrM ConcTyEnv
+typeRecursionVar env env' n as = undefined
+
+typeNamedProc :: ConcTyEnv -> Text -> [ChanEx] -> SessTyErrM ConcTyEnv
+typeNamedProc env n as = do
   let procSig = fromMaybe (error "Previous analysis should have identified\
                                 \ unknown names.")
                           (M.lookup n (cteProcs env))
@@ -473,15 +497,4 @@ tyCkProc env (PNamed n as) = do
          Left  c -> env'{cteLin=M.delete c le}
          Right e -> markSeqUsed (freeVars e) env'
     ) env as
-
-tyCkProc env@(ConcTyEnv{cteLin=linEnv}) (PFwd c1 c2) = do
-  s1 <- lookupChan c1 env
-  s2 <- lookupChan c2 env
-  unless (s1 `isDual` s2)
-    $ throwError $ FordwardedChansNotDual c1 c2
-  return env{cteLin=M.delete c1 $ M.delete c2 linEnv}
-
-tyCkProc env (PCoRec n inits p) = undefined
-
-tyCkProc env PNil = return env
 

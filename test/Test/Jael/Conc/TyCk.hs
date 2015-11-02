@@ -183,10 +183,8 @@ recDefUnfold = (pack [raw|
     ^x -> z;
   }
 |], UnusedResources{ unusedLin=M.fromList
-                      [ ("x", SPutTy TInt $ SGetTy TInt $ SCoInd "X"
-                            $ SPutTy TInt $ SGetTy TInt $ SVar "X")
-                      , ("y", SPutTy TInt $ SGetTy TInt $ SCoInd "X"
-                            $ SPutTy TInt $ SGetTy TInt $ SVar "X")
+                      [ ("x", SCoInd "X" $ SPutTy TInt $ SGetTy TInt $ SVar "X")
+                      , ("y", SCoInd "X" $ SPutTy TInt $ SGetTy TInt $ SVar "X")
                       ]
                    , unusedSeq=M.fromList [("z", TInt)]
                    }
@@ -209,15 +207,10 @@ reusedRecVarInAlias = (pack [raw|
     ^y select a;
   }
 |], UnusedResources{ unusedLin=M.fromList
-                      [ ("x", SPutTy TInt $ SGetTy TInt $ SCoInd "X"
-                            $ SPutTy TInt $ SGetTy TInt $ SVar "X")
-                      , ("y", SSelect [ ("a", SCoInd "X" (
-                                                SSelect [ ("a", SVar "X")
-                                                        , ("b", SVar "AltTxRxInt")
-                                                        ])
-                                        )
-                                      , ("b", SVar "AltTxRxInt")
-                                      ]
+                      [ ("x", SCoInd "X" $ SPutTy TInt $ SGetTy TInt $ SVar "X")
+                      , ("y", SCoInd "X" $ SSelect [ ("a", SVar "X")
+                                                   , ("b", SVar "AltTxRxInt")
+                                                   ]
                         )
                       ]
                    , unusedSeq=M.fromList [("z", TInt)]
@@ -650,8 +643,8 @@ ex4 = (pack [raw|
       ^c -> _;
       new (^dp, ^dn): rec X. ?[Int] <X>;
       ( L(^dp)
-      | ^d <- 42;
-        ^d <-> ^c
+      | ^dn <- 42;
+        ^dn <-> ^c
       )
     }
   }
@@ -660,7 +653,7 @@ ex4 = (pack [raw|
 
 -- Infinitely produces the sequence 42, 43, 42, 43, ... on the channel c
 -- From Corecursion and non-divergence in session-typed processes, page 161
--- (with small modification)
+-- (with modification)
 ex5 :: Text
 ex5 = pack [raw|
   proc Good(^c: rec X. ![Int] <X>) {
