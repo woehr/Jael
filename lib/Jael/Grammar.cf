@@ -188,6 +188,7 @@ GProcNew.     GProc1 ::= "new" "(" "^" LIdent "," "^" LIdent ")"
 GProcLet.     GProc1 ::= LIdent "="      GExpr       ";" GProc1 ;
 GProcGetExpr. GProc1 ::= GChan  "->"     LIdent      ";" GProc1 ;
 GProcGetChan. GProc1 ::= GChan  "->" "^" LIdent      ";" GProc1 ;
+GProcGetIgn.  GProc1 ::= GChan  "->"     "_"         ";" GProc1 ;
 
 GProcPutExpr. GProc1 ::= GChan  "<-"     GExpr       ";" GProc1 ;
 GProcPutChan. GProc1 ::= GChan  "<-"     GChan       ";" GProc1 ;

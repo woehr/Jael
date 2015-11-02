@@ -39,6 +39,7 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Chan Session
                | InsufficientProcArgs Text
                | ProcArgTypeMismatch (S.Set Text)
                | FordwardedChansNotDual Chan Chan
+               | AttemptedChannelIgnore Chan Session
   deriving (Eq, Show)
 
 missingKey :: a
@@ -209,6 +210,14 @@ tyCkProc env (PGetVal c name p) = do
                   -- c has to already be in the environment so an insert
                   -- replaces the old session with the updated one
                   return $ updateSession c s env'
+               _ -> throwError $ ProtocolMismatch c sess
+  tyCkProc env' p
+
+tyCkProc env (PGetIgn c p) = do
+  sess <- lookupChan c env
+  env' <- case sess of
+               SGetTy _ s -> return $ updateSession c s env
+               SGetSess v _ -> throwError $ AttemptedChannelIgnore c v
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
 

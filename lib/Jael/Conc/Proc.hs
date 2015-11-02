@@ -46,8 +46,9 @@ instance UserDefTy TopProc where
   envItems _ = []
 
 data Proc = PGetChan Chan Chan Proc
-          | PPutChan Chan Chan Proc
           | PGetVal  Chan Text Proc
+          | PGetIgn  Chan      Proc
+          | PPutChan Chan Chan Proc
           | PPutVal  Chan Ex   Proc
           | PNewVal Text Ex Proc
           | PNewChan Text Text Session Proc
@@ -61,8 +62,9 @@ data Proc = PGetChan Chan Chan Proc
           deriving (Eq, Show)
 
 data ProcF a = PGetChanF Chan Chan a
-             | PPutChanF Chan Chan a
              | PGetValF  Chan Text a
+             | PGetIgnF  Chan      a
+             | PPutChanF Chan Chan a
              | PPutValF  Chan Ex   a
              | PNewValF Text Ex a
              | PNewChanF Text Text Session a
@@ -79,8 +81,9 @@ type instance Base Proc = ProcF
 
 instance Foldable Proc where
   project (PGetChan x y z) = PGetChanF x y z
-  project (PPutChan x y z) = PPutChanF x y z
   project (PGetVal x y z)  = PGetValF x y z
+  project (PGetIgn x y)    = PGetIgnF x y
+  project (PPutChan x y z) = PPutChanF x y z
   project (PPutVal x y z)  = PPutValF x y z
   project (PNewVal x y z)  = PNewValF x y z
   project (PNewChan w x y z) = PNewChanF w x y z
@@ -94,8 +97,9 @@ instance Foldable Proc where
 
 instance Unfoldable Proc where
   embed (PGetChanF x y z) = PGetChan x y z
-  embed (PPutChanF x y z) = PPutChan x y z
   embed (PGetValF x y z)  = PGetVal x y z
+  embed (PGetIgnF x y)    = PGetIgn x y
+  embed (PPutChanF x y z) = PPutChan x y z
   embed (PPutValF x y z)  = PPutVal x y z
   embed (PNewValF x y z) = PNewVal x y z
   embed (PNewChanF w x y z) = PNewChan w x y z
@@ -139,6 +143,8 @@ gToProc = ana coalg
               ) = PGetValF (gScopedToText xs) (pack y) p
         coalg (GProcGetChan (GChan (GScopedIdent xs)) (LIdent y) p
               ) = PGetChanF (gScopedToText xs) (pack y) p
+        coalg (GProcGetIgn  (GChan (GScopedIdent xs)) p
+              ) = PGetIgnF (gScopedToText xs) p
         coalg (GProcPutExpr (GChan (GScopedIdent xs)) ex p
               ) = PPutValF (gScopedToText xs) (gToEx ex) p
         coalg (GProcPutChan (GChan (GScopedIdent xs)) (GChan (GScopedIdent c)) p
@@ -166,9 +172,10 @@ procDeps (TopProc _ p) = cata alg p
         alg (PNewChanF _ _ _ x) = x
         alg (PNewValF _ _ x) = x
         alg (PGetChanF    _ _ x) = x
-        alg (PPutChanF    _ _ x) = x
         alg (PGetValF    _ _ x) = x
+        alg (PGetIgnF    _ x) = x
         alg (PPutValF    _ _ x) = x
+        alg (PPutChanF    _ _ x) = x
         alg (PSelF    _ _ x) = x
         alg (PCaseF _ xs) = S.unions (map snd xs)
         alg (PParF    xs) = S.unions xs
@@ -189,8 +196,9 @@ procFreeVars = cata alg
         alg (PNewChanF v v' _ p) = v `S.delete` (v' `S.delete` p)
         alg (PNewValF  v e  p) = v `S.delete` (p `S.union` freeVars e)
         alg (PGetChanF  c v p) = c `S.insert` (v `S.insert` p)
-        alg (PPutChanF  c v p) = c `S.insert` (v `S.insert` p)
         alg (PGetValF  c e p) = c `S.insert` (e `S.insert` p)
+        alg (PGetIgnF  c p) = c `S.insert` p
+        alg (PPutChanF  c v p) = c `S.insert` (v `S.insert` p)
         alg (PPutValF  c e p) = c `S.insert` (freeVars e `S.union` p)
         alg (PSelF  c _ p) = c `S.insert` p
         alg (PCaseF c  xs) = c `S.insert` S.unions (map snd xs)
@@ -212,8 +220,9 @@ coRecCapturedVars = para alg
         alg (PNewChanF _ _ _ (_, x)) = x
         alg (PNewValF _ _ (_, x)) = x
         alg (PGetChanF  _ _ (_, x)) = x
-        alg (PPutChanF  _ _ (_, x)) = x
         alg (PGetValF  _ _ (_, x)) = x
+        alg (PGetIgnF  _ (_, x)) = x
+        alg (PPutChanF  _ _ (_, x)) = x
         alg (PPutValF  _ _ (_, x)) = x
         alg (PSelF  _ _ (_, x)) = x
         alg _ = M.empty
@@ -227,8 +236,9 @@ recDupArgs = cata alg
         alg (PNewChanF _ _ _ x) = x
         alg (PNewValF _ _ x) = x
         alg (PGetChanF  _ _ x) = x
-        alg (PPutChanF  _ _ x) = x
         alg (PGetValF  _ _ x) = x
+        alg (PGetIgnF  _ x) = x
+        alg (PPutChanF  _ _ x) = x
         alg (PPutValF  _ _ x) = x
         alg (PSelF  _ _ x) = x
         alg _ = S.empty
@@ -244,8 +254,9 @@ ambigCoRecDef = para alg
         alg (PNewChanF _ _ _ (_, x)) = x
         alg (PNewValF _ _ (_, x)) = x
         alg (PGetChanF  _ _ (_, x)) = x
-        alg (PPutChanF  _ _ (_, x)) = x
         alg (PGetValF  _ _ (_, x)) = x
+        alg (PGetIgnF  _ (_, x)) = x
+        alg (PPutChanF  _ _ (_, x)) = x
         alg (PPutValF  _ _ (_, x)) = x
         alg (PSelF  _ _ (_, x)) = x
         alg _ = S.empty
@@ -259,8 +270,9 @@ coRecNames = cata alg
         alg (PNewChanF _ _ _ x) = x
         alg (PNewValF _ _ x) = x
         alg (PGetChanF  _ _ x) = x
-        alg (PPutChanF  _ _ x) = x
         alg (PGetValF  _ _ x) = x
+        alg (PGetIgnF  _ x) = x
+        alg (PPutChanF  _ _ x) = x
         alg (PPutValF  _ _ x) = x
         alg (PSelF  _ _ x) = x
         alg _ = S.empty

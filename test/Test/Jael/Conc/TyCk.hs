@@ -40,6 +40,7 @@ concTyCkTests =
   , testCase "forward recursive channel" $ shouldTyCk coRecFwd
   , testCase "sent channel consumed" $ checkTyCkErr sentChannelConsumed
   , testCase "received channel non parallel usage" $ shouldTyCk nonParallelChanRx
+  , testCase "trying to ignore rxd session should fail" $ checkTyCkErr ignoreSession
   , testCase "named proc passed duals" $ checkTyCkErr namedProcWithDualArgs
   , testCase "named proc insufficient args" $ checkTyCkErr namedProcInsufficientArgs
   , testCase "named proc channel type err" $ checkTyCkErr namedProcWrongChanArg
@@ -59,6 +60,8 @@ concTyCkTests =
   , testCase "example 1" $ checkTyCkErr ex1
   , testCase "example 2" $ checkTyCkErr ex2
   , testCase "example 3" $ shouldTyCk ex3
+  , testCase "example 4" $ checkTyCkErr ex4
+  , testCase "example 5" $ shouldTyCk ex5
   ]
 
 -- A map of aliases that will be passed to the type checking function
@@ -350,7 +353,7 @@ namedProcConsume = pack [raw|
 
 parEnvSplit :: (Text, SessTyErr)
 parEnvSplit = (pack [raw|
-  proc P(^dummy: ![Int]) {
+  proc P() {
     answer = 42;
     new (^w, ^x) : ![Int];
     new (^y, ^z) : ![Int];
@@ -400,15 +403,13 @@ dualsUsedInSameParProc = (pack [raw|
 putChannelInterference :: (Text, SessTyErr)
 putChannelInterference = (pack [raw|
   proc P( ^x: ![![Int]]![Int]
-        , ^dummy: ![Int]
         )
   {
     new (^yp, ^yn) : ![Int];
     ^x <- ^yp;
     // x and yn need to be used in parallel now according rule T(circle cross)
     ( ^x <- 42;
-      ^yn -> z;
-      ^dummy <- z;
+      ^yn -> _;
     |
     )
   }
@@ -420,15 +421,13 @@ putChannelInterference = (pack [raw|
 putChannelParContinuation :: (Text, SessTyErr)
 putChannelParContinuation = (pack [raw|
   proc P( ^x: ![![Int]]![Int]
-        , ^dummy: ![Int]
         )
   {
     new (^yp, ^yn) : ![Int];
     ^x <- ^yp;
     // x and yn need to be used in parallel now according rule T(circle cross)
     ^x <- 42;
-    ( ^yn -> z;
-      ^dummy <- z;
+    ( ^yn -> _;
     |
     )
   }
@@ -437,7 +436,7 @@ putChannelParContinuation = (pack [raw|
 
 nonFreshChanRx :: (Text, SessTyErr)
 nonFreshChanRx = (pack [raw|
-  proc P(^dummy: ![Int]) {
+  proc P() {
     new (^xp, ^xn) : ![ ![Int] ];
     new (^yp, ^yn) : ![Int] ;
     new (^zp, ^zn) : ![ ![Int] ];
@@ -456,7 +455,7 @@ nonFreshChanRx = (pack [raw|
     // ^zn receives ^yp which is bound to b
     // Now we can use yp and yn in sequence causes a deadlock without any of the
     // x, y, or z channel duals being used together directly.
-    | ^zn -> ^b; ^b <- 42; ^yn -> c; ^dummy <- c;
+    | ^zn -> ^b; ^b <- 42; ^yn -> _;
     )
   }
 |], NonFreshChan "a"
@@ -466,7 +465,7 @@ nonFreshChanRx = (pack [raw|
 -- forwards a to a fresh channel that can be sent over zp.
 chanFwdToMakeFresh :: Text
 chanFwdToMakeFresh = pack [raw|
-  proc P(^dummy: ![Int]) {
+  proc P() {
     new (^xp, ^xn) : ![ ![Int] ];
     new (^yp, ^yn) : ![Int];
     new (^zp, ^zn) : ![ ![Int] ];
@@ -489,7 +488,7 @@ chanFwdToMakeFresh = pack [raw|
     // Note however that there is no deadlock because yp and yn aren't being
     // used directly but through the forwarding process which will first receive
     // 42 and immidiately send it on a (which is yp).
-    | ^zn -> ^b; ^b <- 42; ^yn -> c; ^dummy <- c;
+    | ^zn -> ^b; ^b <- 42; ^yn -> _;
     )
   }
 |]
@@ -518,6 +517,14 @@ nonParallelChanRx = pack [raw|
     ^rxdChan <- 42;
   }
 |]
+
+ignoreSession :: (Text, SessTyErr)
+ignoreSession = (pack [raw|
+  proc P(^c: ?[]) {
+    ^c -> _;
+  }
+|], AttemptedChannelIgnore "c" SEnd
+  )
 
 -- Check errors in cases. In this test, a has a type error isolated within the
 -- case, b has a type error using external resources, c doesn't use a linear
@@ -574,12 +581,11 @@ casesWithDifferingUsages = (pack [raw|
   proc P( ^c: &[ a =>
                , b =>
                ]
-        , ^dummy: ![Int]
         )
   {
     new (^x, ^y) : ![Int]?[Int];
     ( ^c case
-        { a => ^x <- 42; ^x -> z; ^dummy <- z;
+        { a => ^x <- 42; ^x -> _;
         , b =>
         }
     | SomeProc(^y)
@@ -595,11 +601,11 @@ casesWithDifferingUsages = (pack [raw|
 -- pi-DILL. Note no deadlock.
 ex1 :: (Text, SessTyErr)
 ex1 = (pack [raw|
-  proc P(^dummy: ![Int]) {
+  proc P() {
     new (^xp, ^xn) : ![Int];
     new (^yp, ^yn) : ![Int];
     ( ^xp <- 42; ^yp <- 84;
-    | ^xn -> a;  ^yn -> b; ^dummy <- a+b;
+    | ^xn -> _;  ^yn -> _;
     )
   }
 |], ChannelInterference "xn" $ S.fromList ["yn"]
@@ -612,11 +618,11 @@ ex1 = (pack [raw|
 -- only block in a synchronous model.
 ex2 :: (Text, SessTyErr)
 ex2 = (pack [raw|
-  proc P(^dummy: ![Int]) {
+  proc P() {
     new (^xp, ^xn) : ![Int];
     new (^yp, ^yn) : ![Int];
     ( ^xp <- 42; ^yp <- 84;
-    | ^yn -> b;  ^xn -> a; ^dummy <- a+b;
+    | ^yn -> _;  ^xn -> _;
     )
   }
 |], ChannelInterference "xn" $ S.fromList ["yn"]
@@ -627,11 +633,45 @@ ex2 = (pack [raw|
 -- is typable in their system.
 ex3 :: Text
 ex3 = pack [raw|
-  proc P(^dummy: ![Int]) {
+  proc P() {
     new (^nxy_p, ^nxy_n) : ![Int]![Int];
     ( ^nxy_p <- 41; ^nxy_p <- 42;
-    | ^nxy_n -> x;  ^nxy_n -> y;  ^dummy <- x+y;
+    | ^nxy_n -> _;  ^nxy_n -> _;
     )
+  }
+|]
+
+-- Produces an infinite <internal> reduction sequence, i.e.: not useful
+-- From Corecursion and non-divergence in session-typed processes, page 161
+ex4 :: (Text, SessTyErr)
+ex4 = (pack [raw|
+  proc Loop(^c: rec X. ?[Int] <X>) {
+    rec L(^c=^c) {
+      ^c -> _;
+      new (^dp, ^dn): rec X. ?[Int] <X>;
+      ( L(^dp)
+      | ^d <- 42;
+        ^d <-> ^c
+      )
+    }
+  }
+|], undefined
+  )
+
+-- Infinitely produces the sequence 42, 43, 42, 43, ... on the channel c
+-- From Corecursion and non-divergence in session-typed processes, page 161
+-- (with small modification)
+ex5 :: Text
+ex5 = pack [raw|
+  proc Good(^c: rec X. ![Int] <X>) {
+      rec G(^c=^c) {
+        ^c <- 42;
+        new (^dp, ^dn) : rec X. ![Int] <X>;
+        ( G(^dp)
+        | ^c <- 43;
+          ^c <-> ^dn
+        )
+      }
   }
 |]
 
