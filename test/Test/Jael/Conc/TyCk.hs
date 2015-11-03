@@ -55,6 +55,14 @@ concTyCkTests =
   , testCase "make sure rx'd channels are not considered fresh" $ checkTyCkErr nonFreshChanRx
   , testCase "check type errors in cases" $ checkTyCkErr caseTypeErrors
   , testCase "check all cases use resources the same" $ checkTyCkErr casesWithDifferingUsages
+  , testCase "interfering corecursive arguments" $ checkTyCkErr interferingCoRecArgs
+  , testCase "undefined co-rec channel arg" $ checkTyCkErr undefinedCoRecArgChan
+  , testCase "undefined co-rec expr arg" $ checkTyCkErr undefinedCoRecArgExpr
+  -- same as above three tests but for the corecursive variable instead of definition
+  , testCase "interfering corecursive variable arguments" $ checkTyCkErr interferingCoRecVarArgs
+  , testCase "undefined co-rec variable channel arg" $ checkTyCkErr undefinedCoRecVarArgChan
+  , testCase "undefined co-rec variable expr arg" $ checkTyCkErr undefinedCoRecVarArgExpr
+  , testCase "test residual environment with corecursive definition" $ shouldTyCk coRecResidualEnv
   -- The remainder of these tests are specific examples from papers. See the
   -- inline comments for more details
   , testCase "example 1" $ checkTyCkErr ex1
@@ -588,6 +596,92 @@ casesWithDifferingUsages = (pack [raw|
   }
 |], CasesUseDifferentLinearResources
   )
+
+undefinedCoRecArgChan :: (Text, SessTyErr)
+undefinedCoRecArgChan = (pack [raw|
+  proc P(^a : ![Int]) {
+    rec X(^a=^a, ^b=^b) {
+      ^a <- 42;
+      ^b <- 43;
+    }
+  }
+|], UndefinedChan "b"
+  )
+
+undefinedCoRecArgExpr :: (Text, SessTyErr)
+undefinedCoRecArgExpr = (pack [raw|
+  proc P(^a : ![Int]) {
+    rec X(^a=^a, b=x+y) {
+      ^a <- b;
+    }
+  }
+|], SeqTIErrs ["unbound variable \"\"x\"\""]
+  )
+
+interferingCoRecArgs :: (Text, SessTyErr)
+interferingCoRecArgs = (pack [raw|
+  proc P() {
+    new (^a, ^b) : ![Int];
+    rec X(^c=^a, ^d=^b) {
+      ^c <- 42;
+      ^d <- 43;
+    }
+  }
+|], InterferingProcArgs "X" $ M.fromList
+      [ ("a", S.fromList ["b"])
+      , ("b", S.fromList ["a"])
+      ]
+  )
+
+undefinedCoRecVarArgChan :: (Text, SessTyErr)
+undefinedCoRecVarArgChan = (pack [raw|
+  proc P(^a : ![Int]) {
+    rec X(^a=^a) {
+      X(^b)
+    }
+  }
+|], UndefinedChan "b"
+  )
+
+undefinedCoRecVarArgExpr :: (Text, SessTyErr)
+undefinedCoRecVarArgExpr = (pack [raw|
+  proc P(a : Int) {
+    rec X(a=a) {
+      X(b)
+    }
+  }
+|], SeqTIErrs ["unbound variable \"\"b\"\""]
+  )
+
+interferingCoRecVarArgs :: (Text, SessTyErr)
+interferingCoRecVarArgs = (pack [raw|
+  proc P(^a: ![Int], ^b: ?[Int]) {
+    rec X(^a=^a, ^b=^b) {
+      new (^c, ^d) : ![Int];
+      X(^c, ^d)
+    }
+  }
+|], InterferingProcArgs "X" $ M.fromList
+      [ ("c", S.fromList ["d"])
+      , ("d", S.fromList ["c"])
+      ]
+  )
+
+coRecResidualEnv :: Text
+coRecResidualEnv = pack [raw|
+  proc P(^useIt : ![rec X. ![Int] <X>]) {
+    new (^a, ^b) : rec Y. ![Int] <Y>;
+    ( rec X(^b=^b) {
+        ^b -> _;
+        X(^b)
+      }
+    // b should be consumed by the recursive process but a and useIt should
+    // remain
+    | ^a <- 42;
+      ^useIt <- ^a;
+    )
+  }
+|]
 
 -- L. Caires et al. Linear logic propositions as session types, 2014
 -- From page 23, the following is typable in Gay and Hole's system but not

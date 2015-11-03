@@ -34,7 +34,7 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Chan Session
                | NonParallelUsage Chan
                | InterferingProcArgs Text (M.Map Chan (S.Set Chan))
                | CaseProcErrs (M.Map Label SessTyErr)
-               -- TODO: Return some information about which cases are offending
+               -- Issue #4
                | CasesUseDifferentLinearResources
                | InsufficientProcArgs Text
                | ProcArgTypeMismatch (S.Set Text)
@@ -126,13 +126,12 @@ separateArgs = foldr
                             TorSSess s -> ((n,s):ss, ts)
   ) ([],[])
 
-envErrors :: ConcTyEnv -> SessTyErrM ConcTyEnv
-envErrors env@(ConcTyEnv{cteLin=linEnv, cteBase=baseEnv}) =
+envErrors :: ConcTyEnv -> SessTyErrM ()
+envErrors (ConcTyEnv{cteLin=linEnv, cteBase=baseEnv}) =
   let uLin = M.filter (/= SEnd) (M.map leSess linEnv)
       uSeq = M.map snd . M.filter (not . fst) $ baseEnv
-   in if (not . null) uLin || (not . null) uSeq
-         then throwError UnusedResources { unusedLin = uLin, unusedSeq = uSeq}
-         else return env
+   in when ((not . null) uLin || (not . null) uSeq)
+           (throwError UnusedResources{unusedLin = uLin, unusedSeq = uSeq})
 
 markSeqUsed :: S.Set Text -> ConcTyEnv -> ConcTyEnv
 markSeqUsed vars env@(ConcTyEnv{cteBase=baseEnv}) =
@@ -160,17 +159,17 @@ splitEnvs origEnv newEnv@(ConcTyEnv{cteLin=le, cteBase=be}) = do
       , newEnv{cteLin=used, cteBase=resBase}
       )
 
-tyCheckTopProc :: TyEnv
-               -> M.Map Text Session
-               -> M.Map Text [(Text, TyOrSess)]
-               -> TopProc
-               -> Maybe SessTyErr
-tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
+mkConcEnv :: [(Text, TyOrSess)]
+          -> TyEnv
+          -> M.Map Text Session
+          -> M.Map Text [(Text, TyOrSess)]
+          -> ConcTyEnv
+mkConcEnv as sEnv sessNames namedProcs =
   -- Separate arguments into linear and base types
   let (ls, bs) = separateArgs as
-  -- Do some processing of the top level sessions so type checking can match on
-  -- what we expect the session to be. The updateSession function does the same
-  -- thing if the session after unfolding is SCoInd, SVar, or SDualVar
+      -- Do some processing of the top level sessions so type checking can match on
+      -- what we expect the session to be. The updateSession function does the same
+      -- thing if the session after unfolding is SCoInd, SVar, or SDualVar
       env = emptyEnv
               { cteLin   = M.map (\s->newLinEnv s Nothing True) (M.fromList ls)
               , cteBase  = M.fromList $ map (\(n,t)->(n,(False,t))) bs
@@ -178,10 +177,17 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
               , cteAlias = sessNames
               , cteProcs = namedProcs
               }
-      envOrErr = tyCkProc (foldr (unfoldAlias . fst) env ls) p
-   in case envOrErr of
-           Left err -> Just err
-           Right env' -> either Just (const Nothing) $ envErrors env'
+   in foldr (unfoldAlias . fst) env ls
+
+tyCheckTopProc :: TyEnv
+               -> M.Map Text Session
+               -> M.Map Text [(Text, TyOrSess)]
+               -> TopProc
+               -> Maybe SessTyErr
+tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
+   case tyCkProc (mkConcEnv as sEnv sessNames namedProcs) p of
+        Left err -> Just err
+        Right env' -> either Just (const Nothing) $ envErrors env'
 
 -- Type checks a process. Returns either a type checking error or an updated
 -- environment
@@ -267,15 +273,13 @@ tyCkProc env (PPutVal c putExpr pCont) = do
   sess <- lookupChan c env
   env' <- case sess of
                SPutTy v sCont -> do
-                 completeSeqEnv <- mkSeqEnv env
                  -- ' is a name guaranteed not to be used in the expression
-                 case seqInfer completeSeqEnv (ELet "'" putExpr $ EVar "'") of
-                      Left errs -> throwError $ SeqTIErrs errs
-                      Right ty -> if ty /= v
-                                     then throwError $ TypeMismatch c ty
-                                     else return
-                                           $ updateSession c sCont
-                                           $ markSeqUsed (freeVars putExpr) env
+                 ty <- seqTyCk env (ELet "'" putExpr $ EVar "'")
+                 if ty /= v
+                    then throwError $ TypeMismatch c ty
+                    else return
+                         $ updateSession c sCont
+                         $ markSeqUsed (freeVars putExpr) env
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
@@ -343,10 +347,8 @@ tyCkProc env (PCase chan cases) = do
        _ -> throwError $ ProtocolMismatch chan sess
 
 tyCkProc env (PNewVal name expr pCont) = do
-  seqEnv <- mkSeqEnv env
-  env' <- case seqInfer seqEnv expr of
-               Left errs -> throwError $ SeqTIErrs errs
-               Right ty  -> addIfNotRedefinition (Base name ty) env
+  ty <- seqTyCk env expr
+  env' <- addIfNotRedefinition (Base name ty) env
   tyCkProc env' pCont
 
 tyCkProc env (PNewChan n1 n2 sTy pCont) =
@@ -371,7 +373,7 @@ tyCkProc env (PPar ps) = do
       -- respect linearity. The unused resources will be passed on to type the
       -- next process.
       let (unusedEnv, usedEnv) = splitEnvs e newEnv
-      _ <- envErrors usedEnv
+      envErrors usedEnv
       -- the lin map of newEnv should be a super-set of e and any sessions of
       -- newEnv that differ from those of e implies the corresponding channels
       -- were used. Of these used channels, we check that none of them were
@@ -413,18 +415,60 @@ tyCkProc env (PPar ps) = do
                        case M.lookup c l of
                             Just le@(LinEnv{leIntSet=intSet}) ->
                               -- record update disaster
-                              e'{cteLin=M.insert c le{leIntSet=intSet `S.union` (c `S.delete` dualChans)} l}
+                              e'{cteLin=
+                                   M.insert c le{leIntSet=
+                                                   intSet `S.union`
+                                                       (c `S.delete` dualChans)
+                                                } l
+                                }
                             Nothing -> e'
                      ) unusedEnv dualChans
     ) env' ps
 
-tyCkProc env (PCoRec n inits p) = undefined
+tyCkProc env (PCoRec n inits p) = do
+  -- Determine the types of the arguments to the corecursive process
+  let varNames = map fst inits
+  let argVals  = map snd inits
+  argTypes <- mapM
+    (\ce ->
+       case ce of
+            Left c -> maybe (throwError $ UndefinedChan c)
+                            (return . TorSSess . leSess)
+                            (M.lookup c $ cteLin env)
+            Right e -> do
+              ty <- seqTyCk env e
+              return $ TorSTy ty
+    ) argVals
+  let coRecSig = zip varNames argTypes
+  -- Check for errors in the arguments passed to the corecursive process
+  checkProcArgErrs env n argVals coRecSig
+
+  -- create a new environment for the corecursive process
+  let coRecEnv = (mkConcEnv coRecSig
+                            (cteSeq   env)
+                            (cteAlias env)
+                            (cteProcs env)
+                 ){cteRec=M.insert n coRecSig (cteRec env)}
+  coRecResidualEnv <- tyCkProc coRecEnv p
+
+  -- Type checking the co-recursive process should consume everything that was
+  -- in its environment
+  envErrors coRecResidualEnv
+
+  -- return the original environment with the things used by the corecursive
+  -- process updated
+  return $ foldr (
+    \ce acc@(ConcTyEnv{cteLin=lEnv}) ->
+      case ce of
+           Left c -> acc{cteLin=M.delete c lEnv}
+           Right e -> markSeqUsed (freeVars e) acc
+    ) coRecResidualEnv argVals
 
 tyCkProc env (PNamed n as) =
   -- Is what we're trying to type a recursion variable or a named process?
   case M.lookup n (cteRec env) of
-       Just env'  -> typeRecursionVar env env' n as
-       Nothing    -> typeNamedProc env n as
+       Just sig -> typeRecursionVar env n as sig
+       Nothing -> typeNamedProc env n as
 
 tyCkProc env@(ConcTyEnv{cteLin=linEnv}) (PFwd c1 c2) = do
   s1 <- lookupChan c1 env
@@ -437,17 +481,44 @@ tyCkProc env PNil = return env
 
 -- Helper functions to keep things a bit cleaner
 
+seqTyCk :: ConcTyEnv -> Ex -> SessTyErrM Ty
+seqTyCk env expr = do
+  seqEnv <- mkSeqEnv env
+  either (throwError . SeqTIErrs) return (seqInfer seqEnv expr)
+
 -- The current env, the env in which the recursive definition was made, the
 -- recursion variable, and the parameters to the recursive call
-typeRecursionVar :: ConcTyEnv -> ConcTyEnv -> Text -> [ChanEx] -> SessTyErrM ConcTyEnv
-typeRecursionVar env env' n as = undefined
+typeRecursionVar :: ConcTyEnv
+                 -> Text
+                 -> [ChanEx]
+                 -> [(Text, TyOrSess)]
+                 -> SessTyErrM ConcTyEnv
+typeRecursionVar env n as sig = do
+  checkProcArgErrs env n as sig
+  return (error "typing of recursion variables is unimplemented")
 
 typeNamedProc :: ConcTyEnv -> Text -> [ChanEx] -> SessTyErrM ConcTyEnv
 typeNamedProc env n as = do
   let procSig = fromMaybe (error "Previous analysis should have identified\
                                 \ unknown names.")
                           (M.lookup n (cteProcs env))
-  when (length procSig /= length as)
+
+  checkProcArgErrs env n as procSig
+  -- Should be good at this point. Update the environment to reflect what has
+  -- been used/consumed by the named proc
+  return $ foldr (\ce env'@(ConcTyEnv{cteLin=le}) ->
+    case ce of
+         Left  c -> env'{cteLin=M.delete c le}
+         Right e -> markSeqUsed (freeVars e) env'
+    ) env as
+
+checkProcArgErrs :: ConcTyEnv
+                 -> Text
+                 -> [ChanEx]
+                 -> [(Text, TyOrSess)]
+                 -> SessTyErrM ()
+checkProcArgErrs env n as sig = do
+  when (length sig /= length as)
        $ throwError $ InsufficientProcArgs n
 
   argTypeMismatches <-
@@ -456,12 +527,10 @@ typeNamedProc env n as = do
       case (argType, argVal) of
            -- Make sure the type of e matches t
            (TorSTy t  , Right expr) -> do
-             seqEnv <- mkSeqEnv env
-             case seqInfer seqEnv expr of
-                  Left errs -> throwError $ SeqTIErrs errs
-                  Right ty  -> if t == ty
-                                  then return acc
-                                  else return $ argName:acc
+             ty <- seqTyCk env expr
+             if t == ty
+                then return acc
+                else return $ argName:acc
            -- Make sure the type of c matches s
            (TorSSess s,  Left c) -> case M.lookup c (cteLin env) of
                                          Just le -> if s == leSess le
@@ -470,7 +539,7 @@ typeNamedProc env n as = do
                                          Nothing -> throwError $ UndefinedChan c
            -- Expected either type or session but got the opposite
            _ -> return $ argName:acc
-      ) (return []) (zip procSig as)
+      ) (return []) (zip sig as)
   unless (null argTypeMismatches)
          $ throwError $ ProcArgTypeMismatch (S.fromList argTypeMismatches)
 
@@ -489,12 +558,4 @@ typeNamedProc env n as = do
         ) M.empty chanArgSet
   unless (null interferingArgMap)
          $ throwError $ InterferingProcArgs n interferingArgMap
-
-  -- Should be good at this point. Update the environment to reflect what has
-  -- been used/consumed by the named proc
-  return $ foldr (\ce env'@(ConcTyEnv{cteLin=le}) ->
-    case ce of
-         Left  c -> env'{cteLin=M.delete c le}
-         Right e -> markSeqUsed (freeVars e) env'
-    ) env as
 

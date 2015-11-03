@@ -46,7 +46,7 @@ data ConcTyEnv = ConcTyEnv
   -- Whether a channel has been used yet
   , cteFresh :: S.Set Chan
   -- Map of environments for recursion contexts
-  , cteRec   :: M.Map Text ConcTyEnv
+  , cteRec   :: M.Map Text [(Text, TyOrSess)]
   -- Types (and usage) of sequential variables
   , cteBase  :: M.Map Text (Bool, Ty)
   -- Type environment with builtins and user defined types
