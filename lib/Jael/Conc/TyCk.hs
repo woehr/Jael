@@ -52,6 +52,20 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Chan Session
                | IndSessImplReqd Chan
   deriving (Eq, Show)
 
+data RecType = RTUse
+             | RTImpl
+             deriving (Show)
+
+invertUsage :: RecType -> RecType
+invertUsage x = case x of
+                     RTUse -> RTImpl
+                     RTImpl -> RTUse
+
+toRI :: RecType -> RecImpl
+toRI x = case x of
+              RTUse -> RIUse
+              RTImpl -> RIImpl
+
 -- This function is unsafe as it assumes that the channel name (k) is already in
 -- the linear environment. This function replaces the session represented by
 -- names until the session is no longer a SCoInd, SVar, or SDualVar
@@ -94,11 +108,60 @@ addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
          | nameExists n -> throwError $ RedefinedName n
          | otherwise -> return $ env{cteBase=M.insert n (False, t) bEnv}
 
-updateSession :: Chan -> Session -> ConcTyEnv -> ConcTyEnv
+-- This function modifies the session of c to v. It is called when a session is
+-- deconstructed by a get, put, case, or select. In addition to removing the
+-- fresh flag, this function ensures that the "recursive implementation" flag is
+-- respected. This means that the session is used in a co-recursive process
+-- if the flag is RIImpl or not used in a co-recursive process if the flag is
+-- RIUse. If the flag is RIUnknown it is set accordingly in both the session
+-- being updated and its dual (to be the opposite). It is a compiler error if
+-- there is no dual and the flag is RIUnknown since it is initialized to
+-- RIUnknown only if there is a dual. If the dual was removed from the
+-- environment through use, its dual (this channel) should have had its flag
+-- updated.
+updateSession :: Chan -> Session -> ConcTyEnv -> SessTyErrM ConcTyEnv
 updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
   case M.lookup c linEnv of
-       Just le -> unfoldAlias c env{ cteLin=M.insert c le{leSess=v} linEnv
-                                     , cteFresh=S.delete c freshEnv}
+       Just le -> do
+         when (null (cteRec env) && leRecImpl le == RIImpl)
+              $ throwError $ IndSessUseReqd c
+         when ((not . null) (cteRec env) && leRecImpl le == RIUse)
+              $ throwError $ IndSessImplReqd c
+         -- update the linear environment to reflect new recursive usage flags
+         return $ if leRecImpl le == RIUnknown
+                   then
+                     let dualName =
+                           fromMaybe (error "updateSession error: Channel being\
+                                            \ updated had leRecImpl set to\
+                                            \ RIUnknown but didn't have a dual")
+                                     (leDual le)
+                         dualEnv =
+                           M.findWithDefault
+                             (error "updateSession error: Channel being\
+                                    \ updated had dual but dual was not\
+                                    \ present in the environment.")
+                             dualName linEnv
+                      in if null (cteRec env)
+                            -- not in a recursive environment
+                            then unfoldAlias c env{ cteLin=M.insert c le{ leSess=v
+                                                                        , leRecImpl=RIUse
+                                                                        }
+                                                         $ M.insert dualName
+                                                                    dualEnv{leRecImpl=RIImpl}
+                                                                    linEnv
+                                                  , cteFresh=S.delete c freshEnv
+                                                  }
+                            else unfoldAlias c env{ cteLin=M.insert c le{ leSess=v
+                                                                        , leRecImpl=RIImpl
+                                                                        }
+                                                         $ M.insert dualName
+                                                                    dualEnv{leRecImpl=RIUse}
+                                                                    linEnv
+                                                  , cteFresh=S.delete c freshEnv
+                                                  }
+                   else unfoldAlias c env{ cteLin=M.insert c le{leSess=v} linEnv
+                                         , cteFresh=S.delete c freshEnv}
+
        Nothing -> error "It is expected that if a channel's session is being\
                        \ updated that it already exists in the environment."
 
@@ -173,6 +236,24 @@ markSeqUsed :: S.Set Text -> ConcTyEnv -> ConcTyEnv
 markSeqUsed vars env@(ConcTyEnv{cteBase=baseEnv}) =
   env{cteBase=foldr (M.adjust (\(_,t)->(True,t))) baseEnv vars}
 
+-- Mark a linear channel as "used". This means the channel is removed from the
+-- environment if eligible. If it has a dual in the environment that needs to
+-- "implement" behaviour, mark it as such.
+consumeLinear :: RecType -> Chan -> ConcTyEnv -> SessTyErrM ConcTyEnv
+consumeLinear recType c env@(ConcTyEnv{cteLin=linEnv}) =
+  let cEnv@(LinEnv{leRecImpl=cRec}) = M.findWithDefault (error "") c linEnv
+   in case (recType, cRec) of
+           (RTUse, RIImpl) -> throwError $ IndSessUseReqd c
+           (RTImpl, RIUse) -> throwError $ IndSessImplReqd c
+           (_, RIUnknown)  ->
+             let d = fromMaybe (error "") (leDual cEnv)
+                 dEnv@(LinEnv{leRecImpl=dRec}) = M.findWithDefault (error "") d linEnv
+              in if dRec /= RIUnknown
+                    then error ""
+                    else return $ env{cteLin=M.insert d dEnv{leRecImpl=toRI . invertUsage $ recType}
+                                           $ M.delete c linEnv}
+           _ -> return env{cteLin=M.delete c linEnv}
+
 -- Take an old env and an updated env and return the used and unused parts of
 -- the updated one.
 splitEnvs :: ConcTyEnv -> ConcTyEnv -> (ConcTyEnv, ConcTyEnv)
@@ -236,7 +317,7 @@ tyCkProc env (PGetChan c name p) = do
   env' <- case sess of
                SGetSess v s -> do
                   env'  <- addIfNotRedefinition (RxdLinear name v) env
-                  return $ updateSession c s env'
+                  updateSession c s env'
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
 
@@ -250,14 +331,14 @@ tyCkProc env (PGetVal c name p) = do
                   env'  <- addIfNotRedefinition (Base name v) env
                   -- c has to already be in the environment so an insert
                   -- replaces the old session with the updated one
-                  return $ updateSession c s env'
+                  updateSession c s env'
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
 
 tyCkProc env (PGetIgn c p) = do
   sess <- lookupChanUnfold c env
   env' <- case sess of
-               SGetTy _ s -> return $ updateSession c s env
+               SGetTy _ s -> updateSession c s env
                SGetSess v _ -> throwError $ AttemptedChannelIgnore c v
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
@@ -293,15 +374,14 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPutChan c putChan pCont) = do
                           -- environment; update the type of the session;
                           -- mark the session as no longer in a concurrent
                           -- context to satisfy rule T(circle cross)
-                          return $ (\e -> e{cteLin=M.adjust
-                                              (\le -> le{leConcCtx=False})
-                                              c
-                                              (cteLin e)
-                                           }
-                                   )
-                                 $ updateSession c sCont
-                                 $ addInterferenceUnsafe putChanDual c
-                                     env {cteLin=M.delete putChan lEnv}
+                          updateSession c sCont (addInterferenceUnsafe putChanDual c env)
+                            >>= consumeLinear RTUse putChan
+                            >>= (\e -> return e{cteLin=M.adjust
+                                                 (\le -> le{leConcCtx=False})
+                                                    c
+                                                    (cteLin e)
+                                                }
+                                )
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
@@ -313,8 +393,7 @@ tyCkProc env (PPutVal c putExpr pCont) = do
                  ty <- seqTyCk env (ELet "'" putExpr $ EVar "'")
                  if ty /= v
                     then throwError $ TypeMismatch c ty
-                    else return
-                         $ updateSession c sCont
+                    else updateSession c sCont
                          $ markSeqUsed (freeVars putExpr) env
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
@@ -323,7 +402,7 @@ tyCkProc env (PSel chan lab pCont) = do
   sess <- lookupChanUnfold chan env
   env' <- case sess of
                SSelect ls -> case lookup lab ls of
-                                  Just s -> return $ updateSession chan s env
+                                  Just s -> updateSession chan s env
                                   Nothing -> throwError $ UnknownLabel lab
                _ -> throwError $ ProtocolMismatch chan sess
   tyCkProc env' pCont
@@ -343,12 +422,12 @@ tyCkProc env (PCase chan cases) = do
                  -- channel updated to reflect the session in the
                  -- corresponding "choice" session type.
                  let (caseErrMap, residualEnvMap) = M.mapEitherWithKey
-                      (\label proc -> flip tyCkProc proc $ updateSession chan
+                      (\label proc -> updateSession chan
                         (fromMaybe (error "Should not happen because we check\
                                          \ beforehand that the case and session\
                                          \ labels match.")
                                    (lookup label ls)
-                        ) env
+                        ) env >>= flip tyCkProc proc
                       ) (M.fromList cases)
                  -- The first map for each value in splitEs is what remains of
                  -- the original input environment. The second map contains the
@@ -452,10 +531,11 @@ tyCkProc env (PPar ps) = do
                             Just le@(LinEnv{leIntSet=intSet}) ->
                               -- record update disaster
                               e'{cteLin=
-                                   M.insert c le{leIntSet=
-                                                   intSet `S.union`
-                                                       (c `S.delete` dualChans)
-                                                } l
+                                   M.insert
+                                     c
+                                     le{leIntSet=
+                                          intSet `S.union` S.delete c dualChans}
+                                     l
                                 }
                             Nothing -> e'
                      ) unusedEnv dualChans
@@ -508,7 +588,7 @@ tyCkProc env (PCoRec n inits p) = do
 
   -- return the original environment with the things used by the corecursive
   -- process updated
-  return $ updateEnvFromArgs env argVals
+  updateEnvFromRecArgs env argVals
 
 tyCkProc env (PNamed n as) =
   -- Is what we're trying to type a recursion variable or a named process?
@@ -516,24 +596,33 @@ tyCkProc env (PNamed n as) =
        Just sig -> typeRecursionVar env n as sig
        Nothing -> typeNamedProc env n as
 
-tyCkProc env@(ConcTyEnv{cteLin=linEnv}) (PFwd c1 c2) = do
+tyCkProc env (PFwd c1 c2) = do
   s1 <- lookupChan c1 env
   s2 <- lookupChan c2 env
   unless (s1 `isDual` s2)
     $ throwError $ FordwardedChansNotDual c1 c2
-  return env{cteLin=M.delete c1 $ M.delete c2 linEnv}
+  consumeLinear RTUse c1 env >>= consumeLinear RTUse c2
 
 tyCkProc env PNil = return env
 
 -- Helper functions to keep things a bit cleaner
 
-updateEnvFromArgs :: ConcTyEnv -> [ChanEx] -> ConcTyEnv
-updateEnvFromArgs =
-  foldr (
-    \ce acc@(ConcTyEnv{cteLin=lEnv}) ->
+updateEnvFromProcArgs :: ConcTyEnv -> [ChanEx] -> SessTyErrM ConcTyEnv
+updateEnvFromProcArgs =
+  foldM (
+    \acc ce ->
       case ce of
-           Left c -> acc{cteLin=M.delete c lEnv}
-           Right e -> markSeqUsed (freeVars e) acc
+           Left c -> consumeLinear RTUse c acc
+           Right e -> return $ markSeqUsed (freeVars e) acc
+    )
+
+updateEnvFromRecArgs :: ConcTyEnv -> [ChanEx] -> SessTyErrM ConcTyEnv
+updateEnvFromRecArgs =
+  foldM (
+    \acc ce ->
+      case ce of
+           Left c -> consumeLinear RTImpl c acc
+           Right e -> return $ markSeqUsed (freeVars e) acc
     )
 
 seqTyCk :: ConcTyEnv -> Ex -> SessTyErrM Ty
@@ -550,7 +639,7 @@ typeRecursionVar :: ConcTyEnv
                  -> SessTyErrM ConcTyEnv
 typeRecursionVar env n as sig = do
   checkProcArgErrs env n as sig
-  return $ updateEnvFromArgs env as
+  updateEnvFromRecArgs env as
 
 typeNamedProc :: ConcTyEnv -> Text -> [ChanEx] -> SessTyErrM ConcTyEnv
 typeNamedProc env n as = do
@@ -561,11 +650,7 @@ typeNamedProc env n as = do
   checkProcArgErrs env n as procSig
   -- Should be good at this point. Update the environment to reflect what has
   -- been used/consumed by the named proc
-  return $ foldr (\ce env'@(ConcTyEnv{cteLin=le}) ->
-    case ce of
-         Left  c -> env'{cteLin=M.delete c le}
-         Right e -> markSeqUsed (freeVars e) env'
-    ) env as
+  updateEnvFromProcArgs env as
 
 checkProcArgErrs :: ConcTyEnv
                  -> Text

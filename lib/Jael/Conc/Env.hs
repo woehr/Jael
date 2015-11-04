@@ -21,6 +21,12 @@ type AliasMap = M.Map Text Session
 -- A set of channels with which the channel can not be used sequentially
 type InterferenceSet = S.Set Chan
 
+data RecImpl = RINonInd
+             | RIUnknown
+             | RIUse
+             | RIImpl
+             deriving (Eq, Show)
+
 data LinEnv = LinEnv
   { leSess    :: Session
   , leDual    :: Maybe Chan
@@ -28,7 +34,7 @@ data LinEnv = LinEnv
   -- Does the channel implement recursive behaviour, that is, is it defined
   -- within a co-recursive process. Set when a channel is first used based on
   -- how it is used.
-  , leRecImpl :: Maybe Bool
+  , leRecImpl :: RecImpl
   , leAliases :: AliasMap
   , leIntSet  :: InterferenceSet
   } deriving (Show)
@@ -37,7 +43,11 @@ newLinEnv :: Session -> Maybe Chan -> ConcCtx -> LinEnv
 newLinEnv s dualChan cc = LinEnv{ leSess    = s
                                 , leDual    = dualChan
                                 , leConcCtx = cc
-                                , leRecImpl = Nothing
+                                , leRecImpl = case (isInductiveSession s
+                                                   ,isJust dualChan) of
+                                                   (True, True)  -> RIUnknown
+                                                   (True, False) -> RIUse
+                                                   _             -> RINonInd
                                 , leAliases = M.empty
                                 , leIntSet  = S.empty
                                 }
