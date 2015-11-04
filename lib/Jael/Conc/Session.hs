@@ -139,8 +139,8 @@ varUsage = cata alg
         alg (SCoIndF var (us, vs, ws)) = (var:us, vs, ws)
         alg (SGetTyF _ y) = y
         alg (SPutTyF _ y) = y
-        alg (SGetSessF xs ys) = varUsage xs `tupListMerge` ys
-        alg (SPutSessF xs ys) = varUsage xs `tupListMerge` ys
+        alg (SGetSessF x y) = varUsage x `tupListMerge` y
+        alg (SPutSessF x y) = varUsage x `tupListMerge` y
         alg (SChoiceF xs) = foldr (tupListMerge . snd) ([], [], []) xs
         alg (SSelectF xs) = foldr (tupListMerge . snd) ([], [], []) xs
 
@@ -152,8 +152,8 @@ dupLabels = cata alg
         alg (SCoIndF _ cont) = cont
         alg (SGetTyF _ y) = y
         alg (SPutTyF _ y) = y
-        alg (SGetSessF xs ys) = dupLabels xs `S.union` ys
-        alg (SPutSessF xs ys) = dupLabels xs `S.union` ys
+        alg (SGetSessF x y) = dupLabels x `S.union` y
+        alg (SPutSessF x y) = dupLabels x `S.union` y
         alg (SChoiceF xs) = S.unions $ S.fromList (repeated $ map fst xs):map snd xs
         alg (SSelectF xs) = S.unions $ S.fromList (repeated $ map fst xs):map snd xs
         alg _ = S.empty
@@ -166,8 +166,8 @@ trivialRecursionVars (SCoInd v (SVar v')) = if v == v'
 trivialRecursionVars (SCoInd _ x) = trivialRecursionVars x
 trivialRecursionVars (SGetTy _ x) = trivialRecursionVars x
 trivialRecursionVars (SPutTy _ x) = trivialRecursionVars x
-trivialRecursionVars (SGetSess xs ys) = trivialRecursionVars xs `S.union` trivialRecursionVars ys
-trivialRecursionVars (SPutSess xs ys) = trivialRecursionVars xs `S.union` trivialRecursionVars ys
+trivialRecursionVars (SGetSess x y) = trivialRecursionVars x `S.union` trivialRecursionVars y
+trivialRecursionVars (SPutSess x y) = trivialRecursionVars x `S.union` trivialRecursionVars y
 trivialRecursionVars (SChoice xs) = S.unions $ map (trivialRecursionVars . snd) xs
 trivialRecursionVars (SSelect xs) = S.unions $ map (trivialRecursionVars . snd) xs
 trivialRecursionVars _ = S.empty
@@ -217,6 +217,18 @@ freeIndVars' (defd, vars, dualedVars) =
 unusedIndVars' :: ([Text], [Text], [Text]) -> S.Set Text
 unusedIndVars' (defd, vars, dualedVars) =
   S.fromList defd S.\\ S.fromList (vars ++ dualedVars)
+
+isInductiveSession :: Session -> Bool
+isInductiveSession = cata alg
+  where alg :: Base Session Bool -> Bool
+        alg (SCoIndF _ _) = True
+        alg (SGetTyF _ y) = y
+        alg (SPutTyF _ y) = y
+        alg (SGetSessF _ y) = y
+        alg (SPutSessF _ y) = y
+        alg (SChoiceF xs) = any snd xs
+        alg (SSelectF xs) = any snd xs
+        alg _ = False
 
 validateSession :: Session -> Maybe SessDefErr
 validateSession s =

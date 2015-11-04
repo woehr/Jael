@@ -64,6 +64,12 @@ concTyCkTests =
   , testCase "undefined co-rec variable expr arg" $ checkTyCkErr undefinedCoRecVarArgExpr
   , testCase "test residual environment with corecursive definition" $ checkTyCkErr coRecResidualEnv
   , testCase "test inductive sessions equal under renaming" $ shouldTyCk equalityOfCoinductiveSessions
+  , testCase "unfolded session as argument" $ checkTyCkErr unfoldedInductiveArgumentToRecProc
+  , testCase "inductive session requires 'use' behaviour (1)" $ checkTyCkErr indSessUseReqd1
+  , testCase "inductive session requires 'use' behaviour (2)" $ checkTyCkErr indSessUseReqd2
+  , testCase "inductive session requires 'use' behaviour (3)" $ checkTyCkErr indSessUseReqd3
+  , testCase "inductive session requires 'impl' behaviour (1)" $ checkTyCkErr indSessImplReqd1
+  , testCase "inductive session requires 'impl' behaviour (2)" $ checkTyCkErr indSessImplReqd2
   -- The remainder of these tests are specific examples from papers. See the
   -- inline comments for more details
   , testCase "example 1" $ checkTyCkErr ex1
@@ -97,6 +103,8 @@ testProcs =
   ) $ M.fromList
         [ ("DualArgProc", ["^arg1: ![Int]", "^arg2: ?[Int]"])
         , ("ProcArgTest", ["a1: Int", "a2: Bool", "^a3: ![Int]", "^a4: ![Bool]"])
+        , ("ProcsUseRecSessPos", ["^a: rec X. ![Int] <X>"])
+        , ("ProcsUseRecSessNeg", ["^a: rec X. ?[Int] <X>"])
         ]
 
 doTyCk :: Text -> Maybe SessTyErr
@@ -700,6 +708,91 @@ equalityOfCoinductiveSessions = pack [raw|
   }
 |]
 
+unfoldedInductiveArgumentToRecProc :: (Text, SessTyErr)
+unfoldedInductiveArgumentToRecProc = (pack [raw|
+  proc P() {
+    new (^x, ^y) : ![Int] rec X. ![Int]?[Int] <X>;
+    ( rec X(^x=^x) {
+      }
+    |
+    )
+  }
+|], NonPrimaryIndSessArg "x"
+  )
+
+-- If a recursive session is sent over a channel or passed to a process, it must
+-- be "used" (left rule), and can't implement recursive behaviour in a recursive
+-- process (right rule).
+indSessUseReqd1 :: (Text, SessTyErr)
+indSessUseReqd1 = (pack [raw|
+  proc P(^x: rec X. ![Int] <X>) {
+    // x can't be used as an argument because we have no idea how its dual is
+    // being used
+    rec X(^x=^x) {
+    }
+  }
+|], IndSessUseReqd "x"
+  )
+
+-- As above but for received sessions
+indSessUseReqd2 :: (Text, SessTyErr)
+indSessUseReqd2 = (pack [raw|
+  proc P(^x: ?[rec X. ![Int] <X>]) {
+    ^x -> ^y;
+    // tries to implement behaviour on y instead of using it
+    rec X(^y=^y) {
+    }
+  }
+|], IndSessUseReqd "y"
+  )
+
+-- As above but for sessions where the other end already implements behaviour
+indSessUseReqd3 :: (Text, SessTyErr)
+indSessUseReqd3 = (pack [raw|
+  proc P() {
+    new (^x, ^y): rec X. ![Int] <X>;
+    ( rec X(^x=^x) {
+        ^x <- 42;
+        X(^x)
+      }
+    | rec X(^y=^y) {
+      }
+    )
+    // when one end of the channel implements behaviour, the other is required
+    // to be used
+  }
+|], IndSessUseReqd "y"
+  )
+
+-- The next three tests test are as the previous but test the errors when the
+-- implementation behaviour is required.
+indSessImplReqd1 :: (Text, SessTyErr)
+indSessImplReqd1 = (pack [raw|
+  proc P( ^sendRecPos: ![rec X. ![Int] <X>]
+        , ^sendRecNeg: ![rec X. ?[Int] <X>]
+        )
+  {
+    new (^x, ^y): rec X. ![Int] <X>;
+    ^sendRecPos <- ^x;
+    ( ProcsUseRecSessNeg(^y)
+    |
+    )
+  }
+|], IndSessImplReqd "y"
+  )
+
+indSessImplReqd2 :: (Text, SessTyErr)
+indSessImplReqd2 = (pack [raw|
+  proc P()
+  {
+    new (^x, ^y): rec X. ![Int] <X>;
+    ( ProcsUseRecSessPos(^x)
+    | ProcsUseRecSessNeg(^y)
+    )
+  }
+|], IndSessImplReqd "y"
+  )
+
 -- L. Caires et al. Linear logic propositions as session types, 2014
 -- From page 23, the following is typable in Gay and Hole's system but not
 -- pi-DILL. Note no deadlock.
@@ -759,18 +852,21 @@ ex4 = (pack [raw|
       )
     }
   }
-|], undefined
+|], RecVarUnfoldInRecProc "dn"
   )
 
 -- Infinitely produces the sequence 42, 43, 42, 43, ... on the channel c
 -- From Corecursion and non-divergence in session-typed processes, page 161
 -- (with modification)
+-- The paper does not explicitly talk about typing this process, but based on
+-- its definition, ^c has to have a different type than in example 4 for it to
+-- type since ^c can only be used up to it's recursion variable.
 ex5 :: Text
 ex5 = pack [raw|
-  proc Good(^c: rec X. ![Int] <X>) {
+  proc Good(^c: rec X. ![Int]![Int] <X>) {
       rec G(^c=^c) {
         ^c <- 42;
-        new (^dp, ^dn) : rec X. ![Int] <X>;
+        new (^dp, ^dn) : rec X. ![Int]![Int] <X>;
         ( G(^dp)
         | ^c <- 43;
           ^c <-> ^dn

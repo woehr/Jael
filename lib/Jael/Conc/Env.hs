@@ -25,6 +25,10 @@ data LinEnv = LinEnv
   { leSess    :: Session
   , leDual    :: Maybe Chan
   , leConcCtx :: ConcCtx
+  -- Does the channel implement recursive behaviour, that is, is it defined
+  -- within a co-recursive process. Set when a channel is first used based on
+  -- how it is used.
+  , leRecImpl :: Maybe Bool
   , leAliases :: AliasMap
   , leIntSet  :: InterferenceSet
   } deriving (Show)
@@ -33,6 +37,7 @@ newLinEnv :: Session -> Maybe Chan -> ConcCtx -> LinEnv
 newLinEnv s dualChan cc = LinEnv{ leSess    = s
                                 , leDual    = dualChan
                                 , leConcCtx = cc
+                                , leRecImpl = Nothing
                                 , leAliases = M.empty
                                 , leIntSet  = S.empty
                                 }
@@ -45,7 +50,7 @@ data ConcTyEnv = ConcTyEnv
     cteLin   :: M.Map Chan LinEnv
   -- Whether a channel has been used yet
   , cteFresh :: S.Set Chan
-  -- Map of environments for recursion contexts
+  -- Map of types for calling recursion variables
   , cteRec   :: M.Map Text [(Text, TyOrSess)]
   -- Types (and usage) of sequential variables
   , cteBase  :: M.Map Text (Bool, Ty)

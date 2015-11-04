@@ -40,6 +40,16 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Chan Session
                | ProcArgTypeMismatch (S.Set Text)
                | FordwardedChansNotDual Chan Chan
                | AttemptedChannelIgnore Chan Session
+               | RecVarUnfoldInRecProc Chan
+               -- The error when an inductive session is passed to a recursive
+               -- process without the induction session definition in the
+               -- primary position of the session type.
+               | NonPrimaryIndSessArg Chan
+               -- The error for when it can't be determined whether the two ends
+               -- of a channel properly implement the left and right
+               -- co-inductive rules.
+               | IndSessUseReqd Chan
+               | IndSessImplReqd Chan
   deriving (Eq, Show)
 
 -- This function is unsafe as it assumes that the channel name (k) is already in
@@ -92,13 +102,41 @@ updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
        Nothing -> error "It is expected that if a channel's session is being\
                        \ updated that it already exists in the environment."
 
--- Get the session associated with channel c
--- Note: For the purpose of making use of the channel, that is, this returns
--- corecursive sessions that have unfolded variables.
+-- Lookup a channel and return its session. Unlike lookupChanUnfold, this
+-- function does not unfold inductive sessions or error when looking up a
+-- session in a co-recursive process context. This makes it suitable for the
+-- forwarding process to use (which is the only type of process that can make
+-- use of a recursive session without unfolding). See last paragraph of section
+-- three of "Corecursion and non-divergence in session typed processes" by
+-- Toninho et al.
 lookupChan :: Chan -> ConcTyEnv -> SessTyErrM Session
-lookupChan c (ConcTyEnv{cteLin=linEnv}) =
-  case M.lookup c linEnv of
-       Just (LinEnv{leSess=s, leConcCtx=True }) -> return $ unfoldSession s
+lookupChan = lookupChanHelper False
+
+-- Get the session associated with channel c
+-- Note that this function is for the purpose of making use of the channel,
+-- thus this returns corecursive sessions that have unfolded variables.
+lookupChanUnfold :: Chan -> ConcTyEnv -> SessTyErrM Session
+lookupChanUnfold = lookupChanHelper True
+
+lookupChanHelper :: Bool -> Chan -> ConcTyEnv -> SessTyErrM Session
+lookupChanHelper bUnfold c env =
+  case M.lookup c (cteLin env) of
+       Just (LinEnv{leSess=s, leConcCtx=True}) ->
+         -- Any inductive session used within a recursive
+         -- process is limited in its use up to the induction
+         -- variable. This is an important aspect of the nu right
+         -- rule. See "Corecursion and non-divergence in session
+         -- typed processes" by Toninho et al.
+         case (bUnfold, not . null $ cteRec env, s) of
+              -- reached the recursion variable and we want to unfold in a
+              -- recursive process
+              (True, True, SCoInd _ _) -> throwError $ RecVarUnfoldInRecProc c
+              -- The only case where we may have to call unfoldSession, we want
+              -- to unfold and are not in a recursive process
+              (True, False, _) -> return $ unfoldSession s
+              -- All other cases can just return the session
+              _ -> return s
+
        Just (LinEnv{leConcCtx=False}) -> throwError $ NonParallelUsage c
        _ -> throwError $ UndefinedChan c
 
@@ -192,7 +230,7 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
 tyCkProc :: ConcTyEnv -> Proc -> SessTyErrM ConcTyEnv
 tyCkProc env (PGetChan c name p) = do
   -- Get the session the channel c is suppose to implement
-  sess <- lookupChan c env
+  sess <- lookupChanUnfold c env
   -- Check that the session implements a "get", update the session in the
   -- environment, and introduce the new name
   env' <- case sess of
@@ -204,7 +242,7 @@ tyCkProc env (PGetChan c name p) = do
 
 tyCkProc env (PGetVal c name p) = do
   -- Get the session the channel c is suppose to implement
-  sess <- lookupChan c env
+  sess <- lookupChanUnfold c env
   -- Check that the session implements a "get", update the session in the
   -- environment, and introduce the new name
   env' <- case sess of
@@ -217,7 +255,7 @@ tyCkProc env (PGetVal c name p) = do
   tyCkProc env' p
 
 tyCkProc env (PGetIgn c p) = do
-  sess <- lookupChan c env
+  sess <- lookupChanUnfold c env
   env' <- case sess of
                SGetTy _ s -> return $ updateSession c s env
                SGetSess v _ -> throwError $ AttemptedChannelIgnore c v
@@ -225,7 +263,7 @@ tyCkProc env (PGetIgn c p) = do
   tyCkProc env' p
 
 tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPutChan c putChan pCont) = do
-  sess <- lookupChan c env
+  sess <- lookupChanUnfold c env
   env' <- case sess of
                SPutSess v sCont -> do
                  putSess <- lookupFreshChan putChan env
@@ -268,7 +306,7 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPutChan c putChan pCont) = do
   tyCkProc env' pCont
 
 tyCkProc env (PPutVal c putExpr pCont) = do
-  sess <- lookupChan c env
+  sess <- lookupChanUnfold c env
   env' <- case sess of
                SPutTy v sCont -> do
                  -- ' is a name guaranteed not to be used in the expression
@@ -282,7 +320,7 @@ tyCkProc env (PPutVal c putExpr pCont) = do
   tyCkProc env' pCont
 
 tyCkProc env (PSel chan lab pCont) = do
-  sess <- lookupChan chan env
+  sess <- lookupChanUnfold chan env
   env' <- case sess of
                SSelect ls -> case lookup lab ls of
                                   Just s -> return $ updateSession chan s env
@@ -291,7 +329,7 @@ tyCkProc env (PSel chan lab pCont) = do
   tyCkProc env' pCont
 
 tyCkProc env (PCase chan cases) = do
-  sess <- lookupChan chan env
+  sess <- lookupChanUnfold chan env
   case sess of
        SChoice ls ->
          let l1 = (S.fromList $ map fst ls)
@@ -430,9 +468,15 @@ tyCkProc env (PCoRec n inits p) = do
   argTypes <- mapM
     (\ce ->
        case ce of
-            Left c -> maybe (throwError $ UndefinedChan c)
-                            (return . TorSSess . leSess)
-                            (M.lookup c $ cteLin env)
+            Left c ->
+              case M.lookup c $ cteLin env of
+                   Just cEnv ->
+                     let s = leSess cEnv
+                      in case (isInductiveSession s, s) of
+                              (True, SCoInd _ _) -> return . TorSSess $ s
+                              (True, _) -> throwError $ NonPrimaryIndSessArg c
+                              _ -> return . TorSSess $ s
+                   Nothing -> throwError $ UndefinedChan c
             Right e -> do
               ty <- seqTyCk env e
               return $ TorSTy ty
@@ -447,7 +491,16 @@ tyCkProc env (PCoRec n inits p) = do
                             (cteAlias env)
                             (cteProcs env)
                  ){cteRec=M.insert n coRecSig (cteRec env)}
-  coRecResidualEnv <- tyCkProc coRecEnv p
+  -- The type of inductive sessions in coRecSig are left unfolded for the type
+  -- checking of recursive process variables, but so they can be used in the
+  -- process itself we need to unfold them in the environment. This is because
+  -- any inductive session is not allowed to be unfolded when used in a
+  -- co-recursive process definition
+  let coRecEnv' = coRecEnv{cteLin=M.map (
+                            \le@(LinEnv{leSess=s}) -> le{leSess=unfoldSession s}
+                           ) (cteLin coRecEnv)
+                          }
+  coRecResidualEnv <- tyCkProc coRecEnv' p
 
   -- Type checking the co-recursive process should consume everything that was
   -- in its environment
