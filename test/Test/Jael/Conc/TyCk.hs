@@ -62,7 +62,8 @@ concTyCkTests =
   , testCase "interfering corecursive variable arguments" $ checkTyCkErr interferingCoRecVarArgs
   , testCase "undefined co-rec variable channel arg" $ checkTyCkErr undefinedCoRecVarArgChan
   , testCase "undefined co-rec variable expr arg" $ checkTyCkErr undefinedCoRecVarArgExpr
-  , testCase "test residual environment with corecursive definition" $ shouldTyCk coRecResidualEnv
+  , testCase "test residual environment with corecursive definition" $ checkTyCkErr coRecResidualEnv
+  , testCase "test inductive sessions equal under renaming" $ shouldTyCk equalityOfCoinductiveSessions
   -- The remainder of these tests are specific examples from papers. See the
   -- inline comments for more details
   , testCase "example 1" $ checkTyCkErr ex1
@@ -667,18 +668,34 @@ interferingCoRecVarArgs = (pack [raw|
       ]
   )
 
-coRecResidualEnv :: Text
-coRecResidualEnv = pack [raw|
-  proc P(^useIt : ![rec X. ![Int] <X>]) {
-    new (^a, ^b) : rec Y. ![Int] <Y>;
+coRecResidualEnv :: (Text, SessTyErr)
+coRecResidualEnv = (pack [raw|
+  proc P() {
+    new (^a, ^b) : rec X. ![Int] <X>;
     ( rec X(^b=^b) {
         ^b -> _;
         X(^b)
       }
-    // b should be consumed by the recursive process but a and useIt should
-    // remain
-    | ^a <- 42;
-      ^useIt <- ^a;
+    |
+    )
+  }
+|], UnusedResources
+      { unusedLin=M.fromList [("a", SCoInd "X" $ SPutTy TInt $ SVar "X")]
+      , unusedSeq=M.empty
+      }
+  )
+
+-- should be equal under renaming of the induction variable
+equalityOfCoinductiveSessions :: Text
+equalityOfCoinductiveSessions = pack [raw|
+  proc P( ^x: ![ rec X. ![Int] <X> ]
+        , ^y: ![ rec Y. ?[Int] <Y> ]
+        )
+  {
+    new (^a, ^b) : rec Z. ![Int] <Z>;
+    ^x <- ^a;
+    ( ^y <- ^b;
+    |
     )
   }
 |]

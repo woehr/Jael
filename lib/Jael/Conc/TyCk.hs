@@ -42,15 +42,13 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Chan Session
                | AttemptedChannelIgnore Chan Session
   deriving (Eq, Show)
 
-missingKey :: a
-missingKey = error "Assumed map would contain key but it did not."
-
 -- This function is unsafe as it assumes that the channel name (k) is already in
 -- the linear environment. This function replaces the session represented by
 -- names until the session is no longer a SCoInd, SVar, or SDualVar
 unfoldAlias :: Text -> ConcTyEnv -> ConcTyEnv
 unfoldAlias k env@(ConcTyEnv{cteLin=linEnv, cteAlias=alsEnv}) =
-  let kEnv@(LinEnv{leAliases=a}) = M.findWithDefault missingKey k linEnv
+  let missingKey = error "Assumed map would contain key but it did not."
+      kEnv@(LinEnv{leAliases=a}) = M.findWithDefault missingKey k linEnv
       kEnv' = case leSess $ M.findWithDefault missingKey k linEnv of
         (SVar var) -> Just
           kEnv{leSess=fromMaybe (M.findWithDefault missingKey var alsEnv)
@@ -457,12 +455,7 @@ tyCkProc env (PCoRec n inits p) = do
 
   -- return the original environment with the things used by the corecursive
   -- process updated
-  return $ foldr (
-    \ce acc@(ConcTyEnv{cteLin=lEnv}) ->
-      case ce of
-           Left c -> acc{cteLin=M.delete c lEnv}
-           Right e -> markSeqUsed (freeVars e) acc
-    ) coRecResidualEnv argVals
+  return $ updateEnvFromArgs env argVals
 
 tyCkProc env (PNamed n as) =
   -- Is what we're trying to type a recursion variable or a named process?
@@ -481,6 +474,15 @@ tyCkProc env PNil = return env
 
 -- Helper functions to keep things a bit cleaner
 
+updateEnvFromArgs :: ConcTyEnv -> [ChanEx] -> ConcTyEnv
+updateEnvFromArgs =
+  foldr (
+    \ce acc@(ConcTyEnv{cteLin=lEnv}) ->
+      case ce of
+           Left c -> acc{cteLin=M.delete c lEnv}
+           Right e -> markSeqUsed (freeVars e) acc
+    )
+
 seqTyCk :: ConcTyEnv -> Ex -> SessTyErrM Ty
 seqTyCk env expr = do
   seqEnv <- mkSeqEnv env
@@ -495,7 +497,7 @@ typeRecursionVar :: ConcTyEnv
                  -> SessTyErrM ConcTyEnv
 typeRecursionVar env n as sig = do
   checkProcArgErrs env n as sig
-  return (error "typing of recursion variables is unimplemented")
+  return $ updateEnvFromArgs env as
 
 typeNamedProc :: ConcTyEnv -> Text -> [ChanEx] -> SessTyErrM ConcTyEnv
 typeNamedProc env n as = do
