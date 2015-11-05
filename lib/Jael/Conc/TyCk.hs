@@ -126,7 +126,7 @@ updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
          when (null (cteRec env) && leRecImpl le == RIImpl)
               $ throwError $ IndSessUseReqd c
          when ((not . null) (cteRec env) && leRecImpl le == RIUse)
-              $ throwError $ IndSessImplReqd c
+              $ throwError (IndSessImplReqd c)
          -- update the linear environment to reflect new recursive usage flags
          return $ if leRecImpl le == RIUnknown
                    then
@@ -239,19 +239,31 @@ markSeqUsed vars env@(ConcTyEnv{cteBase=baseEnv}) =
 -- Mark a linear channel as "used". This means the channel is removed from the
 -- environment if eligible. If it has a dual in the environment that needs to
 -- "implement" behaviour, mark it as such.
-consumeLinear :: RecType -> Chan -> ConcTyEnv -> SessTyErrM ConcTyEnv
-consumeLinear recType c env@(ConcTyEnv{cteLin=linEnv}) =
+consumeLinear :: Maybe RecType -> Chan -> ConcTyEnv -> SessTyErrM ConcTyEnv
+consumeLinear mRecType c env@(ConcTyEnv{cteLin=linEnv}) =
   let cEnv@(LinEnv{leRecImpl=cRec}) = M.findWithDefault (error "") c linEnv
-   in case (recType, cRec) of
-           (RTUse, RIImpl) -> throwError $ IndSessUseReqd c
-           (RTImpl, RIUse) -> throwError $ IndSessImplReqd c
-           (_, RIUnknown)  ->
+   in case (mRecType, cRec) of
+           (Just RTUse, RIImpl) -> throwError $ IndSessImplReqd c
+           (Just RTImpl, RIUse) -> throwError $ IndSessUseReqd c
+           (_, RIUnknown) ->
              let d = fromMaybe (error "") (leDual cEnv)
                  dEnv@(LinEnv{leRecImpl=dRec}) = M.findWithDefault (error "") d linEnv
               in if dRec /= RIUnknown
-                    then error ""
-                    else return $ env{cteLin=M.insert d dEnv{leRecImpl=toRI . invertUsage $ recType}
-                                           $ M.delete c linEnv}
+                    then error "Expect an RIUnknown channel and its dual to\
+                               \ always both have RIUnknown."
+                    else case mRecType of
+                              Just recType ->
+                                return $
+                                  env{cteLin=
+                                    M.insert d dEnv{leRecImpl=
+                                                    toRI . invertUsage $ recType}
+                                    $ M.delete c linEnv
+                                    }
+                              -- There has to be a dual because of RIUnknown.
+                              -- We need to set that dual to the opposite usage
+                              -- of whatever context we're currently in
+                              Nothing -> error "unimplemented. not sure this\
+                                              \ case can be hit ..."
            _ -> return env{cteLin=M.delete c linEnv}
 
 -- Take an old env and an updated env and return the used and unused parts of
@@ -375,7 +387,7 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPutChan c putChan pCont) = do
                           -- mark the session as no longer in a concurrent
                           -- context to satisfy rule T(circle cross)
                           updateSession c sCont (addInterferenceUnsafe putChanDual c env)
-                            >>= consumeLinear RTUse putChan
+                            >>= consumeLinear (Just RTUse) putChan
                             >>= (\e -> return e{cteLin=M.adjust
                                                  (\le -> le{leConcCtx=False})
                                                     c
@@ -565,19 +577,26 @@ tyCkProc env (PCoRec n inits p) = do
   -- Check for errors in the arguments passed to the corecursive process
   checkProcArgErrs env n argVals coRecSig
 
+  -- Consume recursive process arguments from the environment. Do this first
+  -- so these errors are reported before bothering to type check the recursive
+  -- process.
+  retEnv <- updateEnvFromRecArgs env argVals
+
   -- create a new environment for the corecursive process
   let coRecEnv = (mkConcEnv coRecSig
                             (cteSeq   env)
                             (cteAlias env)
                             (cteProcs env)
                  ){cteRec=M.insert n coRecSig (cteRec env)}
+
   -- The type of inductive sessions in coRecSig are left unfolded for the type
   -- checking of recursive process variables, but so they can be used in the
   -- process itself we need to unfold them in the environment. This is because
   -- any inductive session is not allowed to be unfolded when used in a
-  -- co-recursive process definition
+  -- co-recursive process definition. All sessions should also be marked as
+  -- implementing inductive behaviour.
   let coRecEnv' = coRecEnv{cteLin=M.map (
-                            \le@(LinEnv{leSess=s}) -> le{leSess=unfoldSession s}
+                            \le@(LinEnv{leSess=s}) -> le{leSess=unfoldSession s, leRecImpl=RIImpl}
                            ) (cteLin coRecEnv)
                           }
   coRecResidualEnv <- tyCkProc coRecEnv' p
@@ -586,9 +605,7 @@ tyCkProc env (PCoRec n inits p) = do
   -- in its environment
   envErrors coRecResidualEnv
 
-  -- return the original environment with the things used by the corecursive
-  -- process updated
-  updateEnvFromRecArgs env argVals
+  return retEnv
 
 tyCkProc env (PNamed n as) =
   -- Is what we're trying to type a recursion variable or a named process?
@@ -601,7 +618,7 @@ tyCkProc env (PFwd c1 c2) = do
   s2 <- lookupChan c2 env
   unless (s1 `isDual` s2)
     $ throwError $ FordwardedChansNotDual c1 c2
-  consumeLinear RTUse c1 env >>= consumeLinear RTUse c2
+  consumeLinear Nothing c1 env >>= consumeLinear Nothing c2
 
 tyCkProc env PNil = return env
 
@@ -612,7 +629,7 @@ updateEnvFromProcArgs =
   foldM (
     \acc ce ->
       case ce of
-           Left c -> consumeLinear RTUse c acc
+           Left c -> consumeLinear (Just RTUse) c acc
            Right e -> return $ markSeqUsed (freeVars e) acc
     )
 
@@ -621,7 +638,7 @@ updateEnvFromRecArgs =
   foldM (
     \acc ce ->
       case ce of
-           Left c -> consumeLinear RTImpl c acc
+           Left c -> consumeLinear (Just RTImpl) c acc
            Right e -> return $ markSeqUsed (freeVars e) acc
     )
 

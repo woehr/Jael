@@ -758,8 +758,6 @@ indSessUseReqd3 = (pack [raw|
     | rec X(^y=^y) {
       }
     )
-    // when one end of the channel implements behaviour, the other is required
-    // to be used
   }
 |], IndSessUseReqd "y"
   )
@@ -842,15 +840,19 @@ ex3 = pack [raw|
 -- From Corecursion and non-divergence in session-typed processes, page 161
 ex4 :: (Text, SessTyErr)
 ex4 = (pack [raw|
-  proc Loop(^c: rec X. ?[Int] <X>) {
-    rec L(^c=^c) {
-      ^c -> _;
-      new (^dp, ^dn): rec X. ?[Int] <X>;
-      ( L(^dp)
-      | ^dn <- 42;
-        ^dn <-> ^c
-      )
-    }
+  proc Loop(^useDual: ![rec X. ![Int] <X>]) {
+    new (^c, ^cDual): rec X. ?[Int] <X>;
+    ^useDual <- ^cDual;
+    ( rec L(^c=^c) {
+        ^c -> _;
+        new (^dp, ^dn): rec X. ?[Int] <X>;
+        ( L(^dp)
+        | ^dn <- 42;
+          ^dn <-> ^c
+        )
+      }
+    |
+    )
   }
 |], RecVarUnfoldInRecProc "dn"
   )
@@ -863,15 +865,19 @@ ex4 = (pack [raw|
 -- type since ^c can only be used up to it's recursion variable.
 ex5 :: Text
 ex5 = pack [raw|
-  proc Good(^c: rec X. ![Int]![Int] <X>) {
-      rec G(^c=^c) {
-        ^c <- 42;
-        new (^dp, ^dn) : rec X. ![Int]![Int] <X>;
-        ( G(^dp)
-        | ^c <- 43;
-          ^c <-> ^dn
-        )
-      }
+  proc Good(^useDual: ![rec X. ?[Int]?[Int] <X>]) {
+      new (^c, ^cDual) : rec X. ![Int]![Int] <X>;
+      ^useDual <- ^cDual;
+      ( rec G(^c=^c) {
+          ^c <- 42;
+          new (^dp, ^dn) : rec X. ![Int]![Int] <X>;
+          ( G(^dp)
+          | ^c <- 43;
+            ^c <-> ^dn
+          )
+        }
+      |
+      )
   }
 |]
 
