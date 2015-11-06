@@ -4,6 +4,7 @@ import ClassyPrelude
 import Test.Framework
 
 import Test.Jael.Compile (compileTests)
+import Test.Jael.Examples (exampleTests)
 import Test.Jael.Grammar.Enum (gEnumTests)
 import Test.Jael.Grammar.Expr (gExprTests)
 import Test.Jael.Grammar.HwProc (gHwProcTests)
@@ -48,5 +49,7 @@ main = defaultMainWithOpts
   , testGroup "Process type checking" concTyCkTests
   -- everything else
   , testGroup "Compilation" compileTests
+  -- example programs
+  , testGroup "Examples" exampleTests
   ] mempty
 
