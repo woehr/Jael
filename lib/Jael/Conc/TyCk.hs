@@ -277,6 +277,10 @@ splitEnvs origEnv newEnv@(ConcTyEnv{cteLin=le, cteBase=be}) = do
         -- update the env by deleting the channel name while others destructure
         -- the session until it hits the SEnd case.
         M.partitionWithKey (\k v -> case M.lookup k (cteLin origEnv) of
+                                         -- We use == here instead of coIndEq.
+                                         -- I expect == to work since there is
+                                         -- no reason for the recursion variable
+                                         -- to change within the environment.
                                          Just l -> leSess l == leSess v
                                          Nothing -> False
                            ) le
@@ -360,7 +364,7 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPutChan c putChan pCont) = do
   env' <- case sess of
                SPutSess v sCont -> do
                  putSess <- lookupFreshChan putChan env
-                 if putSess /= v
+                 if not (putSess `coIndEq` v)
                     then throwError $ ProtocolMismatch c putSess
                     else
                       -- putChan must be fresh so it must also have a dual
@@ -690,7 +694,7 @@ checkProcArgErrs env n as sig = do
                 else return $ argName:acc
            -- Make sure the type of c matches s
            (TorSSess s,  Left c) -> case M.lookup c (cteLin env) of
-                                         Just le -> if s == leSess le
+                                         Just le -> if s `coIndEq` leSess le
                                                        then return acc
                                                        else return $ argName:acc
                                          Nothing -> throwError $ UndefinedChan c

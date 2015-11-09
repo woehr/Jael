@@ -87,6 +87,18 @@ instance Unfoldable Session where
   embed (SDualVarF x) = SDualVar x
   embed (SEndF) = SEnd
 
+-- Takes a combining function and applies it to corresponding labels in the
+-- label lists. Returns true if the combining function is true for all
+-- corresponding labels and both label lists have the same set of labels.
+combineLabelList :: (a -> a -> Bool) -> [(Text, a)] -> [(Text, a)] -> Bool
+combineLabelList f xs ys =
+  let m1 = M.fromList xs
+      m2 = M.fromList ys
+      res = M.intersectionWith f m1 m2
+   in M.size m1 == M.size res && and res
+
+-- Partial function. Returns the dual of a session. Will error if a recursion
+-- variable is dualed. This case should be caught when validating a session.
 dual :: Session -> Session
 dual s = let
     vs = S.fromList . (\(x, _, _) -> x) . varUsage $ s
@@ -186,18 +198,26 @@ isDual (SGetTy t1 s1)   (SPutTy t2 s2)   = t1 == t2 && isDual s1 s2
 isDual (SPutTy t1 s1)   (SGetTy t2 s2)   = t1 == t2 && isDual s1 s2
 isDual (SGetSess t1 s1) (SPutSess t2 s2) = t1 == t2 && isDual s1 s2
 isDual (SPutSess t1 s1) (SGetSess t2 s2) = t1 == t2 && isDual s1 s2
-isDual (SChoice xs1) (SSelect xs2) =
-  let m1 = M.fromList xs1
-      m2 = M.fromList xs2
-   in M.keysSet m1 == M.keysSet m2 && and (M.intersectionWith isDual m1 m2)
-isDual (SSelect xs1) (SChoice xs2) =
-  let m1 = M.fromList xs1
-      m2 = M.fromList xs2
-   in M.keysSet m1 == M.keysSet m2 && and (M.intersectionWith isDual m1 m2)
+isDual (SChoice xs) (SSelect ys) = combineLabelList isDual xs ys
+isDual (SSelect xs) (SChoice ys) = combineLabelList isDual xs ys
 isDual (SVar n1) (SDualVar n2) = n1 == n2
 isDual (SDualVar n1) (SVar n2) = n1 == n2
 isDual (SEnd) (SEnd) = True
 isDual _ _ = False
+
+-- Checks whether two sessions are equal under induction variable renaming
+coIndEq :: Session -> Session -> Bool
+coIndEq (SCoInd n1 s1) (SCoInd n2 s2) =
+  replaceVarInSession (n1, SEnd) s1 `coIndEq`
+  replaceVarInSession (n2, SEnd) s2
+coIndEq (SGetTy t1 s1) (SGetTy t2 s2) = t1 == t2 && s1 `coIndEq` s2
+coIndEq (SPutTy t1 s1) (SPutTy t2 s2) = t1 == t2 && s1 `coIndEq` s2
+coIndEq (SGetSess g1 s1) (SGetSess g2 s2) = g1 `coIndEq` g2 && s1 `coIndEq` s2
+coIndEq (SPutSess p1 s1) (SPutSess p2 s2) = p1 `coIndEq` p2 && s1 `coIndEq` s2
+coIndEq (SChoice xs) (SChoice ys) = combineLabelList coIndEq xs ys
+coIndEq (SSelect xs) (SSelect ys) = combineLabelList coIndEq xs ys
+coIndEq (SEnd) (SEnd) = True
+coIndEq _ _ = False
 
 unfoldSession :: Session -> Session
 unfoldSession inSess@(SCoInd var inCont) =

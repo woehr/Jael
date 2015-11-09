@@ -64,6 +64,7 @@ concTyCkTests =
   , testCase "undefined co-rec variable expr arg" $ checkTyCkErr undefinedCoRecVarArgExpr
   , testCase "test residual environment with corecursive definition" $ checkTyCkErr coRecResidualEnv
   , testCase "test inductive sessions equal under renaming" $ shouldTyCk equalityOfCoinductiveSessions
+  , testCase "test inductive sessions equal under renaming (2)" $ shouldTyCk equalityOfCoinductiveSessions2
   , testCase "unfolded session as argument" $ checkTyCkErr unfoldedInductiveArgumentToRecProc
   , testCase "inductive session requires 'use' behaviour (1)" $ checkTyCkErr indSessUseReqd1
   , testCase "inductive session requires 'use' behaviour (2)" $ checkTyCkErr indSessUseReqd2
@@ -105,6 +106,7 @@ testProcs =
         , ("ProcArgTest", ["a1: Int", "a2: Bool", "^a3: ![Int]", "^a4: ![Bool]"])
         , ("ProcsUseRecSessPos", ["^a: rec X. ![Int] <X>"])
         , ("ProcsUseRecSessNeg", ["^a: rec X. ?[Int] <X>"])
+        , ("CoIndEqY", ["^a: rec Y. ![Int] <Y>"])
         ]
 
 doTyCk :: Text -> Maybe SessTyErr
@@ -696,15 +698,27 @@ coRecResidualEnv = (pack [raw|
 -- should be equal under renaming of the induction variable
 equalityOfCoinductiveSessions :: Text
 equalityOfCoinductiveSessions = pack [raw|
-  proc P( ^x: ![ rec X. ![Int] <X> ]
-        , ^y: ![ rec Y. ?[Int] <Y> ]
+  proc P( ^x: ![ rec X. ?[Int] <X> ]
         )
   {
-    new (^a, ^b) : rec Z. ![Int] <Z>;
-    ^x <- ^a;
-    ( ^y <- ^b;
+    new (^a, ^b) : rec Y. ![Int] <Y>;
+    ^x <- ^b;
+    ( rec X(^a=^a) {
+        ^a <- 42;
+        X(^a)
+      }
     |
     )
+  }
+|]
+
+equalityOfCoinductiveSessions2 :: Text
+equalityOfCoinductiveSessions2 = pack [raw|
+  proc P(^a: rec X. ![Int] <X>)
+  {
+    // This process is defined to take a recursive session matching that of
+    // ^a but differing in the variable name.
+    CoIndEqY(^a)
   }
 |]
 
