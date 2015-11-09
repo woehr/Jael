@@ -191,12 +191,12 @@ tup :: (Text, GExpr)
 tup = (pack [raw|
   { 1
   , true
-  , {}
+  , void
   , 42
   }
 |], GETup $ map GETupArg [ GEInt (DecInt "1")
                          , GETrue
-                         , GEUnit GUnit
+                         , GEUnit
                          , GEInt (DecInt "42")
                          ]
   )

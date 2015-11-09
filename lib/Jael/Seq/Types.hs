@@ -49,7 +49,7 @@ instance Unfoldable Ty where
 data PolyTy = PolyTy [Text] Ty
               deriving (Show)
 
-newtype TyEnv = TyEnv { toMap :: (M.Map Text PolyTy) }
+newtype TyEnv = TyEnv { toMap :: M.Map Text PolyTy }
   deriving (Show)
 
 type TySub = M.Map Text Ty
@@ -132,7 +132,7 @@ polyEquiv (PolyTy _ t) (PolyTy _ u) = t `tyEquiv` u
 gToType :: GType -> Ty
 gToType GTInt = TInt
 gToType GTBool = TBool
-gToType (GTUnit GUnit) = TUnit
+gToType GTUnit = TUnit
 gToType (GTNamed (UIdent n) GTNamedNoParam) = TNamed (pack n) []
 gToType (GTNamed (UIdent n) (GTNamedParams xs)) = TNamed (pack n) (map (\(GTNamedParam t) -> gToType t) xs)
 gToType (GTTVar (LIdent s)) = TVar (pack s)

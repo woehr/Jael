@@ -12,7 +12,6 @@ import Test.Jael.Util
 
 gTypeTests :: [T.Test]
 gTypeTests = [ testCase "unit type" (checkParsedTree pGType unit)
-             , testCase "bad unit type" (shouldNotParse pGType badUnit)
              , testCase "int type" (checkParsedTree pGType int)
              , testCase "bool type" (checkParsedTree pGType bool)
              , testCase "type variable type" (checkParsedTree pGType tvar)
@@ -24,13 +23,8 @@ gTypeTests = [ testCase "unit type" (checkParsedTree pGType unit)
 
 unit :: (Text, GType)
 unit = (pack [raw|
-  {}
-|], GTUnit GUnit)
-
-badUnit :: Text
-badUnit = pack [raw|
-  { }
-|]
+  Void
+|], GTUnit)
 
 int :: (Text, GType)
 int = (pack [raw|

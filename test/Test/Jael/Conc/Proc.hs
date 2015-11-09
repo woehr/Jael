@@ -122,7 +122,7 @@ freeVars = (pack [raw|
 dupArgs :: (Text, ProcDefErr)
 dupArgs = (pack [raw|
   proc X(x:Int, x:Bool) {
-    rec Y(y={}, y={}) { }
+    rec Y(y=void, y=void) {}
   }
 |], ProcDefErr
       { pErrFreeVars = S.empty
@@ -161,8 +161,8 @@ ambiguousRecName = (pack [raw|
     rec X(x=x, z=z) {
       rec Y(x=x) {
         rec Y(x=x) {
-          ( rec Z(x=x) { }
-          | rec Z(x=x) { }
+          ( rec Z(x=x) {}
+          | rec Z(x=x) {}
           )
         }
       }

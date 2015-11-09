@@ -92,7 +92,7 @@ gToEx (GEFalse) = ELit $ LBool False
 gToEx (GETup xs) = case NE.nonEmpty (map tupArgToEx xs) of
                         Nothing -> notEnoughElements 1 "GETupArg" "GETup"
                         Just (y:|ys) -> foldl' EApp (EApp (EVar $ "tup" ++ tshow (length xs)) y) ys
-gToEx (GEUnit GUnit)  = ELit LUnit
+gToEx (GEUnit)  = ELit LUnit
 gToEx (GEVar (LIdent i)) = EVar (pack i)
 gToEx (GEScopedFn (UIdent t) (GEScopeIdent (LIdent f))) = (EVar . pack $ t ++ "::" ++ f)
 gToEx (GEScopedFn (UIdent t) (GEScopeIndex (DecInt n))) = (EVar . pack $ t ++ "::" ++ n)

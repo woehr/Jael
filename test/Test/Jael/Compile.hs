@@ -79,14 +79,14 @@ recType = (pack [raw|
 
 recSession :: (Text, CompileErr)
 recSession = (pack [raw|
-  protocol X = ![{}] <Y>
-  protocol Y = ?[{}] <X>
+  protocol X = ![Void] <Y>
+  protocol Y = ?[Void] <X>
 |], DepCycle ["X", "Y"]
   )
 
 recSessionNoCoRec :: (Text, CompileErr)
 recSessionNoCoRec = (pack [raw|
-  protocol X = ![{}] <X>
+  protocol X = ![Void] <X>
 |], DepCycle ["X"]
   )
 
@@ -104,11 +104,11 @@ undefSession = (pack [raw|
 
 ambigName :: (Text, CompileErr)
 ambigName = (pack [raw|
-  proc X() { }
+  proc X() {}
 
   proc Y(a:Int) {
-    ( rec X(a=a) { }
-    | rec Y(a=a) { }
+    ( rec X(a=a) {}
+    | rec Y(a=a) {}
     )
   }
 |], AmbigName $ M.fromList [("Y", S.fromList ["X", "Y"])]

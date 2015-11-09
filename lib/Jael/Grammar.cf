@@ -21,8 +21,6 @@ separator nonempty GScopeElem "::" ;
 
 -- Sequential grammar
 
-GUnit.       GUnit ::= "{}" ;
-
 GTNamedParam. GTNamedParam ::= GType ;
 separator GTNamedParam "," ;
 
@@ -37,7 +35,7 @@ terminator   GTVars "" ;
 
 GTInt.       GType ::= "Int" ;
 GTBool.      GType ::= "Bool" ;
-GTUnit.      GType ::=  GUnit ;
+GTUnit.      GType ::= "Void" ;
 GTTup.       GType ::= "{" [GTTupArg] "}";
 GTNamed.     GType ::= UIdent GTNamedParams ;
 GTTVar.      GType ::= LIdent ;
@@ -170,7 +168,7 @@ GEFalse.     GExpr16 ::= "false" ;
 GEInt.       GExpr16 ::= DecInt ;
 GEVar.       GExpr16 ::= LIdent ;
 GEScopedFn.  GExpr16 ::= UIdent GEScopeArg ;
-GEUnit.      GExpr16 ::= GUnit ;
+GEUnit.      GExpr16 ::= "void" ;
 GETup.       GExpr16 ::= "{" [GETupArg] "}" ;
 
 coercions    GExpr 16 ;

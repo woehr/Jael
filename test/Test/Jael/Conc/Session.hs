@@ -79,7 +79,7 @@ testDualVars = (pack [raw|
 
 dupIndVar :: (Text, SessDefErr)
 dupIndVar = (pack [raw|
-  rec X. &[ a=> rec X. ![{}] <X>
+  rec X. &[ a=> rec X. ![Void] <X>
           , b=> ?[Int]
           , c=> +[ a=>
                  , b=>
@@ -132,7 +132,7 @@ unusedRecVar = (pack [raw|
 
 dualRecVar :: (Text, SessDefErr)
 dualRecVar = (pack [raw|
-  rec X. ?[{}] <dual X>
+  rec X. ?[Void] <dual X>
 |], SessDefErr
       { sessErrDupInd = S.empty
       , sessErrDupLab = S.empty
