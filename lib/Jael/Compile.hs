@@ -27,33 +27,30 @@ splitTop :: GProg -> ( [(Text, Ex)]      -- a
                      , [(Text, HwArea)]  -- d
                      , [(Text, Session)] -- e
                      , [(Text, TopProc)] -- f
-                     , [(Text, ())] --HwProc)]  -- g
                      )
-splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f, g) ->
+splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f) ->
   case x of
        (GTopDefGGlobal (GGlobal (LIdent n) y))
-         -> ((pack n, gToEx y)                         :a,b,c,d,e,f,g)
+         -> ((pack n, gToEx y)                         :a,b,c,d,e,f)
        (GTopDefGFunc (GFunc (GFuncName (LIdent n)) as y))
-         -> ((pack n, fargsToAbs y as)                 :a,b,c,d,e,f,g)
+         -> ((pack n, fargsToAbs y as)                 :a,b,c,d,e,f)
        (GTopDefGTypeDef (GTDefStruct (UIdent n) y))
-         -> (a,(pack n, gToUserDefTy y)                  :b,c,d,e,f,g)
+         -> (a,(pack n, gToUserDefTy y)                  :b,c,d,e,f)
        (GTopDefGTypeDef (GTDefEnum (UIdent n) y))
-         -> (a,b,(pack n, gToUserDefTy y)                  :c,d,e,f,g)
+         -> (a,b,(pack n, gToUserDefTy y)                  :c,d,e,f)
        (GTopDefGTypeDef (GTDefArea (UIdent n) i y))
-         -> (a,b,c,(pack n, gToUserDefTy (HwAreaGrammar i y)):d,e,f,g)
+         -> (a,b,c,(pack n, gToUserDefTy (HwAreaGrammar i y)):d,e,f)
        (GTopDefGTypeDef (GTDefProto (UIdent n) y))
-         -> (a,b,c,d,(pack n, dual $ gToUserDefTy y)           :e,f,g)
+         -> (a,b,c,d,(pack n, dual $ gToUserDefTy y)           :e,f)
        (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) ys p))
-         -> (a,b,c,d,e,              (pack n, gToTopProc (ys, p)):f,g)
-       (GTopDefGHwProc  _) -> (a,b,c,d,e,f,g)
-  ) ([],[],[],[],[],[],[]) xs
+         -> (a,b,c,d,e,              (pack n, gToTopProc (ys, p)):f)
+  ) ([],[],[],[],[],[]) xs
 
 dupDefs :: [Text] -> CompileErrM ()
 dupDefs ns =
   let repeats = repeated ns
-   in if length repeats == 0
-         then return ()
-         else throwError $ DupDef repeats
+   in unless (null repeats)
+        $ throwError $ DupDef repeats
 
 defErrs :: [Struct]
         -> [Enum]
@@ -67,22 +64,20 @@ defErrs ss es as zs ps =
           ++ mapMaybe (liftA tshow . validate) as
           ++ mapMaybe (liftA tshow . validate) zs
           ++ mapMaybe (liftA tshow . validate) ps
-   in if length errs == 0
-         then return ()
-         else throwError $ TypeDefErr errs
+   in unless (null errs)
+        $ throwError $ TypeDefErr errs
 
 shadowingDef :: [Text] -> [(Text, TopProc)] -> CompileErrM ()
 shadowingDef ns ps =
   let nameSet = S.fromList ns
-      redefMap = foldr (\(n, (TopProc _ p)) a ->
+      redefMap = foldr (\(n, TopProc _ p) a ->
           let redefs = redefinedCoRecVar nameSet p
            in if S.size redefs /= 0
                  then M.insert n redefs a
                  else a
         ) M.empty ps
-   in if M.size redefMap /= 0
-         then throwError $ AmbigName redefMap
-         else return ()
+   in unless (null redefMap)
+        $ throwError $ AmbigName redefMap
 
 undefinedNames :: M.Map Text (S.Set Text) -> CompileErrM ()
 undefinedNames depMap =
@@ -104,7 +99,6 @@ processSeqTypes = undefined
 
 processConcTypes :: [(Text, HwArea)]
                  -> [(Text, Session)]
-                 -> [(Text, ())] --HwProc)]
                  -> CompileErrM ConcTyEnv
 processConcTypes = undefined
 
@@ -114,15 +108,14 @@ compile p = do
                Left e  -> throwError $ ParseErr e
                Right x -> return x
 
-  let (exprs, structs, enums, areas, protocols, procs, hwprocs) = splitTop prog
+  let (exprs, structs, enums, areas, protocols, procs) = splitTop prog
 
-  let topLevelNames = (map fst exprs)     ++
-                      (map fst structs)   ++
-                      (map fst enums)     ++
-                      (map fst areas)     ++
-                      (map fst protocols) ++
-                      (map fst procs)     ++
-                      (map fst hwprocs)
+  let topLevelNames = map fst exprs     ++
+                      map fst structs   ++
+                      map fst enums     ++
+                      map fst areas     ++
+                      map fst protocols ++
+                      map fst procs
 
   -- Find duplicate name definitions
   dupDefs topLevelNames
@@ -151,12 +144,12 @@ compile p = do
   undefinedNames typeDepMap
   typeOrder <- nameCycle typeDepMap
 
-  let sessDepMap = (M.map freeIndVars . M.fromList $ protocols)
+  let sessDepMap = M.map freeIndVars . M.fromList $ protocols
   -- Find uses of undefined sessions
   undefinedNames sessDepMap
   _ <- nameCycle sessDepMap
 
-  let procDepMap = (M.map procDeps . M.fromList $ procs)
+  let procDepMap = M.map procDeps . M.fromList $ procs
   -- Processes on the other hand can continue with a process by name, and they
   -- can not be called recursively (recursion must be explicitly defined).
   undefinedNames procDepMap
@@ -169,7 +162,7 @@ compile p = do
   -- Create an environment from sequential types
   seqTyEnv <- processSeqTypes structs enums areas
   -- Create an environment from concurrent types
-  conTyEnv <- processConcTypes areas protocols hwprocs
+  conTyEnv <- processConcTypes areas protocols
   -- Uses variables to quiet warnings
   undefined exprOrder typeOrder seqTyEnv conTyEnv
 
