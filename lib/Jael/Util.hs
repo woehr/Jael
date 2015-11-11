@@ -1,8 +1,5 @@
-{-# Language NoImplicitPrelude #-}
-
 module Jael.Util where
 
-import ClassyPrelude
 import Data.Char (digitToInt)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Array as A
@@ -10,7 +7,7 @@ import qualified Data.Graph as G
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Numeric (readInt, readDec, readHex, readOct)
-import Text.ParserCombinators.ReadP (ReadS)
+import Text.Read (ReadS)
 import Jael.Grammar
 
 wrongNumberOfElements :: Integer -> String -> String -> a
@@ -109,7 +106,7 @@ hasUndefined deps =
   let ns = M.keysSet deps
       free = S.unions (M.elems deps)
       undef = free S.\\ ns
-   in if S.size undef /= 0
+   in if not (null undef)
          then Just undef
          else Nothing
 
@@ -119,14 +116,14 @@ hasUndefined deps =
 findCycles :: M.Map Text (S.Set Text) -> Either [Text] [Text]
 findCycles m =
   let (dg, vertToNode, _) = G.graphFromEdges $ map (\(a,b)->(a,a,b))
-                                             $ M.toList (map S.toList m)
+                                             $ M.toList (M.map S.toList m)
       nodeName = (\(a,_,_)->a) . vertToNode
       (lb, ub) = A.bounds dg
       -- For each node, find it's successors and determine if it has a path back
       recDeps = [nodeName x | x <- [lb..ub]
                             , y <- dg A.! x
                             , G.path dg y x]
-   in if length recDeps /= 0
+   in if not (null recDeps)
          then Left recDeps
          else Right . map nodeName . G.topSort $ dg
 

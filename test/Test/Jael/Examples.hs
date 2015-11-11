@@ -1,15 +1,8 @@
-{-# Language NoImplicitPrelude #-}
-{-# Language QuasiQuotes #-}
-
 module Test.Jael.Examples
 ( exampleTests
 ) where
 
-import ClassyPrelude
-import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.HUnit
-import Test.Jael.Util
+import qualified Test.Framework as T
 
 exampleTests :: [T.Test]
 exampleTests =

@@ -1,9 +1,5 @@
-{-# Language NoImplicitPrelude #-}
+module Jael.Parser where
 
-module Jael.Parser
-where
-
-import ClassyPrelude
 import Jael.Grammar
 
 type ParseFun a = [Token] -> Err a

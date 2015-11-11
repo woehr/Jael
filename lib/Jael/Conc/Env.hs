@@ -1,16 +1,13 @@
-{-# Language NoImplicitPrelude #-}
-
 module Jael.Conc.Env where
 
-import ClassyPrelude hiding (Chan)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Conc.Proc
 import Jael.Conc.Session
 import Jael.Seq.Types
 
-data EnvValue = NewLinear Chan Chan Session
-              | RxdLinear Chan Session
+data EnvValue = NewLinear Channel Channel Session
+              | RxdLinear Channel Session
               | Base Text Ty
   deriving (Show)
 
@@ -19,7 +16,7 @@ type ConcCtx = Bool
 -- A map tracking alias and recursion variables for a channel's session
 type AliasMap = M.Map Text Session
 -- A set of channels with which the channel can not be used sequentially
-type InterferenceSet = S.Set Chan
+type InterferenceSet = S.Set Channel
 
 data RecImpl = RINonInd
              | RIUnknown
@@ -29,7 +26,7 @@ data RecImpl = RINonInd
 
 data LinEnv = LinEnv
   { leSess    :: Session
-  , leDual    :: Maybe Chan
+  , leDual    :: Maybe Channel
   , leConcCtx :: ConcCtx
   -- Does the channel implement recursive behaviour, that is, is it defined
   -- within a co-recursive process. Set when a channel is first used based on
@@ -39,7 +36,7 @@ data LinEnv = LinEnv
   , leIntSet  :: InterferenceSet
   } deriving (Show)
 
-newLinEnv :: Session -> Maybe Chan -> ConcCtx -> LinEnv
+newLinEnv :: Session -> Maybe Channel -> ConcCtx -> LinEnv
 newLinEnv s dualChan cc = LinEnv{ leSess    = s
                                 , leDual    = dualChan
                                 , leConcCtx = cc
@@ -57,9 +54,9 @@ data ConcTyEnv = ConcTyEnv
   -- The linear environment tracking channel types
   -- A mapping of recursion variables for channels
   -- Track non-interference of channels and enforce parallel channel use
-    cteLin   :: M.Map Chan LinEnv
+    cteLin   :: M.Map Channel LinEnv
   -- Whether a channel has been used yet
-  , cteFresh :: S.Set Chan
+  , cteFresh :: S.Set Channel
   -- Map of types for calling recursion variables
   , cteRec   :: M.Map Text [(Text, TyOrSess)]
   -- Types (and usage) of sequential variables
@@ -89,7 +86,7 @@ emptyEnv = ConcTyEnv
 
 -- Assume that c1 and c2 both exist in cteLin and add each to the others
 -- interference set
-addInterferenceUnsafe :: Chan -> Chan -> ConcTyEnv -> ConcTyEnv
+addInterferenceUnsafe :: Channel -> Channel -> ConcTyEnv -> ConcTyEnv
 addInterferenceUnsafe c1 c2 env@(ConcTyEnv{cteLin=linEnv}) =
   let c1env@(LinEnv{leIntSet=intSet1}) =
         M.findWithDefault (error $ "Expected " ++ unpack c1 ++ " to be in the\

@@ -1,8 +1,5 @@
-{-# Language NoImplicitPrelude #-}
-
 module Jael.Compile where
 
-import ClassyPrelude hiding (Enum, Foldable, Prim)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Err
@@ -23,7 +20,7 @@ import Jael.UserDefTy
 -- splits the top level definition into its different types of components
 splitTop :: GProg -> ( [(Text, Ex)]      -- a
                      , [(Text, Struct)]  -- b
-                     , [(Text, Enum)]    -- c
+                     , [(Text, Enumer)]    -- c
                      , [(Text, HwArea)]  -- d
                      , [(Text, Session)] -- e
                      , [(Text, TopProc)] -- f
@@ -53,17 +50,17 @@ dupDefs ns =
         $ throwError $ DupDef repeats
 
 defErrs :: [Struct]
-        -> [Enum]
+        -> [Enumer]
         -> [HwArea]
         -> [Session]
         -> [TopProc]
         -> CompileErrM ()
 defErrs ss es as zs ps =
-  let errs = mapMaybe (liftA tshow . validate) ss
-          ++ mapMaybe (liftA tshow . validate) es
-          ++ mapMaybe (liftA tshow . validate) as
-          ++ mapMaybe (liftA tshow . validate) zs
-          ++ mapMaybe (liftA tshow . validate) ps
+  let errs = mapMaybe (liftA (pack . show) . validate) ss
+          ++ mapMaybe (liftA (pack . show) . validate) es
+          ++ mapMaybe (liftA (pack . show) . validate) as
+          ++ mapMaybe (liftA (pack . show) . validate) zs
+          ++ mapMaybe (liftA (pack . show) . validate) ps
    in unless (null errs)
         $ throwError $ TypeDefErr errs
 
@@ -92,7 +89,7 @@ nameCycle depMap =
        Right order -> return order
 
 processSeqTypes :: [(Text, Struct)]
-                -> [(Text, Enum)]
+                -> [(Text, Enumer)]
                 -> [(Text, HwArea)]
                 -> CompileErrM TyEnv
 processSeqTypes = undefined

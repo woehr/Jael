@@ -1,9 +1,8 @@
-{-# Language NoImplicitPrelude #-}
-
 module Test.Jael.Util where
 
-import ClassyPrelude hiding (Enum)
 import qualified Data.Map as M
+import Language.Haskell.TH
+import Language.Haskell.TH.Quote
 import Jael.Grammar
 import Jael.Parser
 import Jael.Seq.Enum
@@ -13,22 +12,6 @@ import Jael.Seq.Struct
 import Jael.Seq.TI
 import Jael.Seq.Types
 import Jael.UserDefTy
-import Language.Haskell.TH
-import Language.Haskell.TH.Quote
-import Test.HUnit
-
--- https://hackage.haskell.org/package/raw-strings-qq
--- Extracted from dead-simple-json.
-raw :: QuasiQuoter
-raw = QuasiQuoter
-  { quoteExp  = return . LitE . StringL
-  , quotePat  = \_ -> fail "illegal raw string QuasiQuote \
-                           \(allowed as expression only, used as a pattern)"
-  , quoteType = \_ -> fail "illegal raw string QuasiQuote \
-                           \(allowed as expression only, used as a type)"
-  , quoteDec  = \_ -> fail "illegal raw string QuasiQuote \
-                           \(allowed as expression only, used as a declaration)"
-  }
 
 shouldNotParse :: ParseFun a -> Text -> Assertion
 shouldNotParse p t = either (\_ -> return ())
@@ -76,7 +59,7 @@ checkInference testTypes (tx, expected) =
                                      (GTopDefGTypeDef (GTDefEnum (UIdent n) m))
                                        -> Just (pack n, gToUserDefTy m)
                                      _ -> Nothing
-                         ) prog :: [(Text, Enum)]
+                         ) prog :: [(Text, Enumer)]
     let structEnumErrs = mapMaybe (liftA tshow . validate . snd) sDefs ++
                          mapMaybe (liftA tshow . validate . snd) eDefs
     funs <- if length structEnumErrs == 0

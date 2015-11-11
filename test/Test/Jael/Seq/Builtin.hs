@@ -1,17 +1,12 @@
-{-# Language NoImplicitPrelude #-}
-
 module Test.Jael.Seq.Builtin
 ( builtinTests
 ) where
 
-import ClassyPrelude
 import qualified Data.Map as M
-import Jael.Seq.Env
-import Jael.Seq.Types
-import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.HUnit
-import Test.Jael.Util
+import           Jael.Seq.Env
+import           Jael.Seq.Types
+import qualified Test.Framework as T
+import           Test.Jael.Util
 
 checkBuiltins :: [(Text, PolyTy)] -> Assertion
 checkBuiltins expected =
@@ -28,31 +23,31 @@ builtinTests =
   ]
 
 eMaybe :: [(Text, PolyTy)]
-eMaybe = [ ("Maybe::just", PolyTy ["a"] $ TFun (TVar "a") (TNamed "Maybe" [TVar "a"]))
-         , ("Maybe::nothing", PolyTy ["a"] $ TNamed "Maybe" [TVar "a"])
+eMaybe = [ ("Maybe::just", PolyTy ["a"] $ TFun (TyVar "a") (TNamed "Maybe" [TyVar "a"]))
+         , ("Maybe::nothing", PolyTy ["a"] $ TNamed "Maybe" [TyVar "a"])
          ]
 
 sTup1 :: [(Text, PolyTy)]
 sTup1 = [ ( "tup1"
-          , PolyTy ["a"] $ TFun (TVar "a") (TNamed "Tup1" [TVar "a"])
+          , PolyTy ["a"] $ TFun (TyVar "a") (TNamed "Tup1" [TyVar "a"])
           )
         , ( "Tup1::0"
-          , PolyTy ["a"] $ TFun (TNamed "Tup1" [TVar "a"]) (TVar "a")
+          , PolyTy ["a"] $ TFun (TNamed "Tup1" [TyVar "a"]) (TyVar "a")
           )
         ]
 
 sTup2 :: [(Text, PolyTy)]
 sTup2 = [ ( "tup2"
-          , PolyTy ["a", "b"] $ TFun (TVar "a")
-                                     (TFun (TVar "b")
-                                           (TNamed "Tup2" [TVar "a", TVar "b"])
+          , PolyTy ["a", "b"] $ TFun (TyVar "a")
+                                     (TFun (TyVar "b")
+                                           (TNamed "Tup2" [TyVar "a", TyVar "b"])
                                      )
           )
         , ( "Tup2::0"
-          , PolyTy ["a", "b"] $ TFun (TNamed "Tup2" [TVar "a", TVar "b"]) (TVar "a")
+          , PolyTy ["a", "b"] $ TFun (TNamed "Tup2" [TyVar "a", TyVar "b"]) (TyVar "a")
           )
         , ( "Tup2::1"
-          , PolyTy ["a", "b"] $ TFun (TNamed "Tup2" [TVar "a", TVar "b"]) (TVar "b")
+          , PolyTy ["a", "b"] $ TFun (TNamed "Tup2" [TyVar "a", TyVar "b"]) (TyVar "b")
           )
         ]
 

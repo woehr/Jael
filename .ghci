@@ -1,3 +1,5 @@
-:set -XOverloadedStrings -XDeriveFunctor
+:set -XOverloadedStrings
+:set -XDeriveFunctor
 :set -isrc:lib:test:dist/build
+:load ./lib/Prelude.hs
 

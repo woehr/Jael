@@ -1,9 +1,5 @@
-{-# Language NoImplicitPrelude #-}
-{-# Language TypeFamilies #-}
-
 module Jael.Seq.Struct where
 
-import ClassyPrelude
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as S
 import Jael.Grammar
@@ -42,15 +38,15 @@ validateStruct (Struct tvs fs) =
                        , sErrUnusedTv = w
                        }
                 )
-        $ checkDefErr tvs (NE.toList $ map fst fs)
-                          (typeVars'' . NE.toList $ map snd fs)
+        $ checkDefErr tvs (NE.toList $ NE.map fst fs)
+                          (typeVars'' . NE.toList $ NE.map snd fs)
 
 structEnvItems :: (Text, Struct) -> [(Text, PolyTy)]
-structEnvItems (n, (Struct tvs fs)) =
-  let structTy = TNamed n (map TVar tvs)
-      consTy = (foldr (\(_, ft) t -> TFun ft t) structTy fs)
+structEnvItems (n, Struct tvs fs) =
+  let structTy = TNamed n (map TyVar tvs)
+      consTy = foldr (\(_, ft) t -> TFun ft t) structTy fs
   in (lowerFirst n, PolyTy tvs consTy)
-     : map (\(f, t) -> (n ++ "::" ++ f, PolyTy tvs $ TFun structTy t)
+     : map (\(f, t) -> (n <> "::" <> f, PolyTy tvs $ TFun structTy t)
            ) (NE.toList fs)
 
 structTypeDeps :: Struct -> S.Set Text
@@ -64,7 +60,7 @@ structTypeDeps (Struct _ fs) = S.fromList
 
 lowerFirst :: Text -> Text
 lowerFirst xs = case uncons xs of
-                     Just (x, xs') -> (toLower . singleton $ x) ++ xs'
+                     Just (x, xs') -> (toLower . singleton $ x) <> xs'
                      Nothing ->
                        error "Compiler error. Struct name should not be empty."
 
@@ -77,5 +73,5 @@ gToStruct (GTStructDef tvs fields) =
   case NE.nonEmpty fields of
     Nothing -> notEnoughElements 1 "GTStructElement" "GTStructDef"
     Just xs -> Struct (map (\(GTVars (LIdent s)) -> pack s) tvs)
-                      (map gToField xs)
+                      (NE.map gToField xs)
 

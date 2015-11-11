@@ -1,10 +1,6 @@
-{-# Language NoImplicitPrelude #-}
-{-# Language TypeFamilies #-}
-
 module Jael.Conc.Session where
 
-import ClassyPrelude hiding (Foldable)
-import Data.Functor.Foldable
+import Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
@@ -63,7 +59,7 @@ data SessionF a = SGetTyF Ty a
 
 type instance Base Session = SessionF
 
-instance Foldable Session where
+instance F.Foldable Session where
   project (SGetTy x y) = SGetTyF x y
   project (SPutTy x y) = SPutTyF x y
   project (SGetSess x y) = SGetSessF x y
@@ -75,7 +71,7 @@ instance Foldable Session where
   project (SDualVar x) = SDualVarF x
   project (SEnd) = SEndF
 
-instance Unfoldable Session where
+instance F.Unfoldable Session where
   embed (SGetTyF x y) = SGetTy x y
   embed (SPutTyF x y) = SPutTy x y
   embed (SGetSessF x y) = SGetSess x y
@@ -129,11 +125,11 @@ gToSession = ana coalg
         coalg (GSessEnd) = SEndF
         coalg (GSessVar (UIdent var)) = SVarF (pack var)
         coalg (GSessVarDual (UIdent var)) = SDualVarF (pack var)
-        coalg (GSessRec (UIdent var) cont) = SCoIndF (pack var) cont
-        coalg (GSessGet (GSessTy t) cont) = SGetTyF (gToType t) cont
-        coalg (GSessGet (GSessSess s) cont) = SGetSessF (gToSession s) cont
-        coalg (GSessPut (GSessTy t) cont) = SPutTyF (gToType t) cont
-        coalg (GSessPut (GSessSess s) cont) = SPutSessF (gToSession s) cont
+        coalg (GSessRec (UIdent var) c) = SCoIndF (pack var) c
+        coalg (GSessGet (GSessTy t) c) = SGetTyF (gToType t) c
+        coalg (GSessGet (GSessSess s) c) = SGetSessF (gToSession s) c
+        coalg (GSessPut (GSessTy t) c) = SPutTyF (gToType t) c
+        coalg (GSessPut (GSessSess s) c) = SPutSessF (gToSession s) c
         coalg (GSessSel ss) = SSelectF (convLabelList ss)
         coalg (GSessCho ss) = SChoiceF (convLabelList ss)
 
@@ -161,7 +157,7 @@ varUsage = cata alg
 dupLabels :: Session -> S.Set Text
 dupLabels = cata alg
   where alg :: Base Session (S.Set Text) -> S.Set Text
-        alg (SCoIndF _ cont) = cont
+        alg (SCoIndF _ c) = c
         alg (SGetTyF _ y) = y
         alg (SPutTyF _ y) = y
         alg (SGetSessF x y) = dupLabels x `S.union` y

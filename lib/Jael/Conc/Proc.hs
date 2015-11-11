@@ -1,10 +1,8 @@
-{-# Language NoImplicitPrelude #-}
 {-# Language TypeFamilies #-}
 
 module Jael.Conc.Proc where
 
-import ClassyPrelude hiding (Chan, Foldable)
-import Data.Functor.Foldable
+import Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
@@ -22,11 +20,11 @@ data ProcDefErr = ProcDefErr
   , pErrAmbiguousRecName :: S.Set Text
   } deriving (Eq, Show)
 
-type Chan = Text
+type Channel = Text
 type Var  = Text
 type Label = Text
 
-type ChanEx = Either Chan Ex
+type ChanEx = Either Channel Ex
 
 data TyOrSess = TorSTy Ty
               | TorSSess Session
@@ -45,41 +43,41 @@ instance UserDefTy TopProc where
   typeDeps _ = S.empty
   envItems _ = []
 
-data Proc = PGetChan Chan Chan Proc
-          | PGetVal  Chan Text Proc
-          | PGetIgn  Chan      Proc
-          | PPutChan Chan Chan Proc
-          | PPutVal  Chan Ex   Proc
+data Proc = PGetChan Channel Channel Proc
+          | PGetVal  Channel Text Proc
+          | PGetIgn  Channel      Proc
+          | PPutChan Channel Channel Proc
+          | PPutVal  Channel Ex   Proc
           | PNewVal Text Ex Proc
           | PNewChan Text Text Session Proc
           | PPar [Proc]
-          | PCase Chan [(Label, Proc)]
-          | PSel Chan Label Proc
+          | PCase Channel [(Label, Proc)]
+          | PSel Channel Label Proc
           | PCoRec Text [(Var, ChanEx)] Proc
-          | PFwd Chan Chan
+          | PFwd Channel Channel
           | PNamed Text [ChanEx]
           | PNil
           deriving (Eq, Show)
 
-data ProcF a = PGetChanF Chan Chan a
-             | PGetValF  Chan Text a
-             | PGetIgnF  Chan      a
-             | PPutChanF Chan Chan a
-             | PPutValF  Chan Ex   a
+data ProcF a = PGetChanF Channel Channel a
+             | PGetValF  Channel Text a
+             | PGetIgnF  Channel      a
+             | PPutChanF Channel Channel a
+             | PPutValF  Channel Ex   a
              | PNewValF Text Ex a
              | PNewChanF Text Text Session a
              | PParF [a]
-             | PCaseF Chan [(Label, a)]
-             | PSelF Chan Label a
+             | PCaseF Channel [(Label, a)]
+             | PSelF Channel Label a
              | PCoRecF Text [(Var, ChanEx)] a
-             | PFwdF Chan Chan
+             | PFwdF Channel Channel
              | PNamedF Text [ChanEx]
              | PNilF
              deriving (Functor, Show)
 
 type instance Base Proc = ProcF
 
-instance Foldable Proc where
+instance F.Foldable Proc where
   project (PGetChan x y z) = PGetChanF x y z
   project (PGetVal x y z)  = PGetValF x y z
   project (PGetIgn x y)    = PGetIgnF x y
@@ -95,7 +93,7 @@ instance Foldable Proc where
   project (PNamed x y)   = PNamedF x y
   project (PNil)         = PNilF
 
-instance Unfoldable Proc where
+instance F.Unfoldable Proc where
   embed (PGetChanF x y z) = PGetChan x y z
   embed (PGetValF x y z)  = PGetVal x y z
   embed (PGetIgnF x y)    = PGetIgn x y
@@ -112,7 +110,7 @@ instance Unfoldable Proc where
   embed (PNilF)         = PNil
 
 gScopedToText :: [GScopeElem] -> Text
-gScopedToText = intercalate "::" . map (\(GScopeElem (LIdent x)) -> pack x)
+gScopedToText = pack . intercalate "::" . map (\(GScopeElem (LIdent x)) -> x)
 
 gChoiceToProc :: [GConcChoice] -> [(Text, GProc)]
 gChoiceToProc = map (\(GConcChoice (GChoiceLabel (LIdent x)) p) -> (pack x, p))
@@ -153,8 +151,8 @@ gToProc = ana coalg
               ) = PSelF (gScopedToText xs) (pack y) p
         coalg (GProcCho (GChan (GScopedIdent xs)) ys
               ) = PCaseF (gScopedToText xs) (gChoiceToProc ys)
-        coalg (GProcRec (GProcName (UIdent x)) inits p
-              ) = PCoRecF (pack x) (gToInitList inits) p
+        coalg (GProcRec (GProcName (UIdent x)) i p
+              ) = PCoRecF (pack x) (gToInitList i) p
         coalg (GProcNamed (GProcName (UIdent x)) params
               ) = PNamedF (pack x) (map gProcParamToEx params)
         coalg (GProcInact

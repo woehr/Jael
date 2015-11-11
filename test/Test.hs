@@ -1,8 +1,3 @@
-{-# Language NoImplicitPrelude #-}
-
-import ClassyPrelude
-import Test.Framework
-
 import Test.Jael.Compile (compileTests)
 import Test.Jael.Examples (exampleTests)
 import Test.Jael.Grammar.Enum (gEnumTests)

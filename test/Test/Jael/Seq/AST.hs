@@ -33,27 +33,27 @@ tyEq1 = ( TInt
         )
 
 tyEq2 :: (Ty, Ty)
-tyEq2 = ( TVar "a"
-        , TVar "a"
+tyEq2 = ( TyVar "a"
+        , TyVar "a"
         )
 
 tyEq3 :: (Ty, Ty)
-tyEq3 = ( (TVar "a")
-        , (TVar "b")
+tyEq3 = ( (TyVar "a")
+        , (TyVar "b")
         )
 
 tyEq4 :: (Ty, Ty)
-tyEq4 = ( (TFun (TVar "a") (TVar "b"))
-        , (TFun (TVar "c") (TVar "d"))
+tyEq4 = ( (TFun (TyVar "a") (TyVar "b"))
+        , (TFun (TyVar "c") (TyVar "d"))
         )
 
 tyEq5 :: (Ty, Ty)
-tyEq5 = ( (TFun (TVar "a") (TVar "b"))
-        , (TFun (TVar "b") (TVar "c"))
+tyEq5 = ( (TFun (TyVar "a") (TyVar "b"))
+        , (TFun (TyVar "b") (TyVar "c"))
         )
 
 tyEq6 :: (Ty, Ty)
-tyEq6 = ( (TFun (TVar "a") (TVar "a"))
-        , (TFun (TVar "b") (TVar "b"))
+tyEq6 = ( (TFun (TyVar "a") (TyVar "a"))
+        , (TFun (TyVar "b") (TyVar "b"))
         )
 

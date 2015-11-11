@@ -1,18 +1,12 @@
-{-# Language NoImplicitPrelude, QuasiQuotes #-}
-
 module Test.Jael.Hw.Area
 ( hwAreaTests
 ) where
 
-import ClassyPrelude
 import qualified Data.Map as M
-import Jael.Grammar
-import Jael.Parser
-import Jael.Seq.Types
-import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.HUnit
-import Test.Jael.Util
+import           Jael.Grammar
+import           Jael.Parser
+import           Jael.Seq.Types
+import qualified Test.Framework as T
 
 hwAreaTests :: [T.Test]
 hwAreaTests =

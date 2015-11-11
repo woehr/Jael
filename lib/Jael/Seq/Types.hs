@@ -1,14 +1,11 @@
-{-# Language DeriveFunctor, NoImplicitPrelude, TypeFamilies #-}
-
 module Jael.Seq.Types where
 
-import ClassyPrelude hiding (Foldable)
-import Data.Functor.Foldable
+import Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
 
-data Ty = TVar Text
+data Ty = TyVar Text
         | TUnit
         | TInt
         | TBool
@@ -17,7 +14,7 @@ data Ty = TVar Text
         | TFun Ty Ty
         deriving (Eq, Show)
 
-data TyF a = TVarF Text
+data TyF a = TyVarF Text
            | TUnitF
            | TIntF
            | TBoolF
@@ -28,8 +25,8 @@ data TyF a = TVarF Text
 
 type instance Base Ty = TyF
 
-instance Foldable Ty where
-  project (TVar x) = TVarF x
+instance F.Foldable Ty where
+  project (TyVar x) = TyVarF x
   project (TUnit) = TUnitF
   project (TInt) = TIntF
   project (TBool) = TBoolF
@@ -37,8 +34,8 @@ instance Foldable Ty where
   project (TNamed x y) = TNamedF x y
   project (TFun x y) = TFunF x y
 
-instance Unfoldable Ty where
-  embed (TVarF x) = TVar x
+instance F.Unfoldable Ty where
+  embed (TyVarF x) = TyVar x
   embed (TUnitF) = TUnit
   embed (TIntF) = TInt
   embed (TBoolF) = TBool
@@ -60,13 +57,13 @@ class TyOps a where
 
 instance TyOps Ty where
   ftv = cata ftvFn
-    where ftvFn (TVarF t)      = S.singleton t
+    where ftvFn (TyVarF t)      = S.singleton t
           ftvFn (TNamedF _ ts) = foldr S.union S.empty ts
           ftvFn (TFunF t1 t2)  = t1 `S.union` t2
           ftvFn _              = S.empty
 
   apply s = cata applyFn
-    where applyFn t@(TVarF v)    = M.findWithDefault (embed t) v s
+    where applyFn t@(TyVarF v)    = M.findWithDefault (embed t) v s
           applyFn t = embed t
 
 instance TyOps PolyTy where
@@ -95,9 +92,9 @@ tyEquiv t u =
          Nothing -> False
          Just s  -> apply s t `identical` u
     where mkSub :: TySub -> Ty -> Ty -> Maybe TySub
-          mkSub sub (TVar a) b@(TVar bname) =
+          mkSub sub (TyVar a) b@(TyVar bname) =
             case M.lookup a sub of
-                 Just (TVar b'name) -> if bname == b'name
+                 Just (TyVar b'name) -> if bname == b'name
                                           then Just sub
                                           else Nothing
                  _ -> Just (M.insert a b sub)
@@ -114,7 +111,7 @@ tyEquiv t u =
                              else Nothing
 
           identical :: Ty -> Ty -> Bool
-          identical (TVar a) (TVar b) = a == b
+          identical (TyVar a) (TyVar b) = a == b
           identical (TUnit) (TUnit) = True
           identical (TInt) (TInt) = True
           identical (TBool) (TBool) = True
@@ -135,15 +132,15 @@ gToType GTBool = TBool
 gToType GTUnit = TUnit
 gToType (GTNamed (UIdent n) GTNamedNoParam) = TNamed (pack n) []
 gToType (GTNamed (UIdent n) (GTNamedParams xs)) = TNamed (pack n) (map (\(GTNamedParam t) -> gToType t) xs)
-gToType (GTTVar (LIdent s)) = TVar (pack s)
-gToType (GTTup xs) = TNamed ("Tup" ++ tshow (length xs+1))
+gToType (GTTVar (LIdent s)) = TyVar (pack s)
+gToType (GTTup xs) = TNamed ("Tup" <> (pack . show) (length xs + 1))
                             (map (\(GTTupArg x) -> gToType x) xs)
 
 -- Return the type variables of a type
 typeVars :: Ty -> S.Set Text
 typeVars = cata alg
   where alg :: TyF (S.Set Text) -> S.Set Text
-        alg (TVarF x)   = S.singleton x
+        alg (TyVarF x)   = S.singleton x
         alg (TFunF x y) = x `S.union` y
         alg _           = S.empty
 

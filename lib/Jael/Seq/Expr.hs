@@ -1,13 +1,10 @@
-{-# Language NoImplicitPrelude #-}
--- Module for handling sequential specific grammar
 module Jael.Seq.Expr
 ( fargsToAbs
 , freeVars
 , gToEx
 ) where
 
-import ClassyPrelude hiding (Foldable, Prim)
-import Data.Functor.Foldable
+import Data.Functor.Foldable as F
 import Data.List.NonEmpty ( NonEmpty( (:|) ))
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Set as S
@@ -21,14 +18,14 @@ freeVars = cata alg
         alg (EVarF x) = S.singleton x
         alg (EAppF f e) = f `S.union` e
         alg (EAbsF x e) = S.delete x e
-        alg (ELetF x e1 e2) = e1 `S.union` (S.delete x e2)
+        alg (ELetF x e1 e2) = e1 `S.union` S.delete x e2
         alg _ = S.empty
 
 fargsToAbs :: GExpr -> [GFuncArg] -> Ex
 fargsToAbs e = cata alg
-  where alg :: Prim [GFuncArg] Ex -> Ex
+  where alg :: F.Prim [GFuncArg] Ex -> Ex
         alg (Cons (GFuncArg (LIdent x)) xs) = EAbs (pack x) xs
-        alg Nil = (gToEx e)
+        alg Nil = gToEx e
 
 -- The LetExpr grammar is only allowed in certain places so it isn't of the GExpr type
 letExprToEx :: GELetExpr -> Ex
@@ -91,9 +88,9 @@ gToEx (GETrue)  = ELit $ LBool True
 gToEx (GEFalse) = ELit $ LBool False
 gToEx (GETup xs) = case NE.nonEmpty (map tupArgToEx xs) of
                         Nothing -> notEnoughElements 1 "GETupArg" "GETup"
-                        Just (y:|ys) -> foldl' EApp (EApp (EVar $ "tup" ++ tshow (length xs)) y) ys
+                        Just (y:|ys) -> foldl' EApp (EApp (EVar $ "tup" <> (pack . show) (length xs)) y) ys
 gToEx (GEUnit)  = ELit LUnit
 gToEx (GEVar (LIdent i)) = EVar (pack i)
-gToEx (GEScopedFn (UIdent t) (GEScopeIdent (LIdent f))) = (EVar . pack $ t ++ "::" ++ f)
-gToEx (GEScopedFn (UIdent t) (GEScopeIndex (DecInt n))) = (EVar . pack $ t ++ "::" ++ n)
+gToEx (GEScopedFn (UIdent t) (GEScopeIdent (LIdent f))) = EVar . pack $ t ++ "::" ++ f
+gToEx (GEScopedFn (UIdent t) (GEScopeIndex (DecInt n))) = EVar . pack $ t ++ "::" ++ n
 

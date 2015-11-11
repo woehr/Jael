@@ -1,10 +1,7 @@
-{-# Language NoImplicitPrelude #-}
 {-# Language FlexibleContexts #-}
-{-# Language TypeFamilies #-}
 
 module Jael.UserDefTy where
 
-import ClassyPrelude
 import qualified Data.Set as S
 
 -- A class for user defined things that provides functions for converting the

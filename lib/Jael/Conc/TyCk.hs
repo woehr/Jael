@@ -1,9 +1,5 @@
-{-# Language NoImplicitPrelude #-}
-
 module Jael.Conc.TyCk where
 
-import ClassyPrelude hiding (Chan, Foldable)
-import Control.Monad.Except hiding (foldM, mapM_)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Conc.Env
@@ -17,39 +13,39 @@ import Jael.Seq.Types
 
 type SessTyErrM = Either SessTyErr
 
-data SessTyErr = UnusedResources { unusedLin :: M.Map Chan Session
+data SessTyErr = UnusedResources { unusedLin :: M.Map Channel Session
                                  , unusedSeq :: M.Map Text Ty
                                  }
-               | UndefinedChan Chan
+               | UndefinedChan Channel
                | RedefinedName Text
-               | ProtocolMismatch Chan Session
-               | TypeMismatch Chan Ty
+               | ProtocolMismatch Channel Session
+               | TypeMismatch Channel Ty
                | DuplicateSeqEnvItem [Text]
                | SeqTIErrs [Text]
                | UnknownLabel Label
                | CaseLabelMismatch (S.Set Label)
                | NonFreshChan Text
-               | PutChanDualNotFound Chan
-               | ChannelInterference Chan (S.Set Chan)
-               | NonParallelUsage Chan
-               | InterferingProcArgs Text (M.Map Chan (S.Set Chan))
+               | PutChanDualNotFound Channel
+               | ChannelInterference Channel (S.Set Channel)
+               | NonParallelUsage Channel
+               | InterferingProcArgs Text (M.Map Channel (S.Set Channel))
                | CaseProcErrs (M.Map Label SessTyErr)
                -- Issue #4
                | CasesUseDifferentLinearResources
                | InsufficientProcArgs Text
                | ProcArgTypeMismatch (S.Set Text)
-               | FordwardedChansNotDual Chan Chan
-               | AttemptedChannelIgnore Chan Session
-               | RecVarUnfoldInRecProc Chan
+               | FordwardedChansNotDual Channel Channel
+               | AttemptedChannelIgnore Channel Session
+               | RecVarUnfoldInRecProc Channel
                -- The error when an inductive session is passed to a recursive
                -- process without the induction session definition in the
                -- primary position of the session type.
-               | NonPrimaryIndSessArg Chan
+               | NonPrimaryIndSessArg Channel
                -- The error for when it can't be determined whether the two ends
                -- of a channel properly implement the left and right
                -- co-inductive rules.
-               | IndSessUseReqd Chan
-               | IndSessImplReqd Chan
+               | IndSessUseReqd Channel
+               | IndSessImplReqd Channel
   deriving (Eq, Show)
 
 data RecType = RTUse
@@ -119,7 +115,7 @@ addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
 -- RIUnknown only if there is a dual. If the dual was removed from the
 -- environment through use, its dual (this channel) should have had its flag
 -- updated.
-updateSession :: Chan -> Session -> ConcTyEnv -> SessTyErrM ConcTyEnv
+updateSession :: Channel -> Session -> ConcTyEnv -> SessTyErrM ConcTyEnv
 updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
   case M.lookup c linEnv of
        Just le -> do
@@ -172,16 +168,16 @@ updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
 -- use of a recursive session without unfolding). See last paragraph of section
 -- three of "Corecursion and non-divergence in session typed processes" by
 -- Toninho et al.
-lookupChan :: Chan -> ConcTyEnv -> SessTyErrM Session
+lookupChan :: Channel -> ConcTyEnv -> SessTyErrM Session
 lookupChan = lookupChanHelper False
 
 -- Get the session associated with channel c
 -- Note that this function is for the purpose of making use of the channel,
 -- thus this returns corecursive sessions that have unfolded variables.
-lookupChanUnfold :: Chan -> ConcTyEnv -> SessTyErrM Session
+lookupChanUnfold :: Channel -> ConcTyEnv -> SessTyErrM Session
 lookupChanUnfold = lookupChanHelper True
 
-lookupChanHelper :: Bool -> Chan -> ConcTyEnv -> SessTyErrM Session
+lookupChanHelper :: Bool -> Channel -> ConcTyEnv -> SessTyErrM Session
 lookupChanHelper bUnfold c env =
   case M.lookup c (cteLin env) of
        Just (LinEnv{leSess=s, leConcCtx=True}) ->
@@ -204,7 +200,7 @@ lookupChanHelper bUnfold c env =
        _ -> throwError $ UndefinedChan c
 
 -- Get the session associated with channel c, only if it is a fresh channel
-lookupFreshChan :: Chan -> ConcTyEnv -> SessTyErrM Session
+lookupFreshChan :: Channel -> ConcTyEnv -> SessTyErrM Session
 lookupFreshChan c (ConcTyEnv{cteLin=linEnv, cteFresh=freshEnv}) =
   case (M.lookup c linEnv, c `S.member` freshEnv) of
        (Just (LinEnv{leSess=s}), True) -> return s
@@ -213,12 +209,12 @@ lookupFreshChan c (ConcTyEnv{cteLin=linEnv, cteFresh=freshEnv}) =
 
 mkSeqEnv :: ConcTyEnv -> SessTyErrM TyEnv
 mkSeqEnv (ConcTyEnv{cteBase=bEnv, cteSeq=sEnv}) =
-  case addToEnv sEnv $ M.toList $ M.map polyTy (map snd bEnv) of
+  case addToEnv sEnv $ M.toList $ M.map polyTy (M.map snd bEnv) of
        Left errs -> throwError $ DuplicateSeqEnvItem errs
        Right env -> return env
 
 -- Separate the arguments of a TopProc into linear sessions and base types
-separateArgs :: [(Text, TyOrSess)] -> ([(Chan, Session)], [(Text, Ty)])
+separateArgs :: [(Text, TyOrSess)] -> ([(Channel, Session)], [(Text, Ty)])
 separateArgs = foldr
   (\(n, x) (ss, ts) -> case x of
                             TorSTy t   -> (ss, (n,t):ts)
@@ -239,7 +235,7 @@ markSeqUsed vars env@(ConcTyEnv{cteBase=baseEnv}) =
 -- Mark a linear channel as "used". This means the channel is removed from the
 -- environment if eligible. If it has a dual in the environment that needs to
 -- "implement" behaviour, mark it as such.
-consumeLinear :: Maybe RecType -> Chan -> ConcTyEnv -> SessTyErrM ConcTyEnv
+consumeLinear :: Maybe RecType -> Channel -> ConcTyEnv -> SessTyErrM ConcTyEnv
 consumeLinear mRecType c env@(ConcTyEnv{cteLin=linEnv}) =
   let cEnv@(LinEnv{leRecImpl=cRec}) = M.findWithDefault (error "") c linEnv
    in case (mRecType, cRec) of
@@ -557,10 +553,10 @@ tyCkProc env (PPar ps) = do
                      ) unusedEnv dualChans
     ) env' ps
 
-tyCkProc env (PCoRec n inits p) = do
+tyCkProc env (PCoRec n is p) = do
   -- Determine the types of the arguments to the corecursive process
-  let varNames = map fst inits
-  let argVals  = map snd inits
+  let varNames = map fst is
+  let argVals  = map snd is
   argTypes <- mapM
     (\ce ->
        case ce of

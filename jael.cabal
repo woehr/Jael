@@ -9,7 +9,7 @@ maintainer:          jordanwoehr@gmail.com
 copyright:           Copyright (c) 2015 Jordan Woehr
 category:            Language
 build-type:          Custom
-cabal-version:       >=1.18
+cabal-version:       >=1.22
 
 source-repository head
   type: git
@@ -17,6 +17,7 @@ source-repository head
 
 library
   exposed-modules:     Jael.Compile
+--                       Jael.Compile.TH
                        Jael.Conc.Env
                        Jael.Conc.Proc
                        Jael.Conc.Session
@@ -30,6 +31,7 @@ library
                        Jael.Grammar.Print
                        Jael.Hw.Area
                        Jael.Parser
+--                       Jael.Proc.AM335X
                        Jael.Seq.AST
                        Jael.Seq.Builtin
                        Jael.Seq.Closure
@@ -43,58 +45,70 @@ library
                        Jael.Util
 
   default-extensions:  DeriveFunctor,
+                       TypeFamilies,
                        OverloadedStrings
-  other-extensions:    NoImplicitPrelude
 
-  build-depends:       base >=4.7 && <5,
-                       array,
+  build-depends:       base-noprelude >=4.8,
                        classy-prelude,
+                       mtl-prelude
+
+  build-depends:       array,
                        containers,
                        llvm-general,
                        llvm-general-pure,
-                       mtl,
                        recursion-schemes,
                        semigroups
 
   hs-source-dirs:      lib
   default-language:    Haskell2010
   ghc-options:         -Wall
+                       -fwarn-incomplete-uni-patterns
+                       -fwarn-incomplete-record-updates
+                       -fwarn-monomorphism-restriction
+                       -fwarn-identities
 
 executable jael
   main-is:             Main.hs
 
-  build-depends:       base >=4.7 && <5,
-                       classy-prelude,
-                       jael
+  build-depends:       base-noprelude >=4.8,
+                       classy-prelude
+
+  build-depends:       jael
 
   default-extensions:  OverloadedStrings
-  other-extensions:    NoImplicitPrelude
 
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:         -Wall
+                       -fwarn-incomplete-uni-patterns
+                       -fwarn-incomplete-record-updates
+                       -fwarn-monomorphism-restriction
+                       -fwarn-identities
 
 test-suite test-jael
   type:                exitcode-stdio-1.0
   main-is:             Test.hs
 
-  default-extensions:  OverloadedStrings
-  other-extensions:    NoImplicitPrelude,
+  default-extensions:  OverloadedStrings,
                        QuasiQuotes
 
-  build-depends:       base >=4.7 && <5,
-                       jael,
+  build-depends:       base-noprelude >=4.8,
                        classy-prelude,
-                       containers
-
-  build-depends:       HUnit,
+                       HUnit,
                        QuickCheck,
                        template-haskell,
                        test-framework,
                        test-framework-hunit,
                        test-framework-quickcheck2
 
+  build-depends:       jael,
+                       containers
+
   hs-source-dirs:      test
   default-language:    Haskell2010
   ghc-options:         -Wall
+                       -fwarn-incomplete-uni-patterns
+                       -fwarn-incomplete-record-updates
+                       -fwarn-monomorphism-restriction
+                       -fwarn-identities
 

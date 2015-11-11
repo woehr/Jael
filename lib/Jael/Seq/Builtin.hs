@@ -1,9 +1,5 @@
-{-# Language NoImplicitPrelude #-}
+module Jael.Seq.Builtin where
 
-module Jael.Seq.Builtin
-where
-
-import ClassyPrelude hiding (Enum)
 import Data.List (genericTake)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
@@ -15,9 +11,9 @@ maxBuiltinTupSize :: Integer
 maxBuiltinTupSize = 10
 
 buildTup :: Integer -> (Text, Struct)
-buildTup i = let tvs = genericTake i . map (\v -> "a" ++ tshow v) $ ([0..]::[Integer])
-              in ("Tup" ++ tshow i, Struct tvs $ NE.fromList
-                                               $ map (tshow *** TVar)
+buildTup i = let tvs = genericTake i . map (\v -> "a" <> (pack . show) v) $ ([0..]::[Integer])
+              in ("Tup" <> (pack . show) i, Struct tvs $ NE.fromList
+                                               $ map ((pack . show) *** TyVar)
                                                $ zip ([0..]::[Integer]) tvs
                  )
 
@@ -28,8 +24,8 @@ builtinStruct = ( "IntDivRes", Struct [] ( NE.fromList [ ("quot", TInt)
                                         )
                 ) : map buildTup [1..maxBuiltinTupSize]
 
-builtinEnums :: [(Text, Enum)]
-builtinEnums = [ ("Maybe", Enum ["a"] $ NE.fromList [ TagWithTy "just" (TVar "a")
+builtinEnums :: [(Text, Enumer)]
+builtinEnums = [ ("Maybe", Enumer ["a"] $ NE.fromList [ TagWithTy "just" (TyVar "a")
                                                     , Tag "nothing"
                                                     ]
                  )
@@ -38,16 +34,16 @@ builtinEnums = [ ("Maybe", Enum ["a"] $ NE.fromList [ TagWithTy "just" (TVar "a"
 builtinFuncs :: TyEnv
 builtinFuncs = TyEnv $ M.fromList
   [ ( "<$" -- (a -> b) -> a -> b
-    , PolyTy ["a", "b"] (TFun (TFun (TVar "a") (TVar "b")) (TFun (TVar "a") (TVar "b")))
+    , PolyTy ["a", "b"] (TFun (TFun (TyVar "a") (TyVar "b")) (TFun (TyVar "a") (TyVar "b")))
     )
   , ( "$>" -- a -> (a -> b) -> b
-    , PolyTy ["a", "b"] (TFun (TVar "a") (TFun (TFun (TVar "a") (TVar "b")) (TVar "b")))
+    , PolyTy ["a", "b"] (TFun (TyVar "a") (TFun (TFun (TyVar "a") (TyVar "b")) (TyVar "b")))
     )
   , ( "<o" -- (b -> c) -> (a -> b) -> (a -> c)
-    , PolyTy ["a", "b", "c"] (TFun (TFun (TVar "b") (TVar "c")) (TFun (TFun (TVar "a") (TVar "b")) (TFun (TVar "a") (TVar "c"))))
+    , PolyTy ["a", "b", "c"] (TFun (TFun (TyVar "b") (TyVar "c")) (TFun (TFun (TyVar "a") (TyVar "b")) (TFun (TyVar "a") (TyVar "c"))))
     )
   , ( "o>" -- (a -> b) -> (b -> c) -> (a -> c)
-    , PolyTy ["a", "b", "c"] (TFun (TFun (TVar "a") (TVar "b")) (TFun (TFun (TVar "b") (TVar "c")) (TFun (TVar "a") (TVar "c"))))
+    , PolyTy ["a", "b", "c"] (TFun (TFun (TyVar "a") (TyVar "b")) (TFun (TFun (TyVar "b") (TyVar "c")) (TFun (TyVar "a") (TyVar "c"))))
     )
   ]
 

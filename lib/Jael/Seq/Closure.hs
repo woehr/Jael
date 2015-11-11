@@ -1,9 +1,6 @@
-{-# Language DeriveFunctor, NoImplicitPrelude, TypeFamilies #-}
-
 module Jael.Seq.Closure where
 
-import ClassyPrelude hiding (Foldable)
-import Data.Functor.Foldable
+import Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Seq.AST
@@ -33,14 +30,14 @@ data TypedCCF a = TypedCCF (Ann Ty ExCCF a)
 
 type instance Base TypedCC = TypedCCF
 
-instance Foldable TypedCC where
-  project (TypedCC (Ann {ann=t, unAnn=e})) = TypedCCF (Ann {ann=t, unAnn=e})
+instance F.Foldable TypedCC where
+  project (TypedCC Ann {ann=t, unAnn=e}) = TypedCCF Ann {ann=t, unAnn=e}
 
-instance Unfoldable TypedCC where
-  embed (TypedCCF (Ann {ann=t, unAnn=e})) = TypedCC (Ann {ann=t, unAnn=e})
+instance F.Unfoldable TypedCC where
+  embed (TypedCCF Ann {ann=t, unAnn=e}) = TypedCC Ann {ann=t, unAnn=e}
 
 mkTypedCC :: Ty -> ExCCF TypedCC -> TypedCC
-mkTypedCC t e = TypedCC $ Ann {ann=t, unAnn=e}
+mkTypedCC t e = TypedCC Ann {ann=t, unAnn=e}
 
 data CCFun = CCFun
   { funArg :: Text
@@ -81,7 +78,7 @@ instance Functor CConvM where
 runCC :: CConvR -> CConvM TypedCC -> (TypedCC, M.Map Text CCFun)
 runCC r m = let (CConvM f) = m
                 (v, s) = f ( r
-                           , CConvS{ccsCount=(-1), ccsFns=M.empty}
+                           , CConvS{ccsCount= -1, ccsFns=M.empty}
                            )
              in (v, ccsFns s)
 
@@ -99,17 +96,17 @@ tellFn :: (Text, CCFun) -> CConvM ()
 tellFn (k, v) = CConvM $ \(_, s@CConvS{ccsFns=fs}) -> ((), s{ccsFns=M.insert k v fs})
 
 getEnvs :: CConvM (M.Map Text (M.Map Text Ty))
-getEnvs = cconvState >>= return . M.map funEnv . ccsFns
+getEnvs = liftM (M.map funEnv . ccsFns) cconvState
 
 genLamName :: CConvM Text
 genLamName = do
   c <- cconvInc
   r <- cconvRead
-  return $ ccrLiftLabel r ++ tshow c
+  return $ ccrLiftLabel r <> (pack . show) c
 
 letConversion :: TypedEx -> TypedEx
 letConversion = cata alg
-  where alg (TypedExF (Ann {ann=t, unAnn=(ELetF x e1 e2)})) =
+  where alg (TypedExF Ann {ann=t, unAnn=(ELetF x e1 e2)}) =
           mkTyped t $ EAppF (mkTyped (TFun (tyOf e1) (tyOf e2))
                                      (EAbsF x e2)
                             )
@@ -123,30 +120,30 @@ letConversion = cata alg
 freeVars :: M.Map Text (M.Map Text Ty) -> TypedCC -> M.Map Text Ty
 freeVars envs = cata (alg envs)
   where alg :: M.Map Text (M.Map Text Ty) -> TypedCCF (M.Map Text Ty) -> M.Map Text Ty
-        alg _ (TypedCCF (Ann {ann=t, unAnn=(CVarF x)})) = M.singleton x t
-        alg _ (TypedCCF (Ann {unAnn=(CAppF f e )})) = f `M.union` e
-        alg e (TypedCCF (Ann {unAnn=(CClosF n)})) = M.findWithDefault M.empty n e
+        alg _ (TypedCCF Ann {ann=t, unAnn=(CVarF x)}) = M.singleton x t
+        alg _ (TypedCCF Ann {unAnn=(CAppF f e )}) = f `M.union` e
+        alg e (TypedCCF Ann {unAnn=(CClosF n)}) = M.findWithDefault M.empty n e
         alg _ _ = M.empty
 
 doCc :: TypedEx -> CConvM TypedCC
 doCc = cata alg
   where alg :: TypedExF (CConvM TypedCC) -> CConvM TypedCC
-        alg (TypedExF (Ann {ann=t, unAnn=(EAbsF a e)})) = do
+        alg (TypedExF Ann {ann=t, unAnn=(EAbsF a e)}) = do
           ccEx <- e
           globals <- cconvRead >>= \x -> return (ccrGlobals x)
           lamName <- genLamName
           envs <- getEnvs
-          let fvs = foldr M.delete (freeVars envs ccEx) $ (S.insert a globals)
+          let fvs = foldr M.delete (freeVars envs ccEx) $ S.insert a globals
           tellFn (lamName, CCFun { funArg=a
                                  , funEnv=fvs
                                  , funExp=ccEx
                                  })
           return $ mkTypedCC t (CClosF lamName)
-        alg (TypedExF (Ann {ann=t, unAnn=(EAppF f e)})) = liftM2 (\x y -> mkTypedCC t $ CAppF x y) f e
-        alg (TypedExF (Ann {ann=t, unAnn=(EVarF x)})) = return $ mkTypedCC t $ CVarF x
-        alg (TypedExF (Ann {ann=t, unAnn=(EPrmF x)})) = return $ mkTypedCC t $ CPrmF x
-        alg (TypedExF (Ann {ann=t, unAnn=(ELitF x)})) = return $ mkTypedCC t $ CLitF x
-        alg (TypedExF (Ann {ann=_, unAnn=(ELetF _ _ _)})) = error "Should have been let converted"
+        alg (TypedExF Ann {ann=t, unAnn=(EAppF f e)}) = liftM2 (\x y -> mkTypedCC t $ CAppF x y) f e
+        alg (TypedExF Ann {ann=t, unAnn=(EVarF x)}) = return $ mkTypedCC t $ CVarF x
+        alg (TypedExF Ann {ann=t, unAnn=(EPrmF x)}) = return $ mkTypedCC t $ CPrmF x
+        alg (TypedExF Ann {ann=t, unAnn=(ELitF x)}) = return $ mkTypedCC t $ CLitF x
+        alg (TypedExF Ann {ann=_, unAnn=(ELetF{})}) = error "Should have been let converted"
 
 closureConversion :: S.Set Text -> Text -> TypedEx -> (TypedCC, M.Map Text CCFun)
 closureConversion globals liftLabel e =

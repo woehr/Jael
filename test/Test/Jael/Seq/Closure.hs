@@ -1,24 +1,18 @@
-{-# Language NoImplicitPrelude, QuasiQuotes #-}
-
 module Test.Jael.Seq.Closure
 ( closureTests
 ) where
 
-import ClassyPrelude
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Jael.Grammar
-import Jael.Parser
-import Jael.Seq.AST
-import Jael.Seq.Closure
-import Jael.Seq.Env
-import Jael.Seq.Expr
-import Jael.Seq.TI
-import Jael.Seq.Types
-import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.HUnit
-import Test.Jael.Util
+import           Jael.Grammar
+import           Jael.Parser
+import           Jael.Seq.AST
+import           Jael.Seq.Closure
+import           Jael.Seq.Env
+import           Jael.Seq.Expr
+import           Jael.Seq.TI
+import           Jael.Seq.Types
+import qualified Test.Framework as T
 
 closureTests :: [T.Test]
 closureTests =
@@ -433,18 +427,18 @@ differentEnvs = (pack [raw|
       \x -> { x }
     }
   }
-|], mkTypedCC (TFun (TVar "a") (TFun TBool (TFun (TVar "a") (TVar "a")))) $ CClosF "lam'3"
+|], mkTypedCC (TFun (TyVar "a") (TFun TBool (TFun (TyVar "a") (TyVar "a")))) $ CClosF "lam'3"
   , [ ( "lam'0"
       , CCFun
           { funArg = "x"
-          , funEnv = M.fromList [("a", TVar "a")]
+          , funEnv = M.fromList [("a", TyVar "a")]
           , funExp =
-              (mkTypedCC (TVar "a") $ CAppF
-                (mkTypedCC (TFun (TVar "a") (TVar "a")) $ CAppF
-                  (mkTypedCC (TFun (TVar "a") (TFun (TVar "a") (TVar "a"))) $ CPrmF PAdd)
-                  (mkTypedCC (TVar "a") $ CVarF "a")
+              (mkTypedCC (TyVar "a") $ CAppF
+                (mkTypedCC (TFun (TyVar "a") (TyVar "a")) $ CAppF
+                  (mkTypedCC (TFun (TyVar "a") (TFun (TyVar "a") (TyVar "a"))) $ CPrmF PAdd)
+                  (mkTypedCC (TyVar "a") $ CVarF "a")
                 )
-                (mkTypedCC (TVar "a") $ CVarF "x")
+                (mkTypedCC (TyVar "a") $ CVarF "x")
               )
           }
       )
@@ -453,35 +447,35 @@ differentEnvs = (pack [raw|
           { funArg = "x"
           , funEnv = M.empty
           , funExp =
-              (mkTypedCC (TVar "a") $ CVarF "x")
+              (mkTypedCC (TyVar "a") $ CVarF "x")
           }
       )
     , ( "lam'2"
       , CCFun
           { funArg = "b"
-          , funEnv = M.fromList [("a", TVar "a")]
+          , funEnv = M.fromList [("a", TyVar "a")]
           , funExp =
-              (mkTypedCC (TFun (TVar "a") (TVar "a")) $ CAppF
-                (mkTypedCC (TFun (TFun (TVar "a") (TVar "a"))
-                               (TFun (TVar "a") (TVar "a"))
+              (mkTypedCC (TFun (TyVar "a") (TyVar "a")) $ CAppF
+                (mkTypedCC (TFun (TFun (TyVar "a") (TyVar "a"))
+                               (TFun (TyVar "a") (TyVar "a"))
                          ) $ CAppF
-                  (mkTypedCC (TFun (TFun (TVar "a") (TVar "a"))
-                                   (TFun (TFun (TVar "a") (TVar "a"))
-                                         (TFun (TVar "a") (TVar "a"))
+                  (mkTypedCC (TFun (TFun (TyVar "a") (TyVar "a"))
+                                   (TFun (TFun (TyVar "a") (TyVar "a"))
+                                         (TFun (TyVar "a") (TyVar "a"))
                                    )
                              ) $ CAppF
                     (mkTypedCC (TFun (TBool)
-                                     (TFun (TFun (TVar "a") (TVar "a"))
-                                           (TFun (TFun (TVar "a") (TVar "a"))
-                                                 (TFun (TVar "a") (TVar "a"))
+                                     (TFun (TFun (TyVar "a") (TyVar "a"))
+                                           (TFun (TFun (TyVar "a") (TyVar "a"))
+                                                 (TFun (TyVar "a") (TyVar "a"))
                                            )
                                      )
                                ) $ CPrmF PIf)
                     (mkTypedCC TBool $ CVarF "b")
                   )
-                  (mkTypedCC (TFun (TVar "a") (TVar "a")) $ CClosF "lam'0")
+                  (mkTypedCC (TFun (TyVar "a") (TyVar "a")) $ CClosF "lam'0")
                 )
-                (mkTypedCC (TFun (TVar "a") (TVar "a")) $ CClosF "lam'1")
+                (mkTypedCC (TFun (TyVar "a") (TyVar "a")) $ CClosF "lam'1")
               )
           }
       )
@@ -490,7 +484,7 @@ differentEnvs = (pack [raw|
           { funArg = "a"
           , funEnv = M.empty
           , funExp =
-              (mkTypedCC (TFun TBool (TFun (TVar "a") (TVar "a"))) (CClosF "lam'2"))
+              (mkTypedCC (TFun TBool (TFun (TyVar "a") (TyVar "a"))) (CClosF "lam'2"))
           }
       )
     ]

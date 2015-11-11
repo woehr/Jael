@@ -1,19 +1,14 @@
-{-# Language NoImplicitPrelude, QuasiQuotes #-}
-
 module Test.Jael.Conc.Session
 ( sessionTests
 ) where
 
-import ClassyPrelude
 import qualified Data.Set as S
-import Jael.Grammar
-import Jael.Parser
-import Jael.Conc.Session
-import Jael.Seq.Types
-import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.HUnit
-import Test.Jael.Util
+import           Jael.Conc.Session
+import           Jael.Grammar
+import           Jael.Parser
+import           Jael.Seq.Types
+import qualified Test.Framework as T
+import           Test.Jael.Util
 
 sessionTests :: [T.Test]
 sessionTests =

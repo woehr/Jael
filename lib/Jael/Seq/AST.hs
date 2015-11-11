@@ -1,8 +1,6 @@
-{-# Language DeriveFunctor, NoImplicitPrelude, TypeFamilies #-}
 module Jael.Seq.AST where
 
-import ClassyPrelude hiding (Foldable)
-import Data.Functor.Foldable
+import Data.Functor.Foldable as F
 import Jael.Seq.Types
 
 data Lit = LUnit
@@ -47,7 +45,7 @@ data ExF a = EVarF Text
 
 type instance Base Ex = ExF
 
-instance Foldable Ex where
+instance F.Foldable Ex where
   project (EVar x)     = EVarF x
   project (EPrm x)     = EPrmF x
   project (ELit x)     = ELitF x
@@ -55,7 +53,7 @@ instance Foldable Ex where
   project (EAbs x y)   = EAbsF x y
   project (ELet x y z) = ELetF x y z
 
-instance Unfoldable Ex where
+instance F.Unfoldable Ex where
   embed (EVarF x)     = EVar x
   embed (EPrmF x)     = EPrm x
   embed (ELitF x)     = ELit x
@@ -75,20 +73,20 @@ data TypedExF a = TypedExF (Ann Ty ExF a)
 
 type instance Base TypedEx = TypedExF
 
-instance Foldable TypedEx where
-  project (TypedEx (Ann {ann=t, unAnn=e})) = TypedExF (Ann {ann=t, unAnn=e})
+instance F.Foldable TypedEx where
+  project (TypedEx Ann {ann=t, unAnn=e}) = TypedExF Ann {ann=t, unAnn=e}
 
-instance Unfoldable TypedEx where
-  embed (TypedExF (Ann {ann=t, unAnn=e})) = TypedEx (Ann {ann=t, unAnn=e})
+instance F.Unfoldable TypedEx where
+  embed (TypedExF Ann {ann=t, unAnn=e}) = TypedEx Ann {ann=t, unAnn=e}
 
 instance TyOps TypedEx where
   ftv (TypedEx (Ann {ann=t})) = ftv t
   apply s = cata alg
-    where alg (TypedExF (Ann {ann=t, unAnn=e})) = TypedEx (Ann {ann=apply s t, unAnn=e})
+    where alg (TypedExF Ann {ann=t, unAnn=e}) = TypedEx Ann {ann=apply s t, unAnn=e}
 
 tyOf :: TypedEx -> Ty
-tyOf (TypedEx (Ann {ann=t})) = t
+tyOf (TypedEx Ann {ann=t}) = t
 
 mkTyped :: Ty -> ExF TypedEx -> TypedEx
-mkTyped t e = TypedEx $ Ann {ann=t, unAnn=e}
+mkTyped t e = TypedEx Ann {ann=t, unAnn=e}
 

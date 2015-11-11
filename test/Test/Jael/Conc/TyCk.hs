@@ -1,23 +1,17 @@
-{-# Language NoImplicitPrelude, QuasiQuotes #-}
-
 module Test.Jael.Conc.TyCk
 ( concTyCkTests
 ) where
 
-import ClassyPrelude
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Jael.Grammar
-import Jael.Parser
-import Jael.Conc.Proc
-import Jael.Conc.Session
-import Jael.Conc.TyCk
-import Jael.Seq.Env
-import Jael.Seq.Types
-import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.HUnit
-import Test.Jael.Util
+import           Jael.Conc.Proc
+import           Jael.Conc.Session
+import           Jael.Conc.TyCk
+import           Jael.Grammar
+import           Jael.Parser
+import           Jael.Seq.Env
+import           Jael.Seq.Types
+import qualified Test.Framework as T
 
 concTyCkTests :: [T.Test]
 concTyCkTests =

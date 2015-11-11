@@ -1,14 +1,10 @@
-{-# Language NoImplicitPrelude, QuasiQuotes #-}
-
 module Test.Jael.Grammar.Enum
 ( gEnumTests
 ) where
 
-import ClassyPrelude
-import Jael.Grammar
-import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.Jael.Util
+import           Jael.Grammar
+import qualified Test.Framework as T
+import           Test.Jael.Util
 
 gEnumTests :: [T.Test]
 gEnumTests =

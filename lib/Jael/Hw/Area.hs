@@ -1,9 +1,7 @@
-{-# Language NoImplicitPrelude #-}
 {-# Language TypeFamilies #-}
 
 module Jael.Hw.Area where
 
-import ClassyPrelude
 import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Seq.Types

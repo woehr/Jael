@@ -1,19 +1,12 @@
-{-# Language NoImplicitPrelude #-}
-{-# Language QuasiQuotes #-}
-
 module Test.Jael.Compile
 ( compileTests
 ) where
 
-import ClassyPrelude
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Compile
 import Jael.Err
-import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.HUnit
-import Test.Jael.Util
+import qualified Test.Framework as T
 
 compileTests :: [T.Test]
 compileTests =

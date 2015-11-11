@@ -1,15 +1,10 @@
-{-# Language NoImplicitPrelude, QuasiQuotes #-}
-
 module Test.Jael.Seq.TI
 ( seqInfTests
 ) where
 
-import ClassyPrelude
-import Jael.Seq.Types
-import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.HUnit
-import Test.Jael.Util
+import           Jael.Seq.Types
+import qualified Test.Framework as T
+import           Test.Jael.Util
 
 seqInfTests :: [T.Test]
 seqInfTests =
@@ -49,10 +44,10 @@ exprAbs = (pack [raw|
   \a b c -> {
     a*b*c
   }
-|], TFun (TVar "a")
-         (TFun (TVar "a")
-               (TFun (TVar "a")
-                     (TVar "a")
+|], TFun (TyVar "a")
+         (TFun (TyVar "a")
+               (TFun (TyVar "a")
+                     (TyVar "a")
                )
          )
   )
@@ -87,12 +82,12 @@ exprLet = (pack [raw|
     i = d-e+a;
     f+g-h*i
   }
-|], TFun (TVar "a")
-         (TFun (TVar "a")
-               (TFun (TVar "a")
-                     (TFun (TVar "a")
-                           (TFun (TVar "a")
-                                 (TVar "a")
+|], TFun (TyVar "a")
+         (TFun (TyVar "a")
+               (TFun (TyVar "a")
+                     (TFun (TyVar "a")
+                           (TFun (TyVar "a")
+                                 (TyVar "a")
                            )
                      )
                )
@@ -105,8 +100,8 @@ exprLetPoly = (pack [raw|
     id = \x -> { x };
     { id(a), id(1), id(true) }
   }
-|], TFun (TVar "a")
-         (TNamed "Tup3" [TVar "a", TInt, TBool])
+|], TFun (TyVar "a")
+         (TNamed "Tup3" [TyVar "a", TInt, TBool])
   )
 
 exprIntDiv :: (Text, Ty)
@@ -143,6 +138,6 @@ exprTup = (pack [raw|
 exprTupCons :: (Text, Ty)
 exprTupCons = (pack [raw|
   tup2(true)
-|], TFun (TVar "a") (TNamed "Tup2" [TBool, TVar "a"])
+|], TFun (TyVar "a") (TNamed "Tup2" [TBool, TyVar "a"])
   )
 

@@ -1,10 +1,7 @@
-{-# Language NoImplicitPrelude #-}
-
 -- Implementation based off of https://github.com/wh5a/Algorithm-W-Step-By-Step
 
 module Jael.Seq.TI where
 
-import ClassyPrelude
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Seq.AST
@@ -59,7 +56,7 @@ incTvCount :: SeqTI ()
 incTvCount = SeqTI $ \s -> (Just (), s{tvCount = tvCount s + 1})
 
 newTV :: SeqTI Ty
-newTV = getTvCount >>= (\i -> (incTvCount >>) $ return . TVar $ "a" ++ tshow i)
+newTV = getTvCount >>= (\i -> (incTvCount >>) $ return . TyVar $ "a" <> (pack . show) i)
 
 getTiErrors :: SeqTI [Text]
 getTiErrors = SeqTI $ \s -> (Just $ tiErrors s, s)
@@ -100,34 +97,34 @@ mgu (TFun l1 r1) (TFun l2 r2) = do
   sub1 <- mgu l1 l2
   sub2 <- mgu (apply sub1 r1) (apply sub1 r2)
   return $ sub2 `compSub` sub1
-mgu (TVar u) t = varBind u t
-mgu t (TVar u) = varBind u t
+mgu (TyVar u) t = varBind u t
+mgu t (TyVar u) = varBind u t
 mgu TInt    TInt    = Right nullSub
 mgu TBool   TBool   = Right nullSub
 mgu (TNamed n xs) (TNamed m ys) =
   if n /= m
-     then Left $ "Attempted to unify named types with different names: " ++
-                 tshow n ++ " " ++ tshow m
+     then Left $ "Attempted to unify named types with different names: " <>
+                 (pack . show) n <> " " <> (pack . show) m
      else foldM (\sub (x, y) ->
                    liftA (M.unionWith (error "Expected unique keys") sub) (mgu x y)
                 ) M.empty (zip xs ys)
-mgu t1 t2 = Left $ "Types \"" ++ tshow t1 ++ "\" and \"" ++ tshow t2 ++
+mgu t1 t2 = Left $ "Types \"" <> (pack . show) t1 <> "\" and \"" <> (pack . show) t2 <>
                    "\" do not unify."
 
 varBind :: Text -> Ty -> Either Text TySub
-varBind u t@(TVar t')
+varBind u t@(TyVar t')
   | u == t'    = Right nullSub
   | otherwise  = Right $ M.singleton u t
 varBind u t
-  | S.member u (ftv t) = Left $ "Can not bind \"" ++ tshow u ++ "\" to \""
-      ++ tshow t ++ "\" because \"" ++ tshow u
-      ++ "\" is a free type variable of \"" ++ tshow t
+  | S.member u (ftv t) = Left $ "Can not bind \"" <> (pack . show) u <> "\" to \""
+      <> (pack . show) t <> "\" because \"" <> (pack . show) u
+      <> "\" is a free type variable of \"" <> (pack . show) t
   | otherwise          = Right $ M.singleton u t
 
 ti :: TyEnv -> Ex -> SeqTI (TySub, TypedEx)
 -- Variables
 ti (TyEnv env) (EVar v) = case M.lookup v env of
-    Nothing -> tiError $ "unbound variable \"" ++ tshow v ++ "\""
+    Nothing -> tiError $ "unbound variable \"" <> (pack . show) v <> "\""
     Just sigma -> do
        t <- instantiation sigma
        return (nullSub, mkTyped t $ EVarF v)
@@ -140,12 +137,12 @@ ti env (EApp e1 e2) = do
   let sub3 = mgu (apply sub2 (tyOf te1)) (TFun (tyOf te2) tv)
   case sub3 of
        Left err -> tiError
-                     (err ++ "\n\n"
-                          ++ "Type variable : " ++ tshow tv ++ "\n\n"
-                          ++ "Inference 1   : " ++ tshow (te1, sub1) ++ "\n"
-                          ++ "   for expr   : " ++ tshow e1 ++ "\n\n"
-                          ++ "Inference 2   : " ++ tshow (te2, sub2) ++ "\n"
-                          ++ "   for expr   : " ++ tshow e2 ++ "\n\n"
+                     (err <> "\n\n"
+                          <> "Type variable : " <> (pack . show) tv <> "\n\n"
+                          <> "Inference 1   : " <> (pack . show) (te1, sub1) <> "\n"
+                          <> "   for expr   : " <> (pack . show) e1 <> "\n\n"
+                          <> "Inference 2   : " <> (pack . show) (te2, sub2) <> "\n"
+                          <> "   for expr   : " <> (pack . show) e2 <> "\n\n"
                      )
        Right sub3' -> return ( sub3' `compSub` sub2 `compSub` sub1
                              , mkTyped (apply sub3' tv) $ EAppF te1 te2)
@@ -168,7 +165,7 @@ ti env (ELet x e1 e2) = do
   return (s2 `compSub` s1, mkTyped (tyOf te2) $ ELetF x te1 te2)
 
 -- Literals
-ti _ (ELit (LUnit))   = return (nullSub, mkTyped TUnit $ ELitF $ LUnit)
+ti _ (ELit LUnit)     = return (nullSub, mkTyped TUnit $ ELitF LUnit)
 ti _ (ELit (LInt x))  = return (nullSub, mkTyped TInt  $ ELitF $ LInt x)
 ti _ (ELit (LBool x)) = return (nullSub, mkTyped TBool $ ELitF $ LBool x)
 ti _ (ELit (LBit x))  = return (nullSub, mkTyped TBit  $ ELitF $ LBit x)
@@ -179,20 +176,20 @@ ti _ (EPrm x) =
       instPrim p = instantiation p >>= \t -> return (nullSub, mkTyped t $ EPrmF x)
    in instPrim $
         case x of
-             PIf    -> PolyTy ["a"] (TFun TBool (TFun (TVar "a") (TFun (TVar "a") (TVar "a"))))
-             PAdd   -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") (TVar "a")))
-             PSub   -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") (TVar "a")))
-             PTimes -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") (TVar "a")))
+             PIf    -> PolyTy ["a"] (TFun TBool (TFun (TyVar "a") (TFun (TyVar "a") (TyVar "a"))))
+             PAdd   -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") (TyVar "a")))
+             PSub   -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") (TyVar "a")))
+             PTimes -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") (TyVar "a")))
              PDiv   -> PolyTy [] (TFun TInt (TFun TInt (TNamed "IntDivRes" [])))
              PMod   -> PolyTy [] (TFun TInt (TFun TInt TInt))
              POr    -> PolyTy [] (TFun TBool (TFun TBool TBool))
              PAnd   -> PolyTy [] (TFun TBool (TFun TBool TBool))
-             PEq    -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
-             PNeq   -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
-             PGeq   -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
-             PLeq   -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
-             PGt    -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
-             PLt    -> PolyTy ["a"] (TFun (TVar "a") (TFun (TVar "a") TBool))
-             PNot   -> PolyTy ["a"] (TFun (TVar "a") (TVar "a"))
+             PEq    -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
+             PNeq   -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
+             PGeq   -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
+             PLeq   -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
+             PGt    -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
+             PLt    -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
+             PNot   -> PolyTy ["a"] (TFun (TyVar "a") (TyVar "a"))
              PBitCat -> PolyTy [] (TFun TBit (TFun TBit TBit))
 

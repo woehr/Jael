@@ -1,14 +1,10 @@
-{-# Language NoImplicitPrelude, QuasiQuotes #-}
-
 module Test.Jael.Grammar.Type
 ( gTypeTests
 ) where
 
-import ClassyPrelude
-import Jael.Grammar
-import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.Jael.Util
+import           Jael.Grammar
+import qualified Test.Framework as T
+import           Test.Jael.Util
 
 gTypeTests :: [T.Test]
 gTypeTests = [ testCase "unit type" (checkParsedTree pGType unit)

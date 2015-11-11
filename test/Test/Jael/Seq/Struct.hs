@@ -1,19 +1,14 @@
-{-# Language NoImplicitPrelude, QuasiQuotes #-}
-
 module Test.Jael.Seq.Struct
 ( structTests
 ) where
 
-import ClassyPrelude
 import qualified Data.Set as S
-import Jael.Grammar
-import Jael.Seq.Struct
-import Jael.Seq.Types
-import Jael.UserDefTy
-import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.HUnit
-import Test.Jael.Util
+import           Jael.Grammar
+import           Jael.Seq.Struct
+import           Jael.Seq.Types
+import           Jael.UserDefTy
+import qualified Test.Framework as T
+import           Test.Jael.Util
 
 validator :: GTypeDef -> Either StructDefError [(Text, PolyTy)]
 validator (GTDefStruct (UIdent i) s) =
@@ -50,14 +45,14 @@ structValidSimple = (pack [raw|
 structValidPoly :: (Text, [(Text, PolyTy)])
 structValidPoly = (pack [raw|
   struct X a b{f0::a, f1 :: b }
-|], [ ("x",     PolyTy ["a", "b"] $ TFun (TVar "a") (TFun (TVar "b")
-                                      (TNamed "X" [TVar "a", TVar "b"])
+|], [ ("x",     PolyTy ["a", "b"] $ TFun (TyVar "a") (TFun (TyVar "b")
+                                      (TNamed "X" [TyVar "a", TyVar "b"])
                                     ))
-    , ("X::f0", PolyTy ["a", "b"] $ TFun (TNamed "X" [TVar "a", TVar "b"])
-                                         (TVar "a")
+    , ("X::f0", PolyTy ["a", "b"] $ TFun (TNamed "X" [TyVar "a", TyVar "b"])
+                                         (TyVar "a")
       )
-    , ("X::f1", PolyTy ["a", "b"] $ TFun (TNamed "X" [TVar "a", TVar "b"])
-                                         (TVar "b")
+    , ("X::f1", PolyTy ["a", "b"] $ TFun (TNamed "X" [TyVar "a", TyVar "b"])
+                                         (TyVar "b")
       )
     ]
   )

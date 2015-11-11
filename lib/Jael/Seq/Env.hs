@@ -1,11 +1,8 @@
-{-# Language NoImplicitPrelude #-}
-
 module Jael.Seq.Env
 ( defaultEnv
 , addToEnv
 ) where
 
-import ClassyPrelude
 import Jael.Seq.Builtin
 import Jael.Seq.Types
 import Jael.UserDefTy
@@ -28,7 +25,7 @@ defaultEnv =
 userDefErr :: UserDefTy a => (Text, a) -> Maybe Text
 userDefErr (n, t) =
   case validate t of
-       Just e -> Just $ "Error validating " ++ n ++ ":\n\t" ++ tshow e
+       Just e -> Just $ "Error validating " <> n <> ":\n\t" <> (pack . show) e
        Nothing -> Nothing
 
 builtinErrs :: Maybe [Text]
@@ -36,5 +33,5 @@ builtinErrs = liftA2 (++) (mapM userDefErr builtinStruct)
                           (mapM userDefErr builtinEnums)
 
 addToEnv :: TyEnv -> [(Text, PolyTy)] -> Either [Text] TyEnv
-addToEnv (TyEnv env) = (liftA TyEnv) . insertCollectDups env
+addToEnv (TyEnv env) = liftA TyEnv . insertCollectDups env
 
