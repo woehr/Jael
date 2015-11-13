@@ -34,7 +34,6 @@ library
 --                       Jael.Proc.AM335X
                        Jael.Seq.AST
                        Jael.Seq.Builtin
-                       Jael.Seq.Closure
                        Jael.Seq.Enum
                        Jael.Seq.Env
                        Jael.Seq.Expr

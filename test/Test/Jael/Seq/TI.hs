@@ -9,11 +9,6 @@ import           Test.Jael.Util
 seqInfTests :: [T.Test]
 seqInfTests =
   [ testCase "plus" $ checkInferredType exprPlus
-  , testCase "abs" $ checkInferredType exprAbs
-  , testCase "app" $ checkInferredType exprApp
-  , testCase "if" $ checkInferredType exprIf
-  , testCase "let" $ checkInferredType exprLet
-  , testCase "let polymorphism" $ checkInferredType exprLetPoly
   , testCase "int div result type" $ checkInferredType exprIntDiv
   , testCase "type of int div result constructor" $ checkInferredType exprConstrIntDivRes
   , testCase "accessors, first field" $ checkInferredType exprAccessor0
@@ -36,73 +31,6 @@ exprPlus :: (Text, Ty)
 exprPlus = (pack [raw|
   1+~2+3
 |], TInt)
-
--- * has type a->a->a so this is expected to be inferred as x->x->x->x
--- where x is some type variable
-exprAbs :: (Text, Ty)
-exprAbs = (pack [raw|
-  \a b c -> {
-    a*b*c
-  }
-|], TFun (TyVar "a")
-         (TFun (TyVar "a")
-               (TFun (TyVar "a")
-                     (TyVar "a")
-               )
-         )
-  )
-
-exprApp :: (Text, Ty)
-exprApp = (pack [raw|
-  \a b c -> {
-    a+b+c
-  }(1)(2)(3)
-|], TInt)
-
-exprIf :: (Text, Ty)
-exprIf = (pack [raw|
-  \b -> {
-    f = \a b c -> { // a and b are Int so c should be inferred as Int
-      a+b*c
-    };
-    if b {
-      f(1, 2)       // thus, f applied twice should be Int -> Int
-    } else {
-      f(4, 5)
-    }
-  }
-|], TFun TBool (TFun TInt TInt))
-
-exprLet :: (Text, Ty)
-exprLet = (pack [raw|
-  \a b c d e -> {
-    f = a+b-c;
-    g = b-c*d;
-    h = c*d+d;
-    i = d-e+a;
-    f+g-h*i
-  }
-|], TFun (TyVar "a")
-         (TFun (TyVar "a")
-               (TFun (TyVar "a")
-                     (TFun (TyVar "a")
-                           (TFun (TyVar "a")
-                                 (TyVar "a")
-                           )
-                     )
-               )
-         )
-  )
-
-exprLetPoly :: (Text, Ty)
-exprLetPoly = (pack [raw|
-  \a -> {
-    id = \x -> { x };
-    { id(a), id(1), id(true) }
-  }
-|], TFun (TyVar "a")
-         (TNamed "Tup3" [TyVar "a", TInt, TBool])
-  )
 
 exprIntDiv :: (Text, Ty)
 exprIntDiv = (pack [raw|

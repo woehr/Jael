@@ -17,16 +17,13 @@ gExprTests = [ testCase "int zero" (checkParsedTree pGExpr intZero)
              , testCase "plus expr" (checkParsedTree pGExpr plus)
              , testCase "plus expr" (checkParsedTree pGExpr times)
              , testCase "operator precedence" (checkParsedTree pGExpr opPrec)
-             , testCase "lambda expr" (checkParsedTree pGExpr abstr)
              , testCase "double application" (checkParsedTree pGExpr app)
              , testCase "application with operator" (checkParsedTree pGExpr appWithOp)
              , testCase "application precedence (1)" (checkParsedTree pGExpr appPrec1)
              , testCase "application precedence (2)" (checkParsedTree pGExpr appPrec2)
-             , testCase "lambda expr with application" (checkParsedTree pGExpr absWithApp)
              , testCase "if expr with application" (checkParsedTree pGExpr ifWithApp)
              , testCase "if expr with application w/o paren" (shouldNotParse pGExpr ifWithAppFail)
              , testCase "tuple expr" (checkParsedTree pGExpr tup)
-             , testCase "tuple in abs" (checkParsedTree pGExpr tupInAbs)
              , testCase "tuple scoped fn" (checkParsedTree pGExpr accIndex)
              , testCase "struct scoped fn" (checkParsedTree pGExpr accLabel)
              , testCase "invalid scoped" (shouldNotParse pGExpr accMulti)
@@ -97,18 +94,6 @@ opPrec = (pack [raw|
             )
   )
 
-abstr :: (Text, GExpr)
-abstr = (pack [raw|
-  \ a b c -> {
-    a
-  }
-|], GEAbs [ GEAbsArg (LIdent "a")
-           , GEAbsArg (LIdent "b")
-           , GEAbsArg (LIdent "c")
-           ]
-           (GELetExpr [] (GEVar (LIdent "a")))
-  )
-
 -- Apply b to a, then apply c to the result, application binds stronger than !
 app :: (Text, GExpr)
 app = (pack [raw|
@@ -148,23 +133,6 @@ appPrec2 = (pack [raw|
             (GEVar (LIdent "a"))
   )
 
-absWithApp :: (Text, GExpr)
-absWithApp = (pack [raw|
-  \ a b c -> {
-    a
-  }(x, y, z)
-|], GEApp (GEAbs [ GEAbsArg (LIdent "a")
-                 , GEAbsArg (LIdent "b")
-                 , GEAbsArg (LIdent "c")
-                 ]
-                 (GELetExpr [] (GEVar (LIdent "a")))
-          )
-          [ GEAppArg (GEVar (LIdent "x"))
-          , GEAppArg (GEVar (LIdent "y"))
-          , GEAppArg (GEVar (LIdent "z"))
-          ]
-  )
-
 ifWithApp :: (Text, GExpr)
 ifWithApp = (pack [raw|
   (if true {a} else {b})(c)
@@ -194,31 +162,6 @@ tup = (pack [raw|
                          , GEUnit
                          , GEInt (DecInt "42")
                          ]
-  )
-
-tupInAbs :: (Text, GExpr)
-tupInAbs = (pack [raw|
-  \a b c d -> {
-    { 1
-    , 2
-    , a
-    , a+b
-    }
-  }
-|], GEAbs [ GEAbsArg (LIdent "a")
-          , GEAbsArg (LIdent "b")
-          , GEAbsArg (LIdent "c")
-          , GEAbsArg (LIdent "d")
-          ]
-          (GELetExpr []
-                     (GETup $ map GETupArg [ GEInt (DecInt "1")
-                                           , GEInt (DecInt "2")
-                                           , GEVar (LIdent "a")
-                                           , GEPlus (GEVar (LIdent "a"))
-                                                    (GEVar (LIdent "b"))
-                                           ]
-                     )
-          )
   )
 
 accIndex :: (Text, GExpr)

@@ -97,22 +97,11 @@ GELetExpr.   GELetExpr ::= [GELetIdent] GExpr ;
 GEAppArg.    GEAppArg ::= GExpr ;
 separator    nonempty GEAppArg "," ;
 
-GEAbsArg.    GEAbsArg ::= LIdent ;
-terminator   nonempty GEAbsArg "" ;
-
 -- tuple args can't be empty (GEUnit handles this)
 GETupArg.    GETupArg ::= GExpr ;
 separator    nonempty GETupArg "," ;
 
 ----- Begin operators -----
-
--- Haskell precedence 0
---GERightApp.  GExpr0 ::= GExpr0 "$>" GExpr1 ;
---GELeftApp.   GExpr1 ::= GExpr2 "<$" GExpr1 ;
-
--- Haskell precedence 1
---GEBind.      GExpr2 ::= GExpr2 ">>=" GExpr3 ;
---GESeq.       GExpr2 ::= GExpr2 ">>"  GExpr3 ;
 
 -- Haskell precedence 2
 GELogOr.     GExpr3 ::= GExpr4 "||" GExpr3 ;
@@ -147,8 +136,6 @@ GEMod.       GExpr8 ::= GExpr8 "%" GExpr9 ;
 GEBitCat.    GExpr9  ::= GExpr10 "#" GExpr9 ;
 
 -- Haskell precedence 9
-GERightComp. GExpr10 ::= GExpr10 "o>" GExpr11 ;
-GELeftComp.  GExpr11 ::= GExpr12 "<o" GExpr11 ;
 
 GELogNot.    GExpr12 ::= "!" GExpr12 ;
 
@@ -157,8 +144,6 @@ GELogNot.    GExpr12 ::= "!" GExpr12 ;
 GEIf.        GExpr13 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
 
 GEApp.       GExpr14 ::= GExpr14 "(" [GEAppArg] ")" ;
-
-GEAbs.       GExpr15 ::= "\\" [GEAbsArg] "->" "{" GELetExpr "}" ;
 
 GEScopeIdent. GEScopeArg ::= "::" LIdent ;
 GEScopeIndex. GEScopeArg ::= "::" DecInt ;

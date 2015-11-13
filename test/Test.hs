@@ -11,7 +11,6 @@ import Test.Jael.Conc.TyCk (concTyCkTests)
 import Test.Jael.Hw.Area (hwAreaTests)
 import Test.Jael.Seq.AST (astTests)
 import Test.Jael.Seq.Builtin (builtinTests)
-import Test.Jael.Seq.Closure (closureTests)
 import Test.Jael.Seq.Enum (enumTests)
 import Test.Jael.Seq.Struct (structTests)
 import Test.Jael.Seq.TI (seqInfTests)
@@ -27,7 +26,6 @@ main = defaultMainWithOpts
   , testGroup "AST tests" astTests
   , testGroup "Builtin tests" builtinTests
   , testGroup "Seq type inference" seqInfTests
-  , testGroup "Closure conversion" closureTests
   -- seq types
   , testGroup "Enum creation" enumTests
   , testGroup "Struct creation" structTests

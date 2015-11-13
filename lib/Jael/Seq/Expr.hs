@@ -49,13 +49,8 @@ unaryPrm p e = EApp (EPrm p) (gToEx e)
 binPrm :: Prm -> GExpr -> GExpr -> Ex
 binPrm p l r = EApp (EApp (EPrm p) (gToEx l)) (gToEx r)
 
-binOp :: Text -> GExpr -> GExpr -> Ex
-binOp op l r = EApp (EApp (EVar op) (gToEx l)) (gToEx r)
-
 -- Converts grammar to AST but no type checking yet
 gToEx :: GExpr -> Ex
---gToEx (GELeftApp   e1 e2) = binOp   "<$" e1 e2
---gToEx (GERightApp  e1 e2) = binOp   "$>" e1 e2
 gToEx (GELogOr     e1 e2) = binPrm  POr e1 e2
 gToEx (GELogAnd    e1 e2) = binPrm  PAnd e1 e2
 gToEx (GEEq        e1 e2) = binPrm  PEq e1 e2
@@ -69,8 +64,6 @@ gToEx (GEMinus     e1 e2) = binPrm  PSub  e1 e2
 gToEx (GETimes     e1 e2) = binPrm  PTimes  e1 e2
 gToEx (GEDiv       e1 e2) = binPrm  PDiv  e1 e2
 gToEx (GEMod       e1 e2) = binPrm  PMod  e1 e2
-gToEx (GELeftComp  e1 e2) = binOp   "<o" e1 e2
-gToEx (GERightComp e1 e2) = binOp   "o>" e1 e2
 gToEx (GELogNot    e    ) = unaryPrm PNot  e
 gToEx (GEBitCat    e1 e2) = binPrm   PBitCat e1 e2
 
@@ -78,10 +71,6 @@ gToEx (GEIf b e1 e2) = EApp (EApp (EApp (EPrm PIf) (gToEx b)) (letExprToEx e1)) 
 
 gToEx (GEApp _ []) = notEnoughElements 1 "GEAppArg" "GEApp"
 gToEx (GEApp e as) = applyArgs (gToEx e) (NE.fromList as)
-
-gToEx (GEAbs [] _) = notEnoughElements 1 "GEAbsArg" "GEAbs"
-gToEx (GEAbs [GEAbsArg (LIdent i)]      le) = EAbs (pack i) (letExprToEx le)
-gToEx (GEAbs (GEAbsArg (LIdent i) : xs) le) = EAbs (pack i) (gToEx $ GEAbs xs le)
 
 gToEx (GEInt i) = ELit . LInt $ parseDecInt i
 gToEx (GETrue)  = ELit $ LBool True
