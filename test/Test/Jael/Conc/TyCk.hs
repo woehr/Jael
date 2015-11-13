@@ -10,6 +10,7 @@ import           Jael.Conc.TyCk
 import           Jael.Grammar
 import           Jael.Parser
 import           Jael.Seq.Env
+import           Jael.Seq.TI (SeqTIErr(..))
 import           Jael.Seq.Types
 import qualified Test.Framework as T
 
@@ -620,7 +621,7 @@ undefinedCoRecArgExpr = (pack [raw|
       ^a <- b;
     }
   }
-|], SeqTIErrs ["unbound variable \"\"x\"\""]
+|], SeqErrs [UnboundVar "x"]
   )
 
 interferingCoRecArgs :: (Text, SessTyErr)
@@ -655,7 +656,7 @@ undefinedCoRecVarArgExpr = (pack [raw|
       X(b)
     }
   }
-|], SeqTIErrs ["unbound variable \"\"b\"\""]
+|], SeqErrs [UnboundVar "b"]
   )
 
 interferingCoRecVarArgs :: (Text, SessTyErr)

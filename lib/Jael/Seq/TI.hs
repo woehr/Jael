@@ -7,9 +7,15 @@ import qualified Data.Set as S
 import Jael.Seq.AST
 import Jael.Seq.Types
 
+data SeqTIErr = NamedUnificationMismatch Text Text
+              | NonUnification Ty Ty
+              | FreeTyVarBind Text Ty
+              | UnboundVar Text
+  deriving (Eq, Show)
+
 data SeqTIState = SeqTIState
   { tvCount :: Integer
-  , tiErrors :: [Text]
+  , tiErrors :: [SeqTIErr]
   }
 
 newtype SeqTI a = SeqTI (SeqTIState -> (Maybe a, SeqTIState))
@@ -28,13 +34,13 @@ instance Applicative SeqTI where
 instance Functor SeqTI where
   fmap = liftM
 
-seqInfer :: TyEnv -> Ex -> Either [Text] Ty
+seqInfer :: TyEnv -> Ex -> Either [SeqTIErr] Ty
 seqInfer env = runSeqTI . seqTypeInference env
 
-seqInferTypedEx :: TyEnv -> Ex -> Either [Text] TypedEx
+seqInferTypedEx :: TyEnv -> Ex -> Either [SeqTIErr] TypedEx
 seqInferTypedEx env = runSeqTI . seqTypedExInference env
 
-runSeqTI :: SeqTI a -> Either [Text] a
+runSeqTI :: SeqTI a -> Either [SeqTIErr] a
 runSeqTI t = let (SeqTI stateFunc) = t
                  initState = SeqTIState{ tvCount = 0, tiErrors = [] }
              in  case stateFunc initState of
@@ -58,14 +64,14 @@ incTvCount = SeqTI $ \s -> (Just (), s{tvCount = tvCount s + 1})
 newTV :: SeqTI Ty
 newTV = getTvCount >>= (\i -> (incTvCount >>) $ return . TyVar $ "a" <> (pack . show) i)
 
-getTiErrors :: SeqTI [Text]
+getTiErrors :: SeqTI [SeqTIErr]
 getTiErrors = SeqTI $ \s -> (Just $ tiErrors s, s)
 
-putTiErrors :: [Text] -> SeqTI ()
+putTiErrors :: [SeqTIErr] -> SeqTI ()
 putTiErrors ts = SeqTI $ \s -> (Just (), s{tiErrors=ts})
 
 -- Halts inference and records the error
-tiError :: Text -> SeqTI a
+tiError :: SeqTIErr -> SeqTI a
 tiError t = getTiErrors >>= (\ts -> putTiErrors $ t:ts)
                         >> (SeqTI $ \s -> (Nothing, s))
 
@@ -92,7 +98,7 @@ instantiation (PolyTy vs ty) = do
 
 -- Most general unifier. Used in the application rule for determining the return
 -- type after application to a function
-mgu :: Ty -> Ty -> Either Text TySub
+mgu :: Ty -> Ty -> Either SeqTIErr TySub
 mgu (TFun l1 r1) (TFun l2 r2) = do
   sub1 <- mgu l1 l2
   sub2 <- mgu (apply sub1 r1) (apply sub1 r2)
@@ -103,28 +109,24 @@ mgu TInt    TInt    = Right nullSub
 mgu TBool   TBool   = Right nullSub
 mgu (TNamed n xs) (TNamed m ys) =
   if n /= m
-     then Left $ "Attempted to unify named types with different names: " <>
-                 (pack . show) n <> " " <> (pack . show) m
+     then Left $ NamedUnificationMismatch n m
      else foldM (\sub (x, y) ->
                    liftA (M.unionWith (error "Expected unique keys") sub) (mgu x y)
                 ) M.empty (zip xs ys)
-mgu t1 t2 = Left $ "Types \"" <> (pack . show) t1 <> "\" and \"" <> (pack . show) t2 <>
-                   "\" do not unify."
+mgu t1 t2 = Left $ NonUnification t1 t2
 
-varBind :: Text -> Ty -> Either Text TySub
+varBind :: Text -> Ty -> Either SeqTIErr TySub
 varBind u t@(TyVar t')
   | u == t'    = Right nullSub
   | otherwise  = Right $ M.singleton u t
 varBind u t
-  | S.member u (ftv t) = Left $ "Can not bind \"" <> (pack . show) u <> "\" to \""
-      <> (pack . show) t <> "\" because \"" <> (pack . show) u
-      <> "\" is a free type variable of \"" <> (pack . show) t
+  | S.member u (ftv t) = Left $ FreeTyVarBind u t
   | otherwise          = Right $ M.singleton u t
 
 ti :: TyEnv -> Ex -> SeqTI (TySub, TypedEx)
 -- Variables
 ti (TyEnv env) (EVar v) = case M.lookup v env of
-    Nothing -> tiError $ "unbound variable \"" <> (pack . show) v <> "\""
+    Nothing -> tiError $ UnboundVar v
     Just sigma -> do
        t <- instantiation sigma
        return (nullSub, mkTyped t $ EVarF v)
@@ -136,14 +138,7 @@ ti env (EApp e1 e2) = do
   (sub2, te2) <- ti (apply sub1 env) e2
   let sub3 = mgu (apply sub2 (tyOf te1)) (TFun (tyOf te2) tv)
   case sub3 of
-       Left err -> tiError
-                     (err <> "\n\n"
-                          <> "Type variable : " <> (pack . show) tv <> "\n\n"
-                          <> "Inference 1   : " <> (pack . show) (te1, sub1) <> "\n"
-                          <> "   for expr   : " <> (pack . show) e1 <> "\n\n"
-                          <> "Inference 2   : " <> (pack . show) (te2, sub2) <> "\n"
-                          <> "   for expr   : " <> (pack . show) e2 <> "\n\n"
-                     )
+       Left err -> tiError err
        Right sub3' -> return ( sub3' `compSub` sub2 `compSub` sub1
                              , mkTyped (apply sub3' tv) $ EAppF te1 te2)
 

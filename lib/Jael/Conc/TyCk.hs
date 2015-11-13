@@ -21,7 +21,7 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Channel Session
                | ProtocolMismatch Channel Session
                | TypeMismatch Channel Ty
                | DuplicateSeqEnvItem [Text]
-               | SeqTIErrs [Text]
+               | SeqErrs [SeqTIErr]
                | UnknownLabel Label
                | CaseLabelMismatch (S.Set Label)
                | NonFreshChan Text
@@ -645,7 +645,7 @@ updateEnvFromRecArgs =
 seqTyCk :: ConcTyEnv -> Ex -> SessTyErrM Ty
 seqTyCk env expr = do
   seqEnv <- mkSeqEnv env
-  either (throwError . SeqTIErrs) return (seqInfer seqEnv expr)
+  either (throwError . SeqErrs) return (seqInfer seqEnv expr)
 
 -- The current env, the env in which the recursive definition was made, the
 -- recursion variable, and the parameters to the recursive call

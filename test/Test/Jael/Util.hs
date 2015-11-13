@@ -1,8 +1,6 @@
 module Test.Jael.Util where
 
 import qualified Data.Map as M
-import Language.Haskell.TH
-import Language.Haskell.TH.Quote
 import Jael.Grammar
 import Jael.Parser
 import Jael.Seq.Enum
@@ -33,7 +31,7 @@ checkTDefErr p validator (def, expected) =
     gDef <- either (Left . show) Right $ runParser p def
     case validator gDef of
          Left actual -> Right $ assertEqual "" expected actual
-         Right _ -> Left $ "Expected definition error"
+         Right _ -> Left "Expected definition error"
 
 checkParsedTypes :: Show b
                  => ParseFun a
@@ -62,16 +60,16 @@ checkInference testTypes (tx, expected) =
                          ) prog :: [(Text, Enumer)]
     let structEnumErrs = mapMaybe (liftA tshow . validate . snd) sDefs ++
                          mapMaybe (liftA tshow . validate . snd) eDefs
-    funs <- if length structEnumErrs == 0
+    funs <- if null structEnumErrs
                then Right $ join (map envItems sDefs) ++
                             join (map envItems eDefs)
                else Left . intercalate "\n" $ structEnumErrs
     env <- either
              (\x -> Left . intercalate "\n" $ "Duplicates in env: " : x)
-             (Right)
+             Right
              (addToEnv defaultEnv funs)
     ex <- runParser pGExpr tx
-    ty <- either (\x -> Left . intercalate "\n" $ x)
+    ty <- either (Left . intercalate "\n" . map tshow)
                  Right
                  (seqInfer env $ gToEx ex)
     return $ assertBool ("Expected:\n" ++
