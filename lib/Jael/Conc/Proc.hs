@@ -109,16 +109,17 @@ instance F.Unfoldable Proc where
   embed (PNamedF x y)   = PNamed x y
   embed (PNilF)         = PNil
 
-gScopedToText :: [GScopeElem] -> Text
-gScopedToText = pack . intercalate "::" . map (\(GScopeElem (LIdent x)) -> x)
+gChanToText :: GChan -> Text
+gChanToText (GChan (LIdent x)) = pack x
+gChanToText (GChanScoped (LScopedIdent x)) = pack x
 
 gChoiceToProc :: [GConcChoice] -> [(Text, GProc)]
 gChoiceToProc = map (\(GConcChoice (GChoiceLabel (LIdent x)) p) -> (pack x, p))
 
 gToInitList :: [GRecInitializer] -> [(Text, ChanEx)]
 gToInitList = map (\i -> case i of
-    (GRecInitializerChan (LIdent x) (GChan (GScopedIdent c))) ->
-      (pack x, Left $ gScopedToText c)
+    (GRecInitializerChan (LIdent x) c) ->
+      (pack x, Left $ gChanToText c)
     (GRecInitializerExpr (LIdent x) y) -> (pack x, Right $ gToEx y)
   )
 
@@ -126,8 +127,7 @@ gParElemToProc :: GParElem -> GProc
 gParElemToProc (GParElem p) = p
 
 gProcParamToEx :: GProcParam -> ChanEx
-gProcParamToEx (GProcParamChan (GChan (GScopedIdent c))) =
-  Left $ gScopedToText c
+gProcParamToEx (GProcParamChan c) = Left (gChanToText c)
 gProcParamToEx (GProcParamExpr x) = Right $ gToEx x
 
 gToProc :: GProc -> Proc
@@ -137,28 +137,28 @@ gToProc = ana coalg
               ) = PNewChanF (pack x) (pack y) (gToSession s) p
         coalg (GProcLet (LIdent x) y p
               ) = PNewValF (pack x) (gToEx y) p
-        coalg (GProcGetExpr (GChan (GScopedIdent xs)) (LIdent y) p
-              ) = PGetValF (gScopedToText xs) (pack y) p
-        coalg (GProcGetChan (GChan (GScopedIdent xs)) (LIdent y) p
-              ) = PGetChanF (gScopedToText xs) (pack y) p
-        coalg (GProcGetIgn  (GChan (GScopedIdent xs)) p
-              ) = PGetIgnF (gScopedToText xs) p
-        coalg (GProcPutExpr (GChan (GScopedIdent xs)) ex p
-              ) = PPutValF (gScopedToText xs) (gToEx ex) p
-        coalg (GProcPutChan (GChan (GScopedIdent xs)) (GChan (GScopedIdent c)) p
-              ) = PPutChanF (gScopedToText xs) (gScopedToText c) p
-        coalg (GProcSel (GChan (GScopedIdent xs)) (GChoiceLabel (LIdent y)) p
-              ) = PSelF (gScopedToText xs) (pack y) p
-        coalg (GProcCho (GChan (GScopedIdent xs)) ys
-              ) = PCaseF (gScopedToText xs) (gChoiceToProc ys)
+        coalg (GProcGetExpr c (LIdent y) p
+              ) = PGetValF (gChanToText c) (pack y) p
+        coalg (GProcGetChan c (LIdent y) p
+              ) = PGetChanF (gChanToText c) (pack y) p
+        coalg (GProcGetIgn  c p
+              ) = PGetIgnF (gChanToText c) p
+        coalg (GProcPutExpr c ex p
+              ) = PPutValF (gChanToText c) (gToEx ex) p
+        coalg (GProcPutChan c1 c2 p
+              ) = PPutChanF (gChanToText c1) (gChanToText c2) p
+        coalg (GProcSel c (GChoiceLabel (LIdent y)) p
+              ) = PSelF (gChanToText c) (pack y) p
+        coalg (GProcCho c ys
+              ) = PCaseF (gChanToText c) (gChoiceToProc ys)
         coalg (GProcRec (GProcName (UIdent x)) i p
               ) = PCoRecF (pack x) (gToInitList i) p
         coalg (GProcNamed (GProcName (UIdent x)) params
               ) = PNamedF (pack x) (map gProcParamToEx params)
         coalg (GProcInact
               ) = PNilF
-        coalg (GProcFwd (GChan (GScopedIdent c1)) (GChan (GScopedIdent c2))
-              ) = PFwdF (gScopedToText c1) (gScopedToText c2)
+        coalg (GProcFwd c1 c2
+              ) = PFwdF (gChanToText c1) (gChanToText c2)
         coalg (GProcPar e1 es
               ) = PParF (gParElemToProc e1 : map gParElemToProc es)
 

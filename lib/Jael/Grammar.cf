@@ -6,6 +6,7 @@
 
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;
+token LScopedIdent (lower (letter | digit | '_' | {"::"})*) ;
 token DecInt ('0' | ('~'? ["123456789"] digit*)) ;
 token HexInt ({"0x"} digit+) ;
 token OctInt ('o' digit+) ;
@@ -14,10 +15,6 @@ token BinInt ('b' ["01"]+) ;
 rules GAnyInt ::= DecInt | HexInt | OctInt | BinInt ;
 
 GChoiceLabel. GChoiceLabel ::= LIdent ;
-
-GScopedIdent. GScopedIdent ::= [GScopeElem] ;
-GScopeElem.   GScopeElem ::= LIdent ;
-separator nonempty GScopeElem "::" ;
 
 -- Sequential grammar
 
@@ -64,7 +61,7 @@ coercions GSession 3 ;
 
 -- Struct element is an accessor followed by a type
 GTStructFieldName. GTStructFieldName ::= LIdent ;
-GTStructElement.   GTStructElement   ::= GTStructFieldName "::" GType ;
+GTStructElement.   GTStructElement   ::= GTStructFieldName ":" GType ;
 separator          nonempty GTStructElement "," ;
 
 GTEnumElemNoTy.   GTEnumElem ::= LIdent ;
@@ -143,16 +140,13 @@ GELogNot.    GExpr12 ::= "!" GExpr12 ;
 
 GEIf.        GExpr13 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
 
-GEApp.       GExpr14 ::= GExpr14 "(" [GEAppArg] ")" ;
-
-GEScopeIdent. GEScopeArg ::= "::" LIdent ;
-GEScopeIndex. GEScopeArg ::= "::" DecInt ;
 
 GETrue.      GExpr16 ::= "true" ;
 GEFalse.     GExpr16 ::= "false" ;
 GEInt.       GExpr16 ::= DecInt ;
 GEVar.       GExpr16 ::= LIdent ;
-GEScopedFn.  GExpr16 ::= UIdent GEScopeArg ;
+GEApp.       GExpr16 ::= LIdent       "(" [GEAppArg] ")" ;
+GEAppScoped. GExpr16 ::= LScopedIdent "(" [GEAppArg] ")" ;
 GEUnit.      GExpr16 ::= "void" ;
 GETup.       GExpr16 ::= "{" [GETupArg] "}" ;
 
@@ -163,7 +157,8 @@ coercions    GExpr 16 ;
 GProcName. GProcName ::= UIdent ;
 
 -- Builtin channels can have "::" in their name
-GChan.  GChan ::= "^" GScopedIdent ;
+GChan.        GChan ::= "^" LIdent ;
+GChanScoped.  GChan ::= "^" LScopedIdent ;
 
 GProcNew.     GProc1 ::= "new" "(" "^" LIdent "," "^" LIdent ")"
   ":" GSession   ";" GProc1 ;

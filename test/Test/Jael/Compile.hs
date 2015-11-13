@@ -65,7 +65,7 @@ callCycleProc = (pack [raw|
 recType :: (Text, CompileErr)
 recType = (pack [raw|
   struct S {
-    f1 :: S
+    f1 : S
   }
 |], DepCycle ["S"]
   )

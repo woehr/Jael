@@ -70,7 +70,9 @@ gToEx (GEBitCat    e1 e2) = binPrm   PBitCat e1 e2
 gToEx (GEIf b e1 e2) = EApp (EApp (EApp (EPrm PIf) (gToEx b)) (letExprToEx e1)) (letExprToEx e2)
 
 gToEx (GEApp _ []) = notEnoughElements 1 "GEAppArg" "GEApp"
-gToEx (GEApp e as) = applyArgs (gToEx e) (NE.fromList as)
+gToEx (GEApp (LIdent n) as) = applyArgs (EVar (pack n)) (NE.fromList as)
+gToEx (GEAppScoped _ []) = notEnoughElements 1 "GEAppArg" "GEAppScoped"
+gToEx (GEAppScoped (LScopedIdent n) as) = applyArgs (EVar (pack n)) (NE.fromList as)
 
 gToEx (GEInt i) = ELit . LInt $ parseDecInt i
 gToEx (GETrue)  = ELit $ LBool True
@@ -80,6 +82,4 @@ gToEx (GETup xs) = case NE.nonEmpty (map tupArgToEx xs) of
                         Just (y:|ys) -> foldl' EApp (EApp (EVar $ "tup" <> (pack . show) (length xs)) y) ys
 gToEx (GEUnit)  = ELit LUnit
 gToEx (GEVar (LIdent i)) = EVar (pack i)
-gToEx (GEScopedFn (UIdent t) (GEScopeIdent (LIdent f))) = EVar . pack $ t ++ "::" ++ f
-gToEx (GEScopedFn (UIdent t) (GEScopeIndex (DecInt n))) = EVar . pack $ t ++ "::" ++ n
 

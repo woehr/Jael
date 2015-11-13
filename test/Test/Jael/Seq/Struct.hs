@@ -35,23 +35,23 @@ structTests =
 
 structValidSimple :: (Text, [(Text, PolyTy)])
 structValidSimple = (pack [raw|
-  struct X { f0 :: Int ,f1::Bool}
+  struct X { f0 : Int ,f1:Bool}
 |], [ ("x",     PolyTy [] $ TFun TInt (TFun TBool (TNamed "X" [])))
-    , ("X::f0", PolyTy [] $ TFun (TNamed "X" []) TInt)
-    , ("X::f1", PolyTy [] $ TFun (TNamed "X" []) TBool)
+    , ("x::f0", PolyTy [] $ TFun (TNamed "X" []) TInt)
+    , ("x::f1", PolyTy [] $ TFun (TNamed "X" []) TBool)
     ]
   )
 
 structValidPoly :: (Text, [(Text, PolyTy)])
 structValidPoly = (pack [raw|
-  struct X a b{f0::a, f1 :: b }
+  struct X a b{f0:a, f1 : b }
 |], [ ("x",     PolyTy ["a", "b"] $ TFun (TyVar "a") (TFun (TyVar "b")
                                       (TNamed "X" [TyVar "a", TyVar "b"])
                                     ))
-    , ("X::f0", PolyTy ["a", "b"] $ TFun (TNamed "X" [TyVar "a", TyVar "b"])
+    , ("x::f0", PolyTy ["a", "b"] $ TFun (TNamed "X" [TyVar "a", TyVar "b"])
                                          (TyVar "a")
       )
-    , ("X::f1", PolyTy ["a", "b"] $ TFun (TNamed "X" [TyVar "a", TyVar "b"])
+    , ("x::f1", PolyTy ["a", "b"] $ TFun (TNamed "X" [TyVar "a", TyVar "b"])
                                          (TyVar "b")
       )
     ]
@@ -59,7 +59,7 @@ structValidPoly = (pack [raw|
 
 structDupTyVars :: (Text, StructDefError)
 structDupTyVars = (pack [raw|
-  struct X a a { f1:: a , f2 :: a }
+  struct X a a { f1: a , f2 : a }
 |], StructDefError
       { sErrDupTv = S.fromList ["a"]
       , sErrDupField = S.empty
@@ -70,7 +70,7 @@ structDupTyVars = (pack [raw|
 
 structDupFields :: (Text, StructDefError)
 structDupFields = (pack [raw|
-  struct X { same :: Int , same :: Bool }
+  struct X { same : Int , same : Bool }
 |], StructDefError
       { sErrDupTv = S.empty
       , sErrDupField = S.fromList ["same"]
@@ -81,7 +81,7 @@ structDupFields = (pack [raw|
 
 structFreeTvs :: (Text, StructDefError)
 structFreeTvs = (pack [raw|
-  struct X a { f1 :: a , f2 :: b }
+  struct X a { f1 : a , f2 : b }
 |], StructDefError
       { sErrDupTv = S.empty
       , sErrDupField = S.empty
@@ -92,7 +92,7 @@ structFreeTvs = (pack [raw|
 
 structUnusedTv :: (Text, StructDefError)
 structUnusedTv = (pack [raw|
-  struct X a { f1 :: Int , f2 :: Bool }
+  struct X a { f1 : Int , f2 : Bool }
 |], StructDefError
       { sErrDupTv = S.empty
       , sErrDupField = S.empty
@@ -103,7 +103,7 @@ structUnusedTv = (pack [raw|
 
 structAllErrs :: (Text, StructDefError)
 structAllErrs = (pack [raw|
-  struct X a a c c { f1 :: a , f1 :: a , f2 :: b , f2 :: b }
+  struct X a a c c { f1 : a , f1 : a , f2 : b , f2 : b }
 |], StructDefError
       { sErrDupTv = S.fromList ["a", "c"]
       , sErrDupField = S.fromList ["f1", "f2"]

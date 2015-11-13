@@ -127,3 +127,9 @@ findCycles m =
          then Left recDeps
          else Right . map nodeName . G.topSort $ dg
 
+lowerFirst :: Text -> Text
+lowerFirst xs = case uncons xs of
+                     Just (x, xs') -> (toLower . singleton $ x) <> xs'
+                     Nothing ->
+                       error "Compiler error. Struct name should not be empty."
+

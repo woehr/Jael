@@ -23,15 +23,15 @@ builtinTests =
   ]
 
 eMaybe :: [(Text, PolyTy)]
-eMaybe = [ ("Maybe::just", PolyTy ["a"] $ TFun (TyVar "a") (TNamed "Maybe" [TyVar "a"]))
-         , ("Maybe::nothing", PolyTy ["a"] $ TNamed "Maybe" [TyVar "a"])
+eMaybe = [ ("maybe::just", PolyTy ["a"] $ TFun (TyVar "a") (TNamed "Maybe" [TyVar "a"]))
+         , ("maybe::nothing", PolyTy ["a"] $ TNamed "Maybe" [TyVar "a"])
          ]
 
 sTup1 :: [(Text, PolyTy)]
 sTup1 = [ ( "tup1"
           , PolyTy ["a"] $ TFun (TyVar "a") (TNamed "Tup1" [TyVar "a"])
           )
-        , ( "Tup1::0"
+        , ( "tup1::0"
           , PolyTy ["a"] $ TFun (TNamed "Tup1" [TyVar "a"]) (TyVar "a")
           )
         ]
@@ -43,10 +43,10 @@ sTup2 = [ ( "tup2"
                                            (TNamed "Tup2" [TyVar "a", TyVar "b"])
                                      )
           )
-        , ( "Tup2::0"
+        , ( "tup2::0"
           , PolyTy ["a", "b"] $ TFun (TNamed "Tup2" [TyVar "a", TyVar "b"]) (TyVar "a")
           )
-        , ( "Tup2::1"
+        , ( "tup2::1"
           , PolyTy ["a", "b"] $ TFun (TNamed "Tup2" [TyVar "a", TyVar "b"]) (TyVar "b")
           )
         ]
@@ -58,10 +58,10 @@ sIntDivRes = [ ( "intDivRes"
                                         (TNamed "IntDivRes" [])
                                   )
                )
-             , ( "IntDivRes::quot"
+             , ( "intDivRes::quot"
                , PolyTy [] $ TFun (TNamed "IntDivRes" []) TInt
                )
-             , ( "IntDivRes::rem"
+             , ( "intDivRes::rem"
                , PolyTy [] $ TFun (TNamed "IntDivRes" []) TInt
                )
              ]

@@ -24,10 +24,10 @@ locationTest :: (Text, M.Map Text (Integer, Ty))
 locationTest = (pack [raw|
   area Area @ 0x4000
   { [pad 8]
-    x :: Int
-  , y :: Bool
+    x : Int
+  , y : Bool
   , [align 4]
-    z :: Int
+    z : Int
   }
 |], M.fromList
   [ ("area",    (0x4000, TNamed "Area" []))

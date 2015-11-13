@@ -56,9 +56,10 @@ validateEnumer (Enumer tvs fs) =
 enumEnvItems :: (Text, Enumer) -> [(Text, PolyTy)]
 enumEnvItems (n, Enumer tvs fs) =
   let enumTy = TNamed n $ map TyVar tvs
+      nLowered = lowerFirst n
   in  map (\t -> case t of
-                      Tag tn -> (n <> "::" <> tn, PolyTy tvs enumTy)
-                      TagWithTy tn ty -> ( n <> "::" <> tn
+                      Tag tn -> (nLowered <> "::" <> tn, PolyTy tvs enumTy)
+                      TagWithTy tn ty -> ( nLowered <> "::" <> tn
                                          , PolyTy tvs $ TFun ty enumTy)
           ) (NE.toList fs)
 

@@ -45,8 +45,9 @@ structEnvItems :: (Text, Struct) -> [(Text, PolyTy)]
 structEnvItems (n, Struct tvs fs) =
   let structTy = TNamed n (map TyVar tvs)
       consTy = foldr (\(_, ft) t -> TFun ft t) structTy fs
-  in (lowerFirst n, PolyTy tvs consTy)
-     : map (\(f, t) -> (n <> "::" <> f, PolyTy tvs $ TFun structTy t)
+      nLowered = lowerFirst n
+  in (nLowered, PolyTy tvs consTy)
+     : map (\(f, t) -> (nLowered <> "::" <> f, PolyTy tvs $ TFun structTy t)
            ) (NE.toList fs)
 
 structTypeDeps :: Struct -> S.Set Text
@@ -57,12 +58,6 @@ structTypeDeps (Struct _ fs) = S.fromList
             )
             $ NE.toList fs
   )
-
-lowerFirst :: Text -> Text
-lowerFirst xs = case uncons xs of
-                     Just (x, xs') -> (toLower . singleton $ x) <> xs'
-                     Nothing ->
-                       error "Compiler error. Struct name should not be empty."
 
 gToField :: GTStructElement -> Field
 gToField (GTStructElement (GTStructFieldName (LIdent gfn)) gt) =

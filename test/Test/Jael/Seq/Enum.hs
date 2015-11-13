@@ -32,25 +32,25 @@ enumTests =
 enumTypedTags :: (Text, [(Text, PolyTy)])
 enumTypedTags = (pack [raw|
   enum X{f0,f1}
-|], [ ("X::f0", PolyTy [] $ TNamed "X" [])
-    , ("X::f1", PolyTy [] $ TNamed "X" [])
+|], [ ("x::f0", PolyTy [] $ TNamed "X" [])
+    , ("x::f1", PolyTy [] $ TNamed "X" [])
     ]
   )
 
 enumUntypedTags :: (Text, [(Text, PolyTy)])
 enumUntypedTags = (pack [raw|
   enum X { f0 Int, f1 Bool }
-|], [ ("X::f0", PolyTy [] $ TFun TInt  (TNamed "X" []))
-    , ("X::f1", PolyTy [] $ TFun TBool (TNamed "X" []))
+|], [ ("x::f0", PolyTy [] $ TFun TInt  (TNamed "X" []))
+    , ("x::f1", PolyTy [] $ TFun TBool (TNamed "X" []))
     ]
   )
 
 enumMixedTags :: (Text, [(Text, PolyTy)])
 enumMixedTags = (pack [raw|
   enum X a { f0, f1 a, f2 Bool }
-|], [ ("X::f0", PolyTy ["a"] $ TNamed "X" [TyVar "a"])
-    , ("X::f1", PolyTy ["a"] $ TFun (TyVar "a") (TNamed "X" [TyVar "a"]))
-    , ("X::f2", PolyTy ["a"] $ TFun TBool (TNamed "X" [TyVar "a"]))
+|], [ ("x::f0", PolyTy ["a"] $ TNamed "X" [TyVar "a"])
+    , ("x::f1", PolyTy ["a"] $ TFun (TyVar "a") (TNamed "X" [TyVar "a"]))
+    , ("x::f2", PolyTy ["a"] $ TFun TBool (TNamed "X" [TyVar "a"]))
     ]
   )
 

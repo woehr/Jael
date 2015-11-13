@@ -14,7 +14,7 @@ gStructTests =
 
 simpleMono :: (Text, GTypeDef)
 simpleMono = (pack [raw|
-  struct X { f0 :: Int }
+  struct X { f0 : Int }
 |], GTDefStruct (UIdent "X") $ GTStructDef
                 []
                 [ GTStructElement (GTStructFieldName (LIdent "f0"))
@@ -24,7 +24,7 @@ simpleMono = (pack [raw|
 
 simplePoly :: (Text, GTypeDef)
 simplePoly = (pack [raw|
-  struct X a { f0 :: a }
+  struct X a { f0 : a }
 |], GTDefStruct (UIdent "X") $ GTStructDef
                 [ GTVars (LIdent "a")
                 ]

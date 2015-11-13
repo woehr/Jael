@@ -23,8 +23,8 @@ checkInferredType = checkInference testTypes
 
 testTypes :: Text
 testTypes = pack [raw|
-  struct S a { f0 :: Bool , f1 :: Int , f2 :: a }
-  enum   E a { t0 Bool    , t1 Int    , t2 a    , t3 }
+  struct S a { f0 : Bool , f1 : Int , f2 : a }
+  enum   E a { t0 Bool   , t1 Int   , t2 a   , t3 }
 |]
 
 exprPlus :: (Text, Ty)
@@ -44,17 +44,17 @@ exprConstrIntDivRes = (pack [raw|
 
 exprAccessor0 :: (Text, Ty)
 exprAccessor0 = (pack [raw|
-  S::f0(s(true, 0, 1))
+  s::f0(s(true, 0, 1))
 |], TBool)
 
 exprAccessor1 :: (Text, Ty)
 exprAccessor1 = (pack [raw|
-  S::f1(s(true, 4, 5))
+  s::f1(s(true, 4, 5))
 |], TInt)
 
 exprAccessor2 :: (Text, Ty)
 exprAccessor2 = (pack [raw|
-  S::f2(s(true, 4, false))
+  s::f2(s(true, 4, false))
 |], TBool)
 
 exprTup :: (Text, Ty)

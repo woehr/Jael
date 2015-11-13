@@ -21,8 +21,6 @@ gExprTests = [ testCase "int zero" (checkParsedTree pGExpr intZero)
              , testCase "application with operator" (checkParsedTree pGExpr appWithOp)
              , testCase "application precedence (1)" (checkParsedTree pGExpr appPrec1)
              , testCase "application precedence (2)" (checkParsedTree pGExpr appPrec2)
-             , testCase "if expr with application" (checkParsedTree pGExpr ifWithApp)
-             , testCase "if expr with application w/o paren" (shouldNotParse pGExpr ifWithAppFail)
              , testCase "tuple expr" (checkParsedTree pGExpr tup)
              , testCase "tuple scoped fn" (checkParsedTree pGExpr accIndex)
              , testCase "struct scoped fn" (checkParsedTree pGExpr accLabel)
@@ -97,18 +95,16 @@ opPrec = (pack [raw|
 -- Apply b to a, then apply c to the result, application binds stronger than !
 app :: (Text, GExpr)
 app = (pack [raw|
-  !a(b)(c)
-|], GELogNot (GEApp (GEApp (GEVar (LIdent "a"))
-                            [GEAppArg (GEVar (LIdent "b"))]
-                     )
-                     [GEAppArg (GEVar (LIdent "c"))]
+  !a(b)
+|], GELogNot (GEApp (LIdent "a")
+                    [GEAppArg (GEVar (LIdent "b"))]
               )
   )
 
 appWithOp :: (Text, GExpr)
 appWithOp = (pack [raw|
   f (1 + 2)
-|], GEApp (GEVar (LIdent "f"))
+|], GEApp (LIdent "f")
           [GEAppArg (GEPlus (GEInt (DecInt "1"))
                             (GEInt (DecInt "2"))
                     )
@@ -119,7 +115,7 @@ appPrec1 :: (Text, GExpr)
 appPrec1 = (pack [raw|
   a+f(b)
 |], GEPlus (GEVar (LIdent "a"))
-           (GEApp (GEVar (LIdent "f"))
+           (GEApp (LIdent "f")
                   [GEAppArg (GEVar (LIdent "b"))]
            )
   )
@@ -127,28 +123,11 @@ appPrec1 = (pack [raw|
 appPrec2 :: (Text, GExpr)
 appPrec2 = (pack [raw|
   f(b)*a
-|], GETimes (GEApp (GEVar (LIdent "f"))
+|], GETimes (GEApp (LIdent "f")
                    [GEAppArg (GEVar (LIdent "b"))]
             )
             (GEVar (LIdent "a"))
   )
-
-ifWithApp :: (Text, GExpr)
-ifWithApp = (pack [raw|
-  (if true {a} else {b})(c)
-|], GEApp (GEIf GETrue
-                (GELetExpr [] (GEVar (LIdent "a")))
-                (GELetExpr [] (GEVar (LIdent "b")))
-          )
-          [GEAppArg (GEVar (LIdent "c"))]
-  )
-
--- This looks confusing so the grammar is defined such that parenthesis are
--- required
-ifWithAppFail :: Text
-ifWithAppFail = pack [raw|
-  if true {a} else {b}(c)
-|]
 
 tup :: (Text, GExpr)
 tup = (pack [raw|
@@ -166,17 +145,15 @@ tup = (pack [raw|
 
 accIndex :: (Text, GExpr)
 accIndex = (pack [raw|
-  Tup1::0
-|], GEScopedFn (UIdent "Tup1") (GEScopeIndex (DecInt "0"))
+  tup1::0(var)
+|], GEAppScoped (LScopedIdent "tup1::0") [GEAppArg $ GEVar (LIdent "var")]
   )
 
 accLabel :: (Text, GExpr)
 accLabel = (pack [raw|
-  SomeStruct::someField(x)
-|], GEApp (GEScopedFn (UIdent "SomeStruct")
-                      (GEScopeIdent (LIdent "someField"))
-          )
-          [ GEAppArg (GEVar (LIdent "x")) ]
+  someStruct::someField(x)
+|], GEAppScoped (LScopedIdent "someStruct::someField")
+          [GEAppArg $ GEVar (LIdent "x")]
   )
 
 accMulti :: Text
