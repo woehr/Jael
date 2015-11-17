@@ -1,35 +1,13 @@
-module Jael.Seq.AST where
+module Jael.Seq.HM_AST where
 
 import Data.Functor.Foldable as F
+import Jael.Seq.Literal
+import Jael.Seq.Prm
 import Jael.Seq.Types
-
-data Lit = LUnit
-         | LInt Integer
-         | LBool Bool
-         | LBit Text
-         deriving (Eq, Show)
-
-data Prm = PIf
-         | PAdd
-         | PSub
-         | PTimes
-         | PDiv
-         | PMod
-         | POr
-         | PAnd
-         | PEq
-         | PNeq
-         | PGeq
-         | PLeq
-         | PGt
-         | PLt
-         | PNot
-         | PBitCat
-         deriving (Eq, Show)
 
 data Ex = EVar Text
         | EPrm Prm
-        | ELit Lit
+        | ELit Literal
         | EApp Ex Ex
         | EAbs Text Ex
         | ELet Text Ex Ex
@@ -37,7 +15,7 @@ data Ex = EVar Text
 
 data ExF a = EVarF Text
            | EPrmF Prm
-           | ELitF Lit
+           | ELitF Literal
            | EAppF a a
            | EAbsF Text a
            | ELetF Text a a
@@ -84,8 +62,8 @@ instance TyOps TypedEx where
   apply s = cata alg
     where alg (TypedExF Ann {ann=t, unAnn=e}) = TypedEx Ann {ann=apply s t, unAnn=e}
 
-tyOf :: TypedEx -> Ty
-tyOf (TypedEx Ann {ann=t}) = t
+instance SeqTypable TypedEx where
+  tyOf (TypedEx Ann {ann=t}) = t
 
 mkTyped :: Ty -> ExF TypedEx -> TypedEx
 mkTyped t e = TypedEx Ann {ann=t, unAnn=e}

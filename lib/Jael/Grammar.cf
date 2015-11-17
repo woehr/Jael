@@ -211,7 +211,7 @@ GTDefProto.  GTypeDef ::= "protocol" UIdent "=" GSession ;
 GTDefArea.   GTypeDef ::= "area" UIdent "@" GAnyInt GTAreaDef ;
 
 GFuncName. GFuncName ::= LIdent ;
-GFuncArg.  GFuncArg  ::= LIdent ;
+GFuncArg.  GFuncArg  ::= LIdent ":" GType ;
 separator nonempty GFuncArg "," ;
 
 GProcArgSess.  GProcArg ::= "^" LIdent ":" GSession ;

@@ -6,8 +6,7 @@ import Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
-import Jael.Seq.AST
-import Jael.Seq.Expr
+import Jael.Seq.CG_AST
 import Jael.Seq.Types
 import Jael.Conc.Session
 import Jael.UserDefTy
@@ -24,7 +23,7 @@ type Channel = Text
 type Var  = Text
 type Label = Text
 
-type ChanEx = Either Channel Ex
+type ChanEx = Either Channel CGEx
 
 data TyOrSess = TorSTy Ty
               | TorSSess Session
@@ -44,18 +43,18 @@ instance UserDefTy TopProc where
   envItems _ = []
 
 data Proc = PGetChan Channel Channel Proc
-          | PGetVal  Channel Text Proc
-          | PGetIgn  Channel      Proc
+          | PGetVal  Channel Text    Proc
+          | PGetIgn  Channel         Proc
           | PPutChan Channel Channel Proc
-          | PPutVal  Channel Ex   Proc
-          | PNewVal Text Ex Proc
+          | PPutVal  Channel CGEx    Proc
+          | PNewVal  Text    CGEx    Proc
           | PNewChan Text Text Session Proc
-          | PPar [Proc]
-          | PCase Channel [(Label, Proc)]
-          | PSel Channel Label Proc
-          | PCoRec Text [(Var, ChanEx)] Proc
-          | PFwd Channel Channel
-          | PNamed Text [ChanEx]
+          | PPar     [Proc]
+          | PCase    Channel [(Label, Proc)]
+          | PSel     Channel Label Proc
+          | PCoRec   Text [(Var, ChanEx)] Proc
+          | PFwd     Channel Channel
+          | PNamed   Text [ChanEx]
           | PNil
           deriving (Eq, Show)
 
@@ -63,8 +62,8 @@ data ProcF a = PGetChanF Channel Channel a
              | PGetValF  Channel Text a
              | PGetIgnF  Channel      a
              | PPutChanF Channel Channel a
-             | PPutValF  Channel Ex   a
-             | PNewValF Text Ex a
+             | PPutValF  Channel CGEx   a
+             | PNewValF  Text CGEx a
              | PNewChanF Text Text Session a
              | PParF [a]
              | PCaseF Channel [(Label, a)]
@@ -120,7 +119,7 @@ gToInitList :: [GRecInitializer] -> [(Text, ChanEx)]
 gToInitList = map (\i -> case i of
     (GRecInitializerChan (LIdent x) c) ->
       (pack x, Left $ gChanToText c)
-    (GRecInitializerExpr (LIdent x) y) -> (pack x, Right $ gToEx y)
+    (GRecInitializerExpr (LIdent x) y) -> (pack x, Right $ gToCGEx y)
   )
 
 gParElemToProc :: GParElem -> GProc
@@ -128,7 +127,7 @@ gParElemToProc (GParElem p) = p
 
 gProcParamToEx :: GProcParam -> ChanEx
 gProcParamToEx (GProcParamChan c) = Left (gChanToText c)
-gProcParamToEx (GProcParamExpr x) = Right $ gToEx x
+gProcParamToEx (GProcParamExpr x) = Right $ gToCGEx x
 
 gToProc :: GProc -> Proc
 gToProc = ana coalg
@@ -136,7 +135,7 @@ gToProc = ana coalg
         coalg (GProcNew (LIdent x) (LIdent y) s p
               ) = PNewChanF (pack x) (pack y) (gToSession s) p
         coalg (GProcLet (LIdent x) y p
-              ) = PNewValF (pack x) (gToEx y) p
+              ) = PNewValF (pack x) (gToCGEx y) p
         coalg (GProcGetExpr c (LIdent y) p
               ) = PGetValF (gChanToText c) (pack y) p
         coalg (GProcGetChan c (LIdent y) p
@@ -144,7 +143,7 @@ gToProc = ana coalg
         coalg (GProcGetIgn  c p
               ) = PGetIgnF (gChanToText c) p
         coalg (GProcPutExpr c ex p
-              ) = PPutValF (gChanToText c) (gToEx ex) p
+              ) = PPutValF (gChanToText c) (gToCGEx ex) p
         coalg (GProcPutChan c1 c2 p
               ) = PPutChanF (gChanToText c1) (gChanToText c2) p
         coalg (GProcSel c (GChoiceLabel (LIdent y)) p

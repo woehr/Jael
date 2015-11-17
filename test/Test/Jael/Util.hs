@@ -3,11 +3,10 @@ module Test.Jael.Util where
 import qualified Data.Map as M
 import Jael.Grammar
 import Jael.Parser
+import Jael.Seq.CG_AST
 import Jael.Seq.Enum
 import Jael.Seq.Env
-import Jael.Seq.Expr
 import Jael.Seq.Struct
-import Jael.Seq.TI
 import Jael.Seq.Types
 import Jael.UserDefTy
 
@@ -69,15 +68,12 @@ checkInference testTypes (tx, expected) =
              Right
              (addToEnv defaultEnv funs)
     ex <- runParser pGExpr tx
-    ty <- either (Left . intercalate "\n" . map tshow)
+    ty <- either (Left . tshow)
                  Right
-                 (seqInfer env $ gToEx ex)
-    return $ assertBool ("Expected:\n" ++
-                        show expected ++
-                        "\n    and:\n" ++
-                        show ty ++
-                        "\nto be equivalent."
-                        ) (expected `tyEquiv` ty)
+                 (typeInf env $ gToCGEx ex)
+    return $ assertBool ("Expected : " ++ show expected ++
+                         "\nbut got  :" ++ show ty)
+                        (expected `tyEquiv` ty)
 
 envListEq :: [(Text, PolyTy)] -> [(Text, PolyTy)] -> Assertion
 envListEq expected actual =
@@ -88,9 +84,8 @@ envListEq expected actual =
 envEq :: TyEnv -> TyEnv -> Assertion
 envEq (TyEnv expected) (TyEnv actual) =
    let inter = M.intersectionWith polyEquiv expected actual
-   in assertBool ("Expected:\n" ++ show expected ++
-                  "\n     and:\n" ++ show actual ++
-                  "\nto be equivalent."
+   in assertBool ("Expected :" ++ show expected ++
+                  "\nbut got : " ++ show actual
                  )
                  (M.size expected == M.size inter && and inter)
 

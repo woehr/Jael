@@ -5,10 +5,8 @@ import qualified Data.Set as S
 import Jael.Conc.Env
 import Jael.Conc.Proc
 import Jael.Conc.Session
-import Jael.Seq.AST
+import Jael.Seq.CG_AST
 import Jael.Seq.Env
-import Jael.Seq.Expr (freeVars)
-import Jael.Seq.TI
 import Jael.Seq.Types
 
 type SessTyErrM = Either SessTyErr
@@ -21,7 +19,7 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Channel Session
                | ProtocolMismatch Channel Session
                | TypeMismatch Channel Ty
                | DuplicateSeqEnvItem [Text]
-               | SeqErrs [SeqTIErr]
+               | SeqErrs [CGTypeErr]
                | UnknownLabel Label
                | CaseLabelMismatch (S.Set Label)
                | NonFreshChan Text
@@ -237,13 +235,21 @@ markSeqUsed vars env@(ConcTyEnv{cteBase=baseEnv}) =
 -- "implement" behaviour, mark it as such.
 consumeLinear :: Maybe RecType -> Channel -> ConcTyEnv -> SessTyErrM ConcTyEnv
 consumeLinear mRecType c env@(ConcTyEnv{cteLin=linEnv}) =
-  let cEnv@(LinEnv{leRecImpl=cRec}) = M.findWithDefault (error "") c linEnv
+  let cEnv@(LinEnv{leRecImpl=cRec}) =
+        M.findWithDefault (error $ "Expected " <> show c <> " to be in the env")
+                          c linEnv
    in case (mRecType, cRec) of
            (Just RTUse, RIImpl) -> throwError $ IndSessImplReqd c
            (Just RTImpl, RIUse) -> throwError $ IndSessUseReqd c
            (_, RIUnknown) ->
-             let d = fromMaybe (error "") (leDual cEnv)
-                 dEnv@(LinEnv{leRecImpl=dRec}) = M.findWithDefault (error "") d linEnv
+             let d = fromMaybe (error $ "Expected " <> show c <> " to have a\
+                                        \ dual in this situation")
+                               (leDual cEnv)
+                 dEnv@(LinEnv{leRecImpl=dRec}) =
+                   M.findWithDefault (error $ "Expected the dual of " <> show c
+                                            <> " to have its dual " <> show d
+                                            <> " in the linear env")
+                                     d linEnv
               in if dRec /= RIUnknown
                     then error "Expect an RIUnknown channel and its dual to\
                                \ always both have RIUnknown."
@@ -401,12 +407,10 @@ tyCkProc env (PPutVal c putExpr pCont) = do
   sess <- lookupChanUnfold c env
   env' <- case sess of
                SPutTy v sCont -> do
-                 -- ' is a name guaranteed not to be used in the expression
-                 ty <- seqTyCk env (ELet "'" putExpr $ EVar "'")
-                 if ty /= v
-                    then throwError $ TypeMismatch c ty
-                    else updateSession c sCont
-                         $ markSeqUsed (freeVars putExpr) env
+                 tyCkRes <- seqTyCk env putExpr v
+                 case tyCkRes of
+                      TCSuccess -> updateSession c sCont $ markSeqUsed (freeVars putExpr) env
+                      TCMismatch inferred -> throwError $ TypeMismatch c inferred
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
@@ -474,7 +478,7 @@ tyCkProc env (PCase chan cases) = do
        _ -> throwError $ ProtocolMismatch chan sess
 
 tyCkProc env (PNewVal name expr pCont) = do
-  ty <- seqTyCk env expr
+  ty <- seqTyInf env expr
   env' <- addIfNotRedefinition (Base name ty) env
   tyCkProc env' pCont
 
@@ -569,9 +573,7 @@ tyCkProc env (PCoRec n is p) = do
                               (True, _) -> throwError $ NonPrimaryIndSessArg c
                               _ -> return . TorSSess $ s
                    Nothing -> throwError $ UndefinedChan c
-            Right e -> do
-              ty <- seqTyCk env e
-              return $ TorSTy ty
+            Right e -> liftM TorSTy $ seqTyInf env e
     ) argVals
   let coRecSig = zip varNames argTypes
   -- Check for errors in the arguments passed to the corecursive process
@@ -642,10 +644,19 @@ updateEnvFromRecArgs =
            Right e -> return $ markSeqUsed (freeVars e) acc
     )
 
-seqTyCk :: ConcTyEnv -> Ex -> SessTyErrM Ty
-seqTyCk env expr = do
+seqTyInf :: ConcTyEnv -> CGEx -> SessTyErrM Ty
+seqTyInf env expr = do
   seqEnv <- mkSeqEnv env
-  either (throwError . SeqErrs) return (seqInfer seqEnv expr)
+  case typeInf seqEnv expr of
+       Left e -> throwError $ SeqErrs [e]
+       Right ty -> return ty
+
+seqTyCk :: ConcTyEnv -> CGEx -> Ty -> SessTyErrM CGTypeCheck
+seqTyCk env expr ty = do
+  seqEnv <- mkSeqEnv env
+  case typeCheck seqEnv expr ty of
+       Left e -> throwError $ SeqErrs [e]
+       Right x -> return x
 
 -- The current env, the env in which the recursive definition was made, the
 -- recursion variable, and the parameters to the recursive call
@@ -684,10 +695,10 @@ checkProcArgErrs env n as sig = do
       case (argType, argVal) of
            -- Make sure the type of e matches t
            (TorSTy t  , Right expr) -> do
-             ty <- seqTyCk env expr
-             if t == ty
-                then return acc
-                else return $ argName:acc
+             ckRes <- seqTyCk env expr t
+             return $ case ckRes of
+                           TCMismatch _ -> argName:acc
+                           TCSuccess    -> acc
            -- Make sure the type of c matches s
            (TorSSess s,  Left c) -> case M.lookup c (cteLin env) of
                                          Just le -> if s `coIndEq` leSess le

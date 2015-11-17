@@ -65,7 +65,7 @@ exprTup = (pack [raw|
 
 exprTupCons :: (Text, Ty)
 exprTupCons = (pack [raw|
-  tup2(true)
-|], TFun (TyVar "a") (TNamed "Tup2" [TBool, TyVar "a"])
+  tup2(true, 1)
+|], TNamed "Tup2" [TBool, TInt]
   )
 

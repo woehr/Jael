@@ -17,7 +17,6 @@ source-repository head
 
 library
   exposed-modules:     Jael.Compile
---                       Jael.Compile.TH
                        Jael.Conc.Env
                        Jael.Conc.Proc
                        Jael.Conc.Session
@@ -31,12 +30,14 @@ library
                        Jael.Grammar.Print
                        Jael.Hw.Area
                        Jael.Parser
---                       Jael.Proc.AM335X
-                       Jael.Seq.AST
+                       Jael.Plat
                        Jael.Seq.Builtin
+                       Jael.Seq.CG_AST
                        Jael.Seq.Enum
                        Jael.Seq.Env
-                       Jael.Seq.Expr
+                       Jael.Seq.HM_AST
+                       Jael.Seq.Literal
+                       Jael.Seq.Prm
                        Jael.Seq.Struct
                        Jael.Seq.TI
                        Jael.Seq.Types

@@ -9,6 +9,7 @@ import           Jael.Conc.Session
 import           Jael.Conc.TyCk
 import           Jael.Grammar
 import           Jael.Parser
+import           Jael.Seq.CG_AST (CGTypeErr(..))
 import           Jael.Seq.Env
 import           Jael.Seq.TI (SeqTIErr(..))
 import           Jael.Seq.Types
@@ -88,7 +89,7 @@ testAliases =
         , ("AltTxRxInt", "rec X. ![Int] ?[Int] <X>")
         ]
 
--- A map of function names to their arguments that will be passed to the type
+-- A map of process names to their arguments that will be passed to the type
 -- checking function
 testProcs :: M.Map Text [(Text, TyOrSess)]
 testProcs =
@@ -621,7 +622,7 @@ undefinedCoRecArgExpr = (pack [raw|
       ^a <- b;
     }
   }
-|], SeqErrs [UnboundVar "x"]
+|], SeqErrs [InferenceErr (UnboundVar "x")]
   )
 
 interferingCoRecArgs :: (Text, SessTyErr)
@@ -656,7 +657,7 @@ undefinedCoRecVarArgExpr = (pack [raw|
       X(b)
     }
   }
-|], SeqErrs [UnboundVar "b"]
+|], SeqErrs [InferenceErr (UnboundVar "b")]
   )
 
 interferingCoRecVarArgs :: (Text, SessTyErr)

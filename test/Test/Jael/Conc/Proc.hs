@@ -8,13 +8,15 @@ import           Jael.Grammar
 import           Jael.Parser
 import           Jael.Conc.Proc
 import           Jael.Conc.Session
-import           Jael.Seq.AST
+import           Jael.Seq.CG_AST
+import           Jael.Seq.Literal
+import           Jael.Seq.Prm
 import qualified Test.Framework as T
 
 procTests :: [T.Test]
 procTests =
   [ testCase "proc valid" $ checkProc valid
-  , testCase "free vars" $ checkProcErr freeVars
+  , testCase "free vars" $ checkProcErr testProcFreeVars
   , testCase "dup args" $ checkProcErr dupArgs
   , testCase "co-rec capture" $ checkProcErr coRecCapt
   , testCase "ambiguious co-rec name" $ checkProcErr ambiguousRecName
@@ -62,10 +64,10 @@ valid = (pack [raw|
               }
     }
 |], PNewChan "xp" "xn" (SVar "SomeProto")
-  $ PNewVal "y" (ELit (LInt 5))
+  $ PNewVal "y" (CGLit (LInt 5))
   $ PGetVal "xp" "z"
-  $ PPutVal "xn" (EVar "y")
-  $ PPutVal "xp" (ELit $ LBool True)
+  $ PPutVal "xn" (CGVar "y")
+  $ PPutVal "xp" (CGLit $ LBool True)
   $ PSel "xn" "label"
   $ PCase "xp"
       [ ("p1", PNil)
@@ -80,12 +82,12 @@ valid = (pack [raw|
                     ]
                 ]
         )
-      , ("p3", PCoRec "X" [ ("j", Right $ EVar "x")
-                          , ("k", Right $ ELit (LInt 1))
+      , ("p3", PCoRec "X" [ ("j", Right $ CGVar "x")
+                          , ("k", Right $ CGLit (LInt 1))
                           ]
-               ( PPutVal "j" (EVar "k")
+               ( PPutVal "j" (CGVar "k")
                $ PPar [ PNamed "X" [ Left "j"
-                                   , Right $ EApp (EApp (EPrm PAdd) (EVar "k")) (ELit (LInt 1))
+                                   , Right $ CGCallPrm PAdd [CGVar "k", CGLit (LInt 1)]
                                    ]
                       , PNil
                       ]
@@ -94,8 +96,8 @@ valid = (pack [raw|
       ]
   )
 
-freeVars :: (Text, ProcDefErr)
-freeVars = (pack [raw|
+testProcFreeVars :: (Text, ProcDefErr)
+testProcFreeVars = (pack [raw|
   proc X(x:Int) {
     ^a <- x;
     ( Y(b)

@@ -4,6 +4,7 @@ module Jael.Seq.Env
 ) where
 
 import Jael.Seq.Builtin
+import Jael.Seq.Prm
 import Jael.Seq.Types
 import Jael.UserDefTy
 import Jael.Util
@@ -14,6 +15,7 @@ defaultEnv =
        Just es -> error $ unpack . intercalate "\n"
                         $ "Errors validating builtins:" : es
        Nothing -> case addToEnv builtinFuncs $
+                         prmFuncs ++
                          concatMap envItems builtinStruct ++
                          concatMap envItems builtinEnums
                   of

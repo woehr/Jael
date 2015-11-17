@@ -10,38 +10,63 @@ import Jael.Conc.Env
 import Jael.Conc.Proc
 import Jael.Conc.Session
 import Jael.Hw.Area
-import Jael.Seq.AST
+import Jael.Seq.CG_AST
 import Jael.Seq.Enum
-import Jael.Seq.Expr
 import Jael.Seq.Struct
 import Jael.Seq.Types
 import Jael.UserDefTy
 
+data TopGlob = TopGlob { tgExpr :: CGEx }
+               deriving (Show)
+
+gToTopGlob :: GExpr -> TopGlob
+gToTopGlob e = TopGlob { tgExpr = gToCGEx e }
+
+globFreeVars :: TopGlob -> S.Set Text
+globFreeVars = freeVars . tgExpr
+
+data TopFunc = TopFunc { tfArgs :: [(Text, Ty)]
+                       , tfExpr :: CGEx }
+               deriving (Show)
+
+gToTopFunc :: [GFuncArg] -> GExpr -> TopFunc
+gToTopFunc as e = TopFunc { tfArgs = map (\(GFuncArg (LIdent n) t) ->
+                                              (pack n, gToType t)
+                                           )
+                                           as
+                          , tfExpr = gToCGEx e
+                          }
+
+funcFreeVars :: TopFunc -> S.Set Text
+funcFreeVars (TopFunc{tfArgs=as, tfExpr=ex}) =
+  freeVars ex S.\\ S.fromList (map fst as)
+
 -- splits the top level definition into its different types of components
-splitTop :: GProg -> ( [(Text, Ex)]      -- a
+splitTop :: GProg -> ( [(Text, TopGlob)] -- a
                      , [(Text, Struct)]  -- b
-                     , [(Text, Enumer)]    -- c
+                     , [(Text, Enumer)]  -- c
                      , [(Text, HwArea)]  -- d
                      , [(Text, Session)] -- e
                      , [(Text, TopProc)] -- f
+                     , [(Text, TopFunc)] -- g
                      )
-splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f) ->
+splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f, g) ->
   case x of
        (GTopDefGGlobal (GGlobal (LIdent n) y))
-         -> ((pack n, gToEx y)                         :a,b,c,d,e,f)
-       (GTopDefGFunc (GFunc (GFuncName (LIdent n)) as y))
-         -> ((pack n, fargsToAbs y as)                 :a,b,c,d,e,f)
+         -> ((pack n, gToTopGlob y)                    :a,b,c,d,e,f,g)
        (GTopDefGTypeDef (GTDefStruct (UIdent n) y))
-         -> (a,(pack n, gToUserDefTy y)                  :b,c,d,e,f)
+         -> (a,(pack n, gToUserDefTy y)                  :b,c,d,e,f,g)
        (GTopDefGTypeDef (GTDefEnum (UIdent n) y))
-         -> (a,b,(pack n, gToUserDefTy y)                  :c,d,e,f)
+         -> (a,b,(pack n, gToUserDefTy y)                  :c,d,e,f,g)
        (GTopDefGTypeDef (GTDefArea (UIdent n) i y))
-         -> (a,b,c,(pack n, gToUserDefTy (HwAreaGrammar i y)):d,e,f)
+         -> (a,b,c,(pack n, gToUserDefTy (HwAreaGrammar i y)):d,e,f,g)
        (GTopDefGTypeDef (GTDefProto (UIdent n) y))
-         -> (a,b,c,d,(pack n, dual $ gToUserDefTy y)           :e,f)
+         -> (a,b,c,d,(pack n, dual $ gToUserDefTy y)           :e,f,g)
        (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) ys p))
-         -> (a,b,c,d,e,              (pack n, gToTopProc (ys, p)):f)
-  ) ([],[],[],[],[],[]) xs
+         -> (a,b,c,d,e,              (pack n, gToTopProc (ys, p)):f,g)
+       (GTopDefGFunc (GFunc (GFuncName (LIdent n)) as y))
+         -> (a,b,c,d,e,f,                 (pack n, gToTopFunc as y):g)
+  ) ([],[],[],[],[],[],[]) xs
 
 dupDefs :: [Text] -> CompileErrM ()
 dupDefs ns =
@@ -105,14 +130,15 @@ compile p = do
                Left e  -> throwError $ ParseErr e
                Right x -> return x
 
-  let (exprs, structs, enums, areas, protocols, procs) = splitTop prog
+  let (globs, structs, enums, areas, protocols, procs, funcs) = splitTop prog
 
-  let topLevelNames = map fst exprs     ++
+  let topLevelNames = map fst globs     ++
                       map fst structs   ++
                       map fst enums     ++
                       map fst areas     ++
                       map fst protocols ++
-                      map fst procs
+                      map fst procs     ++
+                      map fst funcs
 
   -- Find duplicate name definitions
   dupDefs topLevelNames
@@ -124,10 +150,12 @@ compile p = do
           (map snd protocols)
           (map snd procs)
 
-  -- Check for names that shadow other names
+  -- Checks for recursive process names that conflict
   shadowingDef topLevelNames procs
 
-  let exprDepMap = M.map freeVars . M.fromList $ exprs
+  let globDepMap = M.map globFreeVars . M.fromList $ globs
+  let funcDepMap = M.map funcFreeVars . M.fromList $ funcs
+  let exprDepMap = globDepMap `M.union` funcDepMap
 
   -- Find uses of undefined variables
   undefinedNames exprDepMap

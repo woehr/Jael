@@ -4,7 +4,8 @@ module Jael.Seq.TI where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Jael.Seq.AST
+import Jael.Seq.HM_AST
+import Jael.Seq.Literal
 import Jael.Seq.Types
 
 data SeqTIErr = NamedUnificationMismatch Text Text
@@ -15,17 +16,16 @@ data SeqTIErr = NamedUnificationMismatch Text Text
 
 data SeqTIState = SeqTIState
   { tvCount :: Integer
-  , tiErrors :: [SeqTIErr]
   }
 
-newtype SeqTI a = SeqTI (SeqTIState -> (Maybe a, SeqTIState))
+newtype SeqTI a = SeqTI (SeqTIState -> (Either SeqTIErr a, SeqTIState))
 
 instance Monad SeqTI where
   (SeqTI p) >>= f = SeqTI $ \s -> case p s of
-                                       (Just v,  s') -> let (SeqTI n) = f v
-                                                        in  n s'
-                                       (Nothing, s') -> (Nothing, s')
-  return v = SeqTI $ \s -> (Just v, s)
+                                       (Right v,  s') -> let (SeqTI n) = f v
+                                                          in  n s'
+                                       (Left e, s') -> (Left e, s')
+  return v = SeqTI $ \s -> (Right v, s)
 
 instance Applicative SeqTI where
   pure = return
@@ -34,18 +34,16 @@ instance Applicative SeqTI where
 instance Functor SeqTI where
   fmap = liftM
 
-seqInfer :: TyEnv -> Ex -> Either [SeqTIErr] Ty
+seqInfer :: TyEnv -> Ex -> Either SeqTIErr Ty
 seqInfer env = runSeqTI . seqTypeInference env
 
-seqInferTypedEx :: TyEnv -> Ex -> Either [SeqTIErr] TypedEx
+seqInferTypedEx :: TyEnv -> Ex -> Either SeqTIErr TypedEx
 seqInferTypedEx env = runSeqTI . seqTypedExInference env
 
-runSeqTI :: SeqTI a -> Either [SeqTIErr] a
+runSeqTI :: SeqTI a -> Either SeqTIErr a
 runSeqTI t = let (SeqTI stateFunc) = t
-                 initState = SeqTIState{ tvCount = 0, tiErrors = [] }
-             in  case stateFunc initState of
-                      (Just v,  _) -> Right v
-                      (Nothing, s) -> Left $ tiErrors s
+                 initState = SeqTIState{ tvCount = 0 }
+              in fst (stateFunc initState)
 
 seqTypeInference :: TyEnv -> Ex -> SeqTI Ty
 seqTypeInference env = liftM tyOf . seqTypedExInference env
@@ -56,24 +54,17 @@ seqTypedExInference env e = do
   return $ apply sub te
 
 getTvCount :: SeqTI Integer
-getTvCount = SeqTI $ \s -> (Just (tvCount s), s)
+getTvCount = SeqTI $ \s -> (Right (tvCount s), s)
 
 incTvCount :: SeqTI ()
-incTvCount = SeqTI $ \s -> (Just (), s{tvCount = tvCount s + 1})
+incTvCount = SeqTI $ \s -> (Right (), s{tvCount = tvCount s + 1})
 
 newTV :: SeqTI Ty
 newTV = getTvCount >>= (\i -> (incTvCount >>) $ return . TyVar $ "a" <> (pack . show) i)
 
-getTiErrors :: SeqTI [SeqTIErr]
-getTiErrors = SeqTI $ \s -> (Just $ tiErrors s, s)
-
-putTiErrors :: [SeqTIErr] -> SeqTI ()
-putTiErrors ts = SeqTI $ \s -> (Just (), s{tiErrors=ts})
-
 -- Halts inference and records the error
 tiError :: SeqTIErr -> SeqTI a
-tiError t = getTiErrors >>= (\ts -> putTiErrors $ t:ts)
-                        >> (SeqTI $ \s -> (Nothing, s))
+tiError err = SeqTI $ \s -> (Left err, s)
 
 remove :: TyEnv -> Text -> TyEnv
 remove (TyEnv env) t = TyEnv $ M.delete t env
@@ -166,25 +157,5 @@ ti _ (ELit (LBool x)) = return (nullSub, mkTyped TBool $ ELitF $ LBool x)
 ti _ (ELit (LBit x))  = return (nullSub, mkTyped TBit  $ ELitF $ LBit x)
 
 -- Primitives
-ti _ (EPrm x) =
-  let instPrim :: PolyTy -> SeqTI (TySub, TypedEx)
-      instPrim p = instantiation p >>= \t -> return (nullSub, mkTyped t $ EPrmF x)
-   in instPrim $
-        case x of
-             PIf    -> PolyTy ["a"] (TFun TBool (TFun (TyVar "a") (TFun (TyVar "a") (TyVar "a"))))
-             PAdd   -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") (TyVar "a")))
-             PSub   -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") (TyVar "a")))
-             PTimes -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") (TyVar "a")))
-             PDiv   -> PolyTy [] (TFun TInt (TFun TInt (TNamed "IntDivRes" [])))
-             PMod   -> PolyTy [] (TFun TInt (TFun TInt TInt))
-             POr    -> PolyTy [] (TFun TBool (TFun TBool TBool))
-             PAnd   -> PolyTy [] (TFun TBool (TFun TBool TBool))
-             PEq    -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
-             PNeq   -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
-             PGeq   -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
-             PLeq   -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
-             PGt    -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
-             PLt    -> PolyTy ["a"] (TFun (TyVar "a") (TFun (TyVar "a") TBool))
-             PNot   -> PolyTy ["a"] (TFun (TyVar "a") (TyVar "a"))
-             PBitCat -> PolyTy [] (TFun TBit (TFun TBit TBit))
+ti _ (EPrm x) = return (nullSub, mkTyped (tyOf x) $ EPrmF x)
 

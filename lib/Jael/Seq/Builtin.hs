@@ -33,17 +33,8 @@ builtinEnums = [ ("Maybe", Enumer ["a"] $ NE.fromList [ TagWithTy "just" (TyVar 
 
 builtinFuncs :: TyEnv
 builtinFuncs = TyEnv $ M.fromList
-  [ ( "<$" -- (a -> b) -> a -> b
-    , PolyTy ["a", "b"] (TFun (TFun (TyVar "a") (TyVar "b")) (TFun (TyVar "a") (TyVar "b")))
-    )
-  , ( "$>" -- a -> (a -> b) -> b
-    , PolyTy ["a", "b"] (TFun (TyVar "a") (TFun (TFun (TyVar "a") (TyVar "b")) (TyVar "b")))
-    )
-  , ( "<o" -- (b -> c) -> (a -> b) -> (a -> c)
-    , PolyTy ["a", "b", "c"] (TFun (TFun (TyVar "b") (TyVar "c")) (TFun (TFun (TyVar "a") (TyVar "b")) (TFun (TyVar "a") (TyVar "c"))))
-    )
-  , ( "o>" -- (a -> b) -> (b -> c) -> (a -> c)
-    , PolyTy ["a", "b", "c"] (TFun (TFun (TyVar "a") (TyVar "b")) (TFun (TFun (TyVar "b") (TyVar "c")) (TFun (TyVar "a") (TyVar "c"))))
+  [ ( "if"
+    , PolyTy ["a"] $ TFun TBool $ TFun (TyVar "a") $ TFun (TyVar "a") (TyVar "a")
     )
   ]
 
