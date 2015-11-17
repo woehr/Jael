@@ -219,7 +219,7 @@ GProcArgType.  GProcArg ::=     LIdent ":" GType ;
 separator GProcArg "," ;
 
 GGlobal.  GGlobal  ::= LIdent "=" GExpr ";" ;
-GFunc.    GFunc    ::= "func" GFuncName "(" [GFuncArg] ")"
+GFunc.    GFunc    ::= "func" GFuncName "(" [GFuncArg] ")" ":" GType
   "{"
     GExpr
   "}" ;

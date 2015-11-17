@@ -21,7 +21,6 @@ library
                        Jael.Conc.Proc
                        Jael.Conc.Session
                        Jael.Conc.TyCk
-                       Jael.Err
                        Jael.Grammar
                        Jael.Grammar.Abs
                        Jael.Grammar.ErrM
@@ -30,7 +29,6 @@ library
                        Jael.Grammar.Print
                        Jael.Hw.Area
                        Jael.Parser
-                       Jael.Plat
                        Jael.Seq.Builtin
                        Jael.Seq.CG_AST
                        Jael.Seq.Enum

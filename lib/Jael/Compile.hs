@@ -2,7 +2,6 @@ module Jael.Compile where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Jael.Err
 import Jael.Grammar
 import Jael.Parser
 import Jael.Util
@@ -16,6 +15,17 @@ import Jael.Seq.Struct
 import Jael.Seq.Types
 import Jael.UserDefTy
 
+data CompileErr = ParseErr Text
+                | DupDef [Text]
+                | UndefName (S.Set Text)
+                | DepCycle [Text]
+                | TypeDefErr [Text]
+                | TypeInfErr [Text]
+                | AmbigName (M.Map Text (S.Set Text))
+  deriving (Eq, Show)
+
+type CompileErrM = Either CompileErr
+
 data TopGlob = TopGlob { tgExpr :: CGEx }
                deriving (Show)
 
@@ -25,17 +35,19 @@ gToTopGlob e = TopGlob { tgExpr = gToCGEx e }
 globFreeVars :: TopGlob -> S.Set Text
 globFreeVars = freeVars . tgExpr
 
-data TopFunc = TopFunc { tfArgs :: [(Text, Ty)]
-                       , tfExpr :: CGEx }
+data TopFunc = TopFunc { tfArgs  :: [(Text, Ty)]
+                       , tfRetTy :: Ty
+                       , tfExpr  :: CGEx }
                deriving (Show)
 
-gToTopFunc :: [GFuncArg] -> GExpr -> TopFunc
-gToTopFunc as e = TopFunc { tfArgs = map (\(GFuncArg (LIdent n) t) ->
-                                              (pack n, gToType t)
-                                           )
+gToTopFunc :: [GFuncArg] -> GType -> GExpr -> TopFunc
+gToTopFunc as rt e = TopFunc { tfArgs = map (\(GFuncArg (LIdent n) t) ->
+                                               (pack n, gToType t)
+                                            )
                                            as
-                          , tfExpr = gToCGEx e
-                          }
+                             , tfRetTy = gToType rt
+                             , tfExpr = gToCGEx e
+                             }
 
 funcFreeVars :: TopFunc -> S.Set Text
 funcFreeVars (TopFunc{tfArgs=as, tfExpr=ex}) =
@@ -63,9 +75,9 @@ splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f, g) ->
        (GTopDefGTypeDef (GTDefProto (UIdent n) y))
          -> (a,b,c,d,(pack n, dual $ gToUserDefTy y)           :e,f,g)
        (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) ys p))
-         -> (a,b,c,d,e,              (pack n, gToTopProc (ys, p)):f,g)
-       (GTopDefGFunc (GFunc (GFuncName (LIdent n)) as y))
-         -> (a,b,c,d,e,f,                 (pack n, gToTopFunc as y):g)
+         -> (a,b,c,d,e,(pack n, gToTopProc (ys, p))              :f,g)
+       (GTopDefGFunc (GFunc (GFuncName (LIdent n)) as retTy fnBody))
+         -> (a,b,c,d,e,f,(pack n, gToTopFunc as retTy fnBody)      :g)
   ) ([],[],[],[],[],[],[]) xs
 
 dupDefs :: [Text] -> CompileErrM ()
@@ -118,6 +130,12 @@ processSeqTypes :: [(Text, Struct)]
                 -> [(Text, HwArea)]
                 -> CompileErrM TyEnv
 processSeqTypes = undefined
+
+typeCheckSeq :: M.Map Text (Either TopGlob TopFunc)
+             -> [Text]
+             -> TyEnv
+             -> CompileErrM TyEnv
+typeCheckSeq m order env = undefined
 
 processConcTypes :: [(Text, HwArea)]
                  -> [(Text, Session)]
@@ -180,12 +198,16 @@ compile p = do
   undefinedNames procDepMap
 
   -- Processes are explicitly typed so the order in which they're processed does
-  -- not matter. We still need to check for, and prevent, recursion between and
+  -- not matter. We still need to check for and prevent recursion between and
   -- within named processes
   _ <- nameCycle procDepMap
 
-  -- Create an environment from sequential types
+  -- Run 
+  let globAndFuncMap = M.fromList $ map (second Left)  globs
+                                 ++ map (second Right) funcs
   seqTyEnv <- processSeqTypes structs enums areas
+          >>= typeCheckSeq globAndFuncMap exprOrder
+
   -- Create an environment from concurrent types
   conTyEnv <- processConcTypes areas protocols
   -- Uses variables to quiet warnings

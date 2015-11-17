@@ -5,7 +5,6 @@ module Test.Jael.Compile
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Compile
-import Jael.Err
 import qualified Test.Framework as T
 
 compileTests :: [T.Test]
@@ -21,6 +20,7 @@ compileTests =
   , testCase "undefined type" $ assertCompErr undefType
   , testCase "undefined session" $ assertCompErr undefSession
   , testCase "ambiguous co-rec name" $ assertCompErr ambigName
+  , testCase "function arity mismatch" $ assertCompErr fnArityMismatch
   ]
 
 assertCompErr :: (Text, CompileErr) -> Assertion
@@ -105,5 +105,14 @@ ambigName = (pack [raw|
     )
   }
 |], AmbigName $ M.fromList [("Y", S.fromList ["X", "Y"])]
+  )
+
+fnArityMismatch :: (Text, CompileErr)
+fnArityMismatch = (pack [raw|
+  func x(a: Int) : Int {
+    a
+  }
+  y = x(1, 2);
+|], ParseErr ""
   )
 
