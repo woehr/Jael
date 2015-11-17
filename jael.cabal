@@ -16,7 +16,10 @@ source-repository head
   location: git://github.com/woehr/jael
 
 library
-  exposed-modules:     Jael.Compile
+  exposed-modules:     Jael.CodeGen.Convert
+                       Jael.CodeGen.Module
+                       Jael.CodeGen.Passes
+                       Jael.Compile
                        Jael.Conc.Env
                        Jael.Conc.Proc
                        Jael.Conc.Session
