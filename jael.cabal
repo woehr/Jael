@@ -72,12 +72,12 @@ library
 executable jael
   main-is:             Main.hs
 
+  default-extensions:  OverloadedStrings
+
   build-depends:       base-noprelude >=4.8,
                        classy-prelude
 
   build-depends:       jael
-
-  default-extensions:  OverloadedStrings
 
   hs-source-dirs:      src
   default-language:    Haskell2010
@@ -104,7 +104,8 @@ test-suite test-jael
                        test-framework-quickcheck2
 
   build-depends:       jael,
-                       containers
+                       containers,
+                       llvm-general-pure
 
   hs-source-dirs:      test
   default-language:    Haskell2010

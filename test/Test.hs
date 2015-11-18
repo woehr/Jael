@@ -1,10 +1,10 @@
 import Test.Jael.Compile (compileTests)
-import Test.Jael.Examples (exampleTests)
 import Test.Jael.Grammar.Enum (gEnumTests)
 import Test.Jael.Grammar.Expr (gExprTests)
 import Test.Jael.Grammar.Proc (gProcTests)
 import Test.Jael.Grammar.Struct (gStructTests)
 import Test.Jael.Grammar.Type (gTypeTests)
+import Test.Jael.CodeGen.Types (codeGenTypeTests)
 import Test.Jael.Conc.Proc (procTests)
 import Test.Jael.Conc.Session (sessionTests)
 import Test.Jael.Conc.TyCk (concTyCkTests)
@@ -39,7 +39,6 @@ main = defaultMainWithOpts
   , testGroup "Process type checking" concTyCkTests
   -- everything else
   , testGroup "Compilation" compileTests
-  -- example programs
-  , testGroup "Examples" exampleTests
+  , testGroup "Code gen (types)" codeGenTypeTests
   ] mempty
 
