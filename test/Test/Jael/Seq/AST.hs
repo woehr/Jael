@@ -4,8 +4,6 @@ module Test.Jael.Seq.AST
 
 import Jael.Seq.HM_Types
 import Test.Framework as T
-import Test.Framework.Providers.HUnit
-import Test.HUnit
 
 astTests :: [T.Test]
 astTests =
