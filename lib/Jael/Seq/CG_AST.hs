@@ -152,10 +152,10 @@ gToCGEx (GEAppScoped (LScopedIdent n) as) = CGCall (pack n) (map (\(GEAppArg x) 
 gToCGEx (GEInt i) = CGLit $ LInt $ parseDecInt i
 gToCGEx (GETrue)  = CGLit $ LBool True
 gToCGEx (GEFalse) = CGLit $ LBool False
-gToCGEx (GETup xs) = let as = map (\(GETupArg a) -> a) xs
-                      in if null as
-                            then notEnoughElements 1 "GETupArg" "GETup"
-                            else CGTup (map gToCGEx as)
+gToCGEx (GETup x xs) = let as = map (\(GETupArg a) -> a) (x:xs)
+                        in if null as
+                              then notEnoughElements 1 "GETupArg" "GETup"
+                              else CGTup (map gToCGEx as)
 gToCGEx (GEUnit)  = CGLit LUnit
 gToCGEx (GEVar (LIdent i)) = CGVar (pack i)
 

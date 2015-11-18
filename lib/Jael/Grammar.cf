@@ -33,7 +33,7 @@ terminator   GTVars "" ;
 GTInt.       GType ::= "Int" ;
 GTBool.      GType ::= "Bool" ;
 GTUnit.      GType ::= "Void" ;
-GTTup.       GType ::= "{" [GTTupArg] "}";
+GTTup.       GType ::= "(" GTTupArg "," [GTTupArg] ")";
 GTNamed.     GType ::= UIdent GTNamedParams ;
 GTTVar.      GType ::= LIdent ;
 
@@ -148,7 +148,7 @@ GEVar.       GExpr16 ::= LIdent ;
 GEApp.       GExpr16 ::= LIdent       "(" [GEAppArg] ")" ;
 GEAppScoped. GExpr16 ::= LScopedIdent "(" [GEAppArg] ")" ;
 GEUnit.      GExpr16 ::= "void" ;
-GETup.       GExpr16 ::= "{" [GETupArg] "}" ;
+GETup.       GExpr16 ::= "(" GETupArg "," [GETupArg] ")" ;
 
 coercions    GExpr 16 ;
 

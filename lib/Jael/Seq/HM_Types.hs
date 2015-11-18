@@ -147,7 +147,7 @@ gToType (GTNamed (UIdent n) GTNamedNoParam) = TNamed (pack n) []
 gToType (GTNamed (UIdent n) (GTNamedParams xs)) =
   TNamed (pack n) (map (\(GTNamedParam t) -> gToType t) xs)
 gToType (GTTVar (LIdent s)) = TyVar (pack s)
-gToType (GTTup xs) = TTup (map (\(GTTupArg x) -> gToType x) xs)
+gToType (GTTup x xs) = TTup $ map (\(GTTupArg y) -> gToType y) (x:xs)
 
 -- Return the type variables of a type
 typeVars :: Ty -> S.Set Text

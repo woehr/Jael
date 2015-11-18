@@ -131,13 +131,13 @@ appPrec2 = (pack [raw|
 
 tup :: (Text, GExpr)
 tup = (pack [raw|
-  { 1
+  ( 1
   , true
   , void
   , 42
-  }
-|], GETup $ map GETupArg [ GEInt (DecInt "1")
-                         , GETrue
+  )
+|], GETup (GETupArg $ GEInt $ DecInt "1")
+          $ map GETupArg [ GETrue
                          , GEUnit
                          , GEInt (DecInt "42")
                          ]

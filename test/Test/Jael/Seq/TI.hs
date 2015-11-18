@@ -59,7 +59,7 @@ exprAccessor2 = (pack [raw|
 
 exprTup :: (Text, Ty)
 exprTup = (pack [raw|
-  {1,true}
+  (1,true)
 |], TNamed "Tup2" [TInt, TBool]
   )
 

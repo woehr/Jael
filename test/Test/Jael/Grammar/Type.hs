@@ -11,8 +11,7 @@ gTypeTests = [ testCase "unit type" (checkParsedTree pGType unit)
              , testCase "int type" (checkParsedTree pGType int)
              , testCase "bool type" (checkParsedTree pGType bool)
              , testCase "type variable type" (checkParsedTree pGType tvar)
-             , testCase "tuple type (1)" (checkParsedTree pGType tup1)
-             , testCase "tuple type (2)" (checkParsedTree pGType tup2)
+             , testCase "tuple type (2 args)" (checkParsedTree pGType tup2)
              , testCase "named type, no vars" (checkParsedTree pGType named)
              , testCase "named type, type params" (checkParsedTree pGType kind)
              ]
@@ -37,19 +36,11 @@ tvar = (pack [raw|
   a
 |], GTTVar (LIdent "a"))
 
-tup1 :: (Text, GType)
-tup1 = (pack [raw|
-  { Int }
-|], GTTup $ map GTTupArg [ GTInt
-                         ]
-  )
-
 tup2 :: (Text, GType)
 tup2 = (pack [raw|
-  { I, a }
-|], GTTup $ map GTTupArg [ GTNamed (UIdent "I") GTNamedNoParam
-                         , GTTVar (LIdent "a")
-                         ]
+  ( I, a )
+|], GTTup (GTTupArg $ GTNamed (UIdent "I") GTNamedNoParam)
+         $ map GTTupArg [GTTVar (LIdent "a")]
   )
 
 named :: (Text, GType)
