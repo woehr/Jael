@@ -4,8 +4,8 @@ module Test.Jael.Seq.Struct
 
 import qualified Data.Set as S
 import           Jael.Grammar
+import           Jael.Seq.HM_Types
 import           Jael.Seq.Struct
-import           Jael.Seq.Types
 import           Jael.UserDefTy
 import qualified Test.Framework as T
 import           Test.Jael.Util

@@ -11,8 +11,8 @@ import Jael.Conc.Session
 import Jael.Hw.Area
 import Jael.Seq.CG_AST
 import Jael.Seq.Enum
+import Jael.Seq.HM_Types
 import Jael.Seq.Struct
-import Jael.Seq.Types
 import Jael.UserDefTy
 
 data CompileErr = ParseErr Text
@@ -202,7 +202,7 @@ compile p = do
   -- within named processes
   _ <- nameCycle procDepMap
 
-  -- Run 
+  -- Run
   let globAndFuncMap = M.fromList $ map (second Left)  globs
                                  ++ map (second Right) funcs
   seqTyEnv <- processSeqTypes structs enums areas

@@ -1,4 +1,4 @@
-module Jael.Seq.Types where
+module Jael.Seq.HM_Types where
 
 import qualified Data.Functor.Foldable as F
 import qualified Data.Map as M

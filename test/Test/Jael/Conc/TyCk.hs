@@ -11,8 +11,8 @@ import           Jael.Grammar
 import           Jael.Parser
 import           Jael.Seq.CG_AST (CGTypeErr(..))
 import           Jael.Seq.Env
+import           Jael.Seq.HM_Types
 import           Jael.Seq.TI (SeqTIErr(..))
-import           Jael.Seq.Types
 import qualified Test.Framework as T
 
 concTyCkTests :: [T.Test]

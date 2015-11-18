@@ -5,7 +5,7 @@ module Test.Jael.Hw.Area
 import qualified Data.Map as M
 import           Jael.Grammar
 import           Jael.Parser
-import           Jael.Seq.Types
+import           Jael.Seq.HM_Types
 import qualified Test.Framework as T
 
 hwAreaTests :: [T.Test]

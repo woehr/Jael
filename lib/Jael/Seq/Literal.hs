@@ -1,6 +1,6 @@
 module Jael.Seq.Literal where
 
-import Jael.Seq.Types
+import Jael.Seq.HM_Types
 
 data Literal = LUnit
              | LInt Integer

@@ -7,7 +7,7 @@ import Jael.Conc.Proc
 import Jael.Conc.Session
 import Jael.Seq.CG_AST
 import Jael.Seq.Env
-import Jael.Seq.Types
+import Jael.Seq.HM_Types
 
 type SessTyErrM = Either SessTyErr
 

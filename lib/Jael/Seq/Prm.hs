@@ -1,6 +1,6 @@
 module Jael.Seq.Prm where
 
-import Jael.Seq.Types
+import Jael.Seq.HM_Types
 
 data Prm = PAdd
          | PSub

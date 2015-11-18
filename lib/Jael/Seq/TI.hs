@@ -6,7 +6,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Seq.HM_AST
 import Jael.Seq.Literal
-import Jael.Seq.Types
+import Jael.Seq.HM_Types
 
 data SeqTIErr = NamedUnificationMismatch Text Text
               | NonUnification Ty Ty

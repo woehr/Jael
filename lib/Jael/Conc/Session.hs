@@ -6,7 +6,7 @@ import qualified Data.Set as S
 import Jael.Grammar
 import Jael.UserDefTy
 import Jael.Util
-import Jael.Seq.Types
+import Jael.Seq.HM_Types
 
 instance UserDefTy Session where
   type TGrammar Session = GSession

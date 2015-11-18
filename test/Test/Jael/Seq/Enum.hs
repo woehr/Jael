@@ -5,7 +5,7 @@ module Test.Jael.Seq.Enum
 import qualified Data.Set as S
 import           Jael.Grammar
 import           Jael.Seq.Enum
-import           Jael.Seq.Types
+import           Jael.Seq.HM_Types
 import           Jael.UserDefTy
 import qualified Test.Framework as T
 import           Test.Jael.Util

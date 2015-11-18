@@ -1,9 +1,9 @@
 module Jael.Seq.HM_AST where
 
 import Data.Functor.Foldable as F
+import Jael.Seq.HM_Types
 import Jael.Seq.Literal
 import Jael.Seq.Prm
-import Jael.Seq.Types
 
 data Ex = EVar Text
         | EPrm Prm

@@ -2,7 +2,7 @@ module Test.Jael.Seq.TI
 ( seqInfTests
 ) where
 
-import           Jael.Seq.Types
+import           Jael.Seq.HM_Types
 import qualified Test.Framework as T
 import           Test.Jael.Util
 

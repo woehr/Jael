@@ -1,11 +1,8 @@
-{-# Language NoImplicitPrelude, QuasiQuotes #-}
-
 module Test.Jael.Seq.AST
 ( astTests
 ) where
 
-import ClassyPrelude
-import Jael.Seq.Types
+import Jael.Seq.HM_Types
 import Test.Framework as T
 import Test.Framework.Providers.HUnit
 import Test.HUnit

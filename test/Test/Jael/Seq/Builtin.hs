@@ -4,7 +4,7 @@ module Test.Jael.Seq.Builtin
 
 import qualified Data.Map as M
 import           Jael.Seq.Env
-import           Jael.Seq.Types
+import           Jael.Seq.HM_Types
 import qualified Test.Framework as T
 import           Test.Jael.Util
 

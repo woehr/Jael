@@ -5,7 +5,7 @@ import qualified Data.Set as S
 import Jael.Grammar
 import Jael.UserDefTy
 import Jael.Util
-import Jael.Seq.Types
+import Jael.Seq.HM_Types
 
 type Field = (Text, Ty)
 

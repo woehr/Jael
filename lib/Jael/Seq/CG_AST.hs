@@ -6,10 +6,10 @@ import qualified Data.Set as S
 import           Jael.Grammar
 import           Jael.Util
 import qualified Jael.Seq.HM_AST as HM
+import           Jael.Seq.HM_Types
 import           Jael.Seq.Literal
 import           Jael.Seq.Prm
 import           Jael.Seq.TI (SeqTIErr, mgu, seqInferTypedEx)
-import           Jael.Seq.Types
 
 data CGEx = CGCall Text [CGEx]
           | CGCallPrm Prm [CGEx]

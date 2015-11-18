@@ -6,8 +6,8 @@ import Jael.Parser
 import Jael.Seq.CG_AST
 import Jael.Seq.Enum
 import Jael.Seq.Env
+import Jael.Seq.HM_Types
 import Jael.Seq.Struct
-import Jael.Seq.Types
 import Jael.UserDefTy
 
 shouldNotParse :: ParseFun a -> Text -> Assertion

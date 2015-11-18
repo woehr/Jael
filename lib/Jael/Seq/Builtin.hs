@@ -4,8 +4,8 @@ import Data.List (genericTake)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Map as M
 import Jael.Seq.Enum
+import Jael.Seq.HM_Types
 import Jael.Seq.Struct
-import Jael.Seq.Types
 
 maxBuiltinTupSize :: Integer
 maxBuiltinTupSize = 10

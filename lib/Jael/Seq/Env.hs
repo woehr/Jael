@@ -4,8 +4,8 @@ module Jael.Seq.Env
 ) where
 
 import Jael.Seq.Builtin
+import Jael.Seq.HM_Types
 import Jael.Seq.Prm
-import Jael.Seq.Types
 import Jael.UserDefTy
 import Jael.Util
 
