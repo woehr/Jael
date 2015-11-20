@@ -21,12 +21,14 @@ data CGTy = CGTySimple CGBasicType
           | CGTyStruct
           | CGTyEnumer
           | CGTyTup [CGTy]
+          | CGTyVar Text
           deriving (Eq, Show)
 
 data CGTyF a = CGTySimpleF CGBasicType
              | CGTyStructF
              | CGTyEnumerF
              | CGTyTupF [a]
+             | CGTyVarF Text
              deriving (Functor, Show)
 
 type instance F.Base CGTy = CGTyF
@@ -36,12 +38,14 @@ instance F.Foldable CGTy where
   project (CGTyStruct) = CGTyStructF
   project (CGTyEnumer) = CGTyEnumerF
   project (CGTyTup xs) = CGTyTupF xs
+  project (CGTyVar x) = CGTyVarF x
 
 instance F.Unfoldable CGTy where
   embed (CGTySimpleF x) = CGTySimple x
   embed (CGTyStructF) = CGTyStruct
   embed (CGTyEnumerF) = CGTyEnumer
   embed (CGTyTupF xs) = CGTyTup xs
+  embed (CGTyVarF x) = CGTyVar x
 
 instance SeqTypable CGTy where
   tyOf = F.cata alg
@@ -49,4 +53,5 @@ instance SeqTypable CGTy where
           alg (CGTyStructF) = undefined
           alg (CGTyEnumerF) = undefined
           alg (CGTyTupF xs) = TTup xs
+          alg (CGTyVarF x)  = TyVar x
 

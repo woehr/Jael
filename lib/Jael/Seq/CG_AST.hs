@@ -5,6 +5,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           Jael.Grammar
 import           Jael.Util
+import           Jael.Seq.CG_Types
 import qualified Jael.Seq.HM_AST as HM
 import           Jael.Seq.HM_Types
 import           Jael.Seq.Literal
@@ -48,6 +49,20 @@ instance F.Unfoldable CGEx where
   embed (CGTupF x)       = CGTup x
   embed (CGVarF x)       = CGVar x
   embed (CGLitF x)       = CGLit x
+
+data CGTypedEx = CGTypedEx (Ann CGTy CGExF CGTypedEx)
+  deriving (Show)
+
+data CGTypedExF a = CGTypedExF (Ann CGTy CGExF a)
+  deriving (Show, Functor)
+
+type instance F.Base CGTypedEx = CGTypedExF
+
+instance F.Foldable CGTypedEx where
+  project (CGTypedEx Ann{ann=t, unAnn=e}) = CGTypedExF Ann{ann=t, unAnn=e}
+
+instance F.Unfoldable CGTypedEx where
+  embed (CGTypedExF Ann{ann=t, unAnn=e}) = CGTypedEx Ann{ann=t, unAnn=e}
 
 data CGTypeErr = ArityMismatch (M.Map Text (Integer, Integer))
                | InferenceErr SeqTIErr
@@ -95,6 +110,17 @@ typeInf env expr = do
   case seqInferTypedEx env (toHM expr) of
        Left err -> Left $ InferenceErr err
        Right te -> return (tyOf te)
+
+recoverCGTy :: M.Map Text CGTy -> Ty -> CGTy
+recoverCGTy m = undefined
+
+-- Given a type-annotated HM.Ex convert it to a type-annotated CGEx.
+-- The conversion from a CGTy to a Ty is lossy so we need a map of type names to
+-- the original CGTy. Some of the type variables in the original type may now be
+-- replaced with a concrete type.
+recoverCGTypedEx :: M.Map Text CGTy -> HM.TypedEx -> CGTypedEx
+recoverCGTypedEx m = F.ana coalg
+  where coalg (HM.TypedEx Ann{ann=ty, unAnn=(HM.EVarF x)}) = CGTypedExF Ann{ann=recoverCGTy m ty, unAnn=CGVarF x}
 
 toHM :: CGEx -> HM.Ex
 toHM = F.cata alg

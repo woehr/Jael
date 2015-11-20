@@ -4,6 +4,7 @@ import Data.Functor.Foldable as F
 import Jael.Seq.HM_Types
 import Jael.Seq.Literal
 import Jael.Seq.Prm
+import Jael.Util
 
 data Ex = EVar Text
         | EPrm Prm
@@ -38,10 +39,6 @@ instance F.Unfoldable Ex where
   embed (EAppF x y)   = EApp x y
   embed (EAbsF x y)   = EAbs x y
   embed (ELetF x y z) = ELet x y z
-
--- Annotate type f a with something of type x
-data Ann x f a = Ann { ann :: x, unAnn :: f a }
-  deriving (Show, Functor)
 
 data TypedEx = TypedEx (Ann Ty ExF TypedEx)
   deriving (Show)

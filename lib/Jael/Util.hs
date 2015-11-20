@@ -10,6 +10,11 @@ import Numeric (readInt, readDec, readHex, readOct)
 import Text.Read (ReadS)
 import Jael.Grammar
 
+-- An annotated type. Takes 1) a type with which nodes (right word?) of a functor
+-- are annotated with, and 2) a functor to be annotated.
+data Ann x f a = Ann { ann :: x, unAnn :: f a }
+  deriving (Show, Functor)
+
 wrongNumberOfElements :: Integer -> String -> String -> a
 wrongNumberOfElements n x y = error $ "Expected exactly " ++ show n ++ x ++ "s in " ++ y
 
