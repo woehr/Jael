@@ -8,7 +8,6 @@ import Jael.Util
 import Jael.Conc.Env
 import Jael.Conc.Proc
 import Jael.Conc.Session
-import Jael.Hw.Area
 import Jael.Seq.CG_AST
 import Jael.Seq.Enum
 import Jael.Seq.HM_Types
@@ -53,11 +52,18 @@ funcFreeVars :: TopFunc -> S.Set Text
 funcFreeVars (TopFunc{tfArgs=as, tfExpr=ex}) =
   freeVars ex S.\\ S.fromList (map fst as)
 
+data TopArea = TopArea { taAddr :: Integer
+                       , taType :: Text }
+                       deriving (Show)
+
+gToTopArea :: GAnyInt -> UIdent -> TopArea
+gToTopArea i (UIdent t) = TopArea { taAddr = parseAnyInt i, taType = pack t }
+
 -- splits the top level definition into its different types of components
 splitTop :: GProg -> ( [(Text, TopGlob)] -- a
                      , [(Text, Struct)]  -- b
                      , [(Text, Enumer)]  -- c
-                     , [(Text, HwArea)]  -- d
+                     , [(Text, TopArea)] -- d
                      , [(Text, Session)] -- e
                      , [(Text, TopProc)] -- f
                      , [(Text, TopFunc)] -- g
@@ -70,8 +76,8 @@ splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f, g) ->
          -> (a,(pack n, gToUserDefTy y)                  :b,c,d,e,f,g)
        (GTopDefGTypeDef (GTDefEnum (UIdent n) y))
          -> (a,b,(pack n, gToUserDefTy y)                  :c,d,e,f,g)
-       (GTopDefGTypeDef (GTDefArea (UIdent n) i y))
-         -> (a,b,c,(pack n, gToUserDefTy (HwAreaGrammar i y)):d,e,f,g)
+       (GTopDefGTypeDef (GTDefArea (UIdent n) addr ty))
+         -> (a,b,c,(pack n, gToTopArea addr ty)              :d,e,f,g)
        (GTopDefGTypeDef (GTDefProto (UIdent n) y))
          -> (a,b,c,d,(pack n, dual $ gToUserDefTy y)           :e,f,g)
        (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) ys p))
@@ -88,14 +94,12 @@ dupDefs ns =
 
 defErrs :: [Struct]
         -> [Enumer]
-        -> [HwArea]
         -> [Session]
         -> [TopProc]
         -> CompileErrM ()
-defErrs ss es as zs ps =
+defErrs ss es zs ps =
   let errs = mapMaybe (liftA (pack . show) . validate) ss
           ++ mapMaybe (liftA (pack . show) . validate) es
-          ++ mapMaybe (liftA (pack . show) . validate) as
           ++ mapMaybe (liftA (pack . show) . validate) zs
           ++ mapMaybe (liftA (pack . show) . validate) ps
    in unless (null errs)
@@ -127,7 +131,6 @@ nameCycle depMap =
 
 processSeqTypes :: [(Text, Struct)]
                 -> [(Text, Enumer)]
-                -> [(Text, HwArea)]
                 -> CompileErrM TyEnv
 processSeqTypes = undefined
 
@@ -135,10 +138,9 @@ typeCheckSeq :: M.Map Text (Either TopGlob TopFunc)
              -> [Text]
              -> TyEnv
              -> CompileErrM TyEnv
-typeCheckSeq m order env = undefined
+typeCheckSeq = undefined
 
-processConcTypes :: [(Text, HwArea)]
-                 -> [(Text, Session)]
+processConcTypes :: [(Text, Session)]
                  -> CompileErrM ConcTyEnv
 processConcTypes = undefined
 
@@ -164,7 +166,6 @@ compile p = do
   -- Check for errors in a definition
   defErrs (map snd structs)
           (map snd enums)
-          (map snd areas)
           (map snd protocols)
           (map snd procs)
 
@@ -181,7 +182,6 @@ compile p = do
 
   let typeDepMap = (M.map typeDeps . M.fromList $ structs)
          `M.union` (M.map typeDeps . M.fromList $ enums)
-         `M.union` (M.map typeDeps . M.fromList $ areas)
 
   -- Find uses of undefined types
   undefinedNames typeDepMap
@@ -205,11 +205,11 @@ compile p = do
   -- Run
   let globAndFuncMap = M.fromList $ map (second Left)  globs
                                  ++ map (second Right) funcs
-  seqTyEnv <- processSeqTypes structs enums areas
+  seqTyEnv <- processSeqTypes structs enums
           >>= typeCheckSeq globAndFuncMap exprOrder
 
   -- Create an environment from concurrent types
-  conTyEnv <- processConcTypes areas protocols
+  conTyEnv <- processConcTypes protocols
   -- Uses variables to quiet warnings
   undefined exprOrder typeOrder seqTyEnv conTyEnv
 

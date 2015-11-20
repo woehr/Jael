@@ -16,19 +16,16 @@ simpleMono :: (Text, GTypeDef)
 simpleMono = (pack [raw|
   struct X { f0 : Int }
 |], GTDefStruct (UIdent "X") $ GTStructDef
-                []
-                [ GTStructElement (GTStructFieldName (LIdent "f0"))
+                [ GTStructElement (LIdent "f0")
                                   GTInt
                 ]
   )
 
 simplePoly :: (Text, GTypeDef)
 simplePoly = (pack [raw|
-  struct X a { f0 : a }
+  struct X { f0 : a }
 |], GTDefStruct (UIdent "X") $ GTStructDef
-                [ GTVars (LIdent "a")
-                ]
-                [ GTStructElement (GTStructFieldName (LIdent "f0"))
+                [ GTStructElement (LIdent "f0")
                                   (GTTVar (LIdent "a"))
                 ]
   )

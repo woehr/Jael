@@ -9,14 +9,10 @@ import Jael.Seq.HM_Types
 
 type Field = (Text, Ty)
 
-data Struct = Struct [Text] (NE.NonEmpty Field)
+data Struct = Struct (NE.NonEmpty Field)
 
-data StructDefError = StructDefError
-  { sErrDupTv    :: S.Set Text
-  , sErrDupField :: S.Set Text
-  , sErrFreeTv   :: S.Set Text
-  , sErrUnusedTv :: S.Set Text
-  } deriving (Eq, Show)
+data StructDefError = SDEDupFields [Text]
+  deriving (Eq, Show)
 
 instance UserDefTy Struct where
   type TGrammar Struct = GTStructDef
@@ -29,29 +25,23 @@ instance UserDefTy Struct where
   envItems = structEnvItems
 
 validateStruct :: Struct -> Maybe StructDefError
-validateStruct (Struct tvs fs) =
-  maybe Nothing (\(t, u, v, w) ->
-                     Just StructDefError
-                       { sErrDupTv = t
-                       , sErrDupField = u
-                       , sErrFreeTv = v
-                       , sErrUnusedTv = w
-                       }
-                )
-        $ checkDefErr tvs (NE.toList $ NE.map fst fs)
-                          (typeVars'' . NE.toList $ NE.map snd fs)
+validateStruct (Struct fs) =
+  let dups = repeated . map fst . NE.toList $ fs
+   in if null dups
+         then Nothing
+         else Just $ SDEDupFields dups
 
 structEnvItems :: (Text, Struct) -> [(Text, PolyTy)]
-structEnvItems (n, Struct tvs fs) =
-  let structTy = TNamed n (map TyVar tvs)
+structEnvItems (n, Struct fs) =
+  let structTy = TNamed n []
       consTy = foldr (\(_, ft) t -> TFun ft t) structTy fs
       nLowered = lowerFirst n
-  in (nLowered, PolyTy tvs consTy)
-     : map (\(f, t) -> (nLowered <> "::" <> f, PolyTy tvs $ TFun structTy t)
+  in (nLowered, PolyTy [] consTy)
+     : map (\(f, t) -> (nLowered <> "::" <> f, PolyTy [] $ TFun structTy t)
            ) (NE.toList fs)
 
 structTypeDeps :: Struct -> S.Set Text
-structTypeDeps (Struct _ fs) = S.fromList
+structTypeDeps (Struct fs) = S.fromList
   (mapMaybe (\(_, ty) -> case ty of
                               TNamed n _ -> Just n
                               _ -> Nothing
@@ -60,13 +50,12 @@ structTypeDeps (Struct _ fs) = S.fromList
   )
 
 gToField :: GTStructElement -> Field
-gToField (GTStructElement (GTStructFieldName (LIdent gfn)) gt) =
-                                     (pack gfn, gToType gt)
+gToField (GTStructElement (LIdent gfn) gt) = (pack gfn, gToType gt)
+gToField (GTStructElementAnn _ (LIdent gfn) gt) = (pack gfn, gToType gt)
 
 gToStruct :: GTStructDef -> Struct
-gToStruct (GTStructDef tvs fields) =
+gToStruct (GTStructDef fields) =
   case NE.nonEmpty fields of
     Nothing -> notEnoughElements 1 "GTStructElement" "GTStructDef"
-    Just xs -> Struct (map (\(GTVars (LIdent s)) -> pack s) tvs)
-                      (NE.map gToField xs)
+    Just xs -> Struct (NE.map gToField xs)
 

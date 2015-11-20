@@ -8,7 +8,6 @@ import Test.Jael.CodeGen.Types (codeGenTypeTests)
 import Test.Jael.Conc.Proc (procTests)
 import Test.Jael.Conc.Session (sessionTests)
 import Test.Jael.Conc.TyCk (concTyCkTests)
-import Test.Jael.Hw.Area (hwAreaTests)
 import Test.Jael.Seq.AST (astTests)
 import Test.Jael.Seq.Builtin (builtinTests)
 import Test.Jael.Seq.Enum (enumTests)
@@ -29,8 +28,6 @@ main = defaultMainWithOpts
   -- seq types
   , testGroup "Enum creation" enumTests
   , testGroup "Struct creation" structTests
-  -- hw
-  , testGroup "Hardware areas" hwAreaTests
   -- sessions
   , testGroup "Session types" sessionTests
   -- processes

@@ -72,14 +72,14 @@ recType = (pack [raw|
 
 recSession :: (Text, CompileErr)
 recSession = (pack [raw|
-  protocol X = ![Void] <Y>
-  protocol Y = ?[Void] <X>
+  protocol X : ![Void] <Y>;
+  protocol Y : ?[Void] <X>;
 |], DepCycle ["X", "Y"]
   )
 
 recSessionNoCoRec :: (Text, CompileErr)
 recSessionNoCoRec = (pack [raw|
-  protocol X = ![Void] <X>
+  protocol X : ![Void] <X>;
 |], DepCycle ["X"]
   )
 
@@ -91,7 +91,7 @@ undefType = (pack [raw|
 
 undefSession :: (Text, CompileErr)
 undefSession = (pack [raw|
-  protocol X = <Y>
+  protocol X : <Y>;
 |], UndefName $ S.fromList ["Y"]
   )
 

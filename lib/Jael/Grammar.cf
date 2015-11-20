@@ -2,21 +2,21 @@
 -- differentiate them from types in the target language that may have the same
 -- name
 
--- tokens
+-- Tokens
 
 token UIdent (upper (letter | digit | '_')*) ;
 token LIdent (lower (letter | digit | '_')*) ;
 token LScopedIdent (lower (letter | digit | '_' | {"::"})*) ;
 token DecInt ('0' | ('~'? ["123456789"] digit*)) ;
-token HexInt ({"0x"} digit+) ;
-token OctInt ('o' digit+) ;
-token BinInt ('b' ["01"]+) ;
+token HexInt ({"0x"} ["0123456789abcdefABCDEF"]+) ;
+token OctInt ({"0o"} ["01234567"]+) ;
+token BinInt ({"0b"} ["01"]+) ;
 
 rules GAnyInt ::= DecInt | HexInt | OctInt | BinInt ;
 
 GChoiceLabel. GChoiceLabel ::= LIdent ;
 
--- Sequential grammar
+-- Sequential Types
 
 GTNamedParam. GTNamedParam ::= GType ;
 separator GTNamedParam "," ;
@@ -37,7 +37,8 @@ GTTup.       GType ::= "(" GTTupArg "," [GTTupArg] ")";
 GTNamed.     GType ::= UIdent GTNamedParams ;
 GTTVar.      GType ::= LIdent ;
 
--- Session types
+-- Session Types
+
 GSessChoice. GSessChoice ::= GChoiceLabel "=>" GSession1 ;
 separator nonempty GSessChoice "," ;
 
@@ -59,32 +60,31 @@ GSessVarDual. GSession3 ::= "<" "dual" UIdent ">" ;
 
 coercions GSession 3 ;
 
--- Struct element is an accessor followed by a type
-GTStructFieldName. GTStructFieldName ::= LIdent ;
-GTStructElement.   GTStructElement   ::= GTStructFieldName ":" GType ;
-separator          nonempty GTStructElement "," ;
+-- Enums
 
 GTEnumElemNoTy.   GTEnumElem ::= LIdent ;
 GTEnumElemWithTy. GTEnumElem ::= LIdent GType ;
 separator         nonempty GTEnumElem "," ;
 
-GTStructDef. GTStructDef ::= [GTVars] "{" [GTStructElement] "}" ;
-GTEnumDef.   GTEnumDef ::= [GTVars] "{" [GTEnumElem] "}" ;
+GTEnumDef.   GTEnumDef   ::= "{" [GTEnumElem] "}" ;
 
--- Annotations for the fields of hardware areas
-GTAreaAnnPad.   GTAreaAnn ::= "pad" GAnyInt ;
-GTAreaAnnAlign. GTAreaAnn ::= "align" GAnyInt ;
-separator nonempty GTAreaAnn "," ;
+-- Structs
 
--- A single element list collecting several annotations
-GTAreaAnnCol. GTAreaAnnCol ::= "[" [GTAreaAnn] "]" ;
-(:[]). [GTAreaAnnCol] ::= GTAreaAnnCol ;
+---- Annotations
+GTStructAnnPad.   GTStructAnn ::= "pad" GAnyInt ;
+GTStructAnnAlign. GTStructAnn ::= "align" GAnyInt ;
+separator nonempty GTStructAnn "," ;
 
-GTAreaElementPlain. GTAreaElement ::= GTStructElement ;
-GTAreaElementAnn.   GTAreaElement ::= [GTAreaAnnCol] GTStructElement ;
-separator nonempty GTAreaElement "," ;
+---- A single element list collecting several annotations
+GTStructAnnCol. GTStructAnnCol ::= "[" [GTStructAnn] "]" ;
 
-GTAreaDef.   GTAreaDef ::= "{" [GTAreaElement] "}" ;
+GTStructElement.    GTStructElement ::=                LIdent ":" GType ;
+GTStructElementAnn. GTStructElement ::= GTStructAnnCol LIdent ":" GType ;
+separator nonempty GTStructElement "," ;
+
+GTStructDef. GTStructDef ::= "{" [GTStructElement] "}" ;
+
+-- Expressions
 
 GELetIdent.  GELetIdent ::= LIdent "=" GExpr ;
 terminator   GELetIdent ";" ;
@@ -94,7 +94,6 @@ GELetExpr.   GELetExpr ::= [GELetIdent] GExpr ;
 GEAppArg.    GEAppArg ::= GExpr ;
 separator    nonempty GEAppArg "," ;
 
--- tuple args can't be empty (GEUnit handles this)
 GETupArg.    GETupArg ::= GExpr ;
 separator    nonempty GETupArg "," ;
 
@@ -139,7 +138,6 @@ GELogNot.    GExpr12 ::= "!" GExpr12 ;
 ----- End operators -----
 
 GEIf.        GExpr13 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
-
 
 GETrue.      GExpr16 ::= "true" ;
 GEFalse.     GExpr16 ::= "false" ;
@@ -205,10 +203,10 @@ coercions GProc 2 ;
 
 -- Top level grammar
 
-GTDefStruct. GTypeDef ::= "struct" UIdent GTStructDef ;
-GTDefEnum.   GTypeDef ::= "enum" UIdent GTEnumDef ;
-GTDefProto.  GTypeDef ::= "protocol" UIdent "=" GSession ;
-GTDefArea.   GTypeDef ::= "area" UIdent "@" GAnyInt GTAreaDef ;
+GTDefStruct. GTypeDef ::= "struct"   UIdent GTStructDef ;
+GTDefEnum.   GTypeDef ::= "enum"     UIdent GTEnumDef ;
+GTDefProto.  GTypeDef ::= "protocol" UIdent ":" GSession ";" ;
+GTDefArea.   GTypeDef ::= "area"     UIdent "@" GAnyInt ":" UIdent ";" ;
 
 GFuncName. GFuncName ::= LIdent ;
 GFuncArg.  GFuncArg  ::= LIdent ":" GType ;

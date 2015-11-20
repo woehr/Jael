@@ -2,7 +2,6 @@ module Test.Jael.Seq.Enum
 ( enumTests
 ) where
 
-import qualified Data.Set as S
 import           Jael.Grammar
 import           Jael.Seq.Enum
 import           Jael.Seq.HM_Types
@@ -47,21 +46,15 @@ enumUntypedTags = (pack [raw|
 
 enumMixedTags :: (Text, [(Text, PolyTy)])
 enumMixedTags = (pack [raw|
-  enum X a { f0, f1 a, f2 Bool }
-|], [ ("x::f0", PolyTy ["a"] $ TNamed "X" [TyVar "a"])
-    , ("x::f1", PolyTy ["a"] $ TFun (TyVar "a") (TNamed "X" [TyVar "a"]))
-    , ("x::f2", PolyTy ["a"] $ TFun TBool (TNamed "X" [TyVar "a"]))
+  enum X { f0, f1 Bool }
+|], [ ("x::f0", PolyTy [] $ TNamed "X" [])
+    , ("x::f1", PolyTy [] $ TFun TBool (TNamed "X" []))
     ]
   )
 
 enumAllErrs :: (Text, EnumerDefError)
 enumAllErrs = (pack [raw|
-  enum X a a b b { f0 a, f1 a, f1 c, f2 c }
-|], EnumerDefError
-      { eErrDupTv = S.fromList ["a", "b"]
-      , eErrDupField = S.fromList ["f1"]
-      , eErrFreeTv = S.fromList ["c"]
-      , eErrUnusedTv = S.fromList ["b"]
-      }
+  enum X { f0 Int, f1 Int, f1 Int, f2 Int }
+|], EDEDupTags ["f1"]
   )
 

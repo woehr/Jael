@@ -30,7 +30,6 @@ library
                        Jael.Grammar.Lex
                        Jael.Grammar.Par
                        Jael.Grammar.Print
-                       Jael.Hw.Area
                        Jael.Parser
                        Jael.Seq.Builtin
                        Jael.Seq.CG_AST

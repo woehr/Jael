@@ -16,7 +16,6 @@ tagNoType :: (Text, GTypeDef)
 tagNoType = (pack [raw|
   enum X { a }
 |], GTDefEnum (UIdent "X") $ GTEnumDef
-              []
               [ GTEnumElemNoTy (LIdent "a")
               ]
   )
@@ -25,7 +24,6 @@ tagWithType :: (Text, GTypeDef)
 tagWithType = (pack [raw|
   enum X { a Int }
 |], GTDefEnum (UIdent "X") $ GTEnumDef
-              []
               [ GTEnumElemWithTy (LIdent "a") GTInt
               ]
   )

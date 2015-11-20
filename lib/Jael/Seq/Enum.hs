@@ -11,15 +11,11 @@ data Tag = Tag Text
          | TagWithTy Text Ty
            deriving Show
 
-data Enumer = Enumer [Text] (NE.NonEmpty Tag)
+data Enumer = Enumer (NE.NonEmpty Tag)
   deriving (Show)
 
-data EnumerDefError = EnumerDefError
-  { eErrDupTv    :: S.Set Text
-  , eErrDupField :: S.Set Text
-  , eErrFreeTv   :: S.Set Text
-  , eErrUnusedTv :: S.Set Text
-  } deriving (Eq, Show)
+data EnumerDefError = EDEDupTags [Text]
+  deriving (Eq, Show)
 
 instance UserDefTy Enumer where
   type TGrammar Enumer = GTEnumDef
@@ -41,33 +37,28 @@ splitTag t = case t of
                   TagWithTy tn ty -> (tn, Just ty)
 
 validateEnumer :: Enumer -> Maybe EnumerDefError
-validateEnumer (Enumer tvs fs) =
-  let (tags, tys) = splitTags . NE.toList $ fs
-  in maybe Nothing (\(t, u, v, w) ->
-                       Just EnumerDefError
-                         { eErrDupTv = t
-                         , eErrDupField = u
-                         , eErrFreeTv = v
-                         , eErrUnusedTv = w
-                         }
-                   )
-        $ checkDefErr tvs tags (typeVars'' tys)
+validateEnumer (Enumer fs) =
+  let (tags, _) = splitTags . NE.toList $ fs
+      dups = repeated tags
+   in if null dups
+         then Nothing
+         else Just $ EDEDupTags dups
 
 enumEnvItems :: (Text, Enumer) -> [(Text, PolyTy)]
-enumEnvItems (n, Enumer tvs fs) =
-  let enumTy = TNamed n $ map TyVar tvs
+enumEnvItems (n, Enumer fs) =
+  let enumTy = TNamed n []
       nLowered = lowerFirst n
   in  map (\t -> case t of
-                      Tag tn -> (nLowered <> "::" <> tn, PolyTy tvs enumTy)
+                      Tag tn -> (nLowered <> "::" <> tn, PolyTy [] enumTy)
                       TagWithTy tn ty -> ( nLowered <> "::" <> tn
-                                         , PolyTy tvs $ TFun ty enumTy)
+                                         , PolyTy [] $ TFun ty enumTy)
           ) (NE.toList fs)
 
 enumTypeDeps :: Enumer -> S.Set Text
-enumTypeDeps (Enumer _ fs) = S.fromList $ mapMaybe
-  (\(TagWithTy _ ty) -> case ty of
-                             TNamed n _ -> Just n
-                             _ -> Nothing
+enumTypeDeps (Enumer fs) = S.fromList $ mapMaybe
+  (\tag -> case tag of
+                (TagWithTy _ (TNamed n _)) -> Just n
+                _ -> Nothing
   ) $ NE.toList fs
 
 gToTag :: GTEnumElem -> Tag
@@ -75,9 +66,8 @@ gToTag (GTEnumElemNoTy (LIdent t)) = Tag (pack t)
 gToTag (GTEnumElemWithTy (LIdent t) ty) = TagWithTy (pack t) (gToType ty)
 
 gToEnumer :: GTEnumDef -> Enumer
-gToEnumer (GTEnumDef tvs elems) =
+gToEnumer (GTEnumDef elems) =
   case NE.nonEmpty elems of
        Nothing -> notEnoughElements 1 "GTEnumDef" "GTEnumElem"
-       Just xs -> Enumer (map (\(GTVars (LIdent s)) -> pack s) tvs)
-                         (NE.map gToTag xs)
+       Just xs -> Enumer (NE.map gToTag xs)
 
