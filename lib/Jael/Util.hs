@@ -116,3 +116,7 @@ lowerFirst xs = case uncons xs of
                      Nothing ->
                        error "Compiler error. Struct name should not be empty."
 
+-- Return the function name for a tuple of size i
+tupFun :: Int -> Text
+tupFun = pack . (',':) . show
+

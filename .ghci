@@ -1,5 +1,7 @@
+:set -XNoImplicitPrelude
 :set -XOverloadedStrings
 :set -XDeriveFunctor
+:set -XTypeFamilies
 :set -isrc:lib:test:dist/build
 :load ./lib/Prelude.hs
 

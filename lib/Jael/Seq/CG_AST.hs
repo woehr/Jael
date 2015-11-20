@@ -4,13 +4,13 @@ import qualified Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Jael.Grammar
-import           Jael.Util
 import           Jael.Seq.CG_Types
 import qualified Jael.Seq.HM_AST as HM
 import           Jael.Seq.HM_Types
 import           Jael.Seq.Literal
 import           Jael.Seq.Prm
 import           Jael.Seq.TI (SeqTIErr, mgu, seqInferTypedEx)
+import           Jael.Util
 
 data CGEx = CGCall Text [CGEx]
           | CGCallPrm Prm [CGEx]
@@ -128,7 +128,7 @@ toHM = F.cata alg
         alg (CGCallPrmF p as) = foldl' HM.EApp(HM.EVar $ tshow p) as
         alg (CGLetF n e1 e2) = HM.ELet n e1 e2
         alg (CGIfF b e1 e2) = HM.EApp (HM.EApp (HM.EApp (HM.EVar "if") b) e1) e2
-        alg (CGTupF as) = foldl' HM.EApp (HM.EVar $ "tup" <> tshow (length as)) as
+        alg (CGTupF as) = foldl' HM.EApp (HM.EVar $ tupFun $ length as) as
         alg (CGVarF n) = HM.EVar n
         alg (CGLitF l) = HM.ELit l
 
