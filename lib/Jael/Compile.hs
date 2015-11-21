@@ -10,6 +10,7 @@ import Jael.Conc.Proc
 import Jael.Conc.Session
 import Jael.Seq.CG_AST
 import Jael.Seq.Enum
+import Jael.Seq.Env
 import Jael.Seq.HM_Types
 import Jael.Seq.Struct
 import Jael.UserDefTy
@@ -129,16 +130,27 @@ nameCycle depMap =
        Left cycles -> throwError $ DepCycle cycles
        Right order -> return order
 
-processSeqTypes :: [(Text, Struct)]
+processSeqTypes :: TyEnv
+                -> [(Text, Struct)]
                 -> [(Text, Enumer)]
                 -> CompileErrM TyEnv
-processSeqTypes = undefined
+processSeqTypes env s e =
+  let newItems = concatMap envItems s ++ concatMap envItems e
+   in case addToEnv env newItems of
+           Left dups  -> throwError $ DupDef dups
+           Right env' -> return env'
 
 typeCheckSeq :: M.Map Text (Either TopGlob TopFunc)
              -> [Text]
              -> TyEnv
              -> CompileErrM TyEnv
-typeCheckSeq = undefined
+typeCheckSeq exprs = flip $ foldM (\acc def ->
+    case M.lookup def exprs of
+         Just (Left glob)  -> undefined
+         Just (Right func) -> undefined
+         Nothing -> error "Any name in the order list should be in the map of\
+                         \ top level expressions."
+  )
 
 processConcTypes :: [(Text, Session)]
                  -> CompileErrM ConcTyEnv
@@ -205,7 +217,7 @@ compile p = do
   -- Run
   let globAndFuncMap = M.fromList $ map (second Left)  globs
                                  ++ map (second Right) funcs
-  seqTyEnv <- processSeqTypes structs enums
+  seqTyEnv <- processSeqTypes defaultEnv structs enums
           >>= typeCheckSeq globAndFuncMap exprOrder
 
   -- Create an environment from concurrent types
