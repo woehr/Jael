@@ -119,8 +119,19 @@ typeInf env expr = do
        Left err -> Left $ InferenceErr err
        Right te -> return te
 
+-- Partial function. Callers must ensure the type being recovered is not a
+-- function type.
 recoverCGTy :: M.Map Text CGTy -> Ty -> CGTy
-recoverCGTy = undefined
+recoverCGTy m = F.cata alg
+  where alg (TUnitF) = CGTySimple CGUnit
+        alg (TIntF)  = CGTySimple CGInt{ cgIntMin=fromIntegral (minBound::Int32)
+                                       , cgIntMax=fromIntegral (maxBound::Int32)}
+        alg (TBoolF) = CGTySimple CGBool
+        alg (TBitF)  = CGTySimple CGBit{cgBitSize=32}
+        alg (TyVarF n) = CGTyVar n
+        alg (TTupF ts) = CGTyTup ts
+        alg (TNamedF n ts) = undefined n ts
+        alg (TFunF _ _) = error "Cannot recover a HM function type."
 
 -- Given a type-annotated HM.Ex convert it to a type-annotated CGEx.
 -- The conversion from a CGTy to a Ty is lossy so we need a map of type names to
