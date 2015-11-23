@@ -69,7 +69,7 @@ checkInference testTypes (tx, expected) =
              (addToEnv defaultEnv funs)
     ex <- runParser pGExpr tx
     ty <- either (Left . tshow)
-                 Right
+                 (Right . tyOf)
                  (typeInf env $ gToCGEx ex)
     return $ assertBool ("Expected : " ++ show expected ++
                          "\nbut got  :" ++ show ty)

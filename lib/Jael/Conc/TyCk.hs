@@ -406,11 +406,12 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPutChan c putChan pCont) = do
 tyCkProc env (PPutVal c putExpr pCont) = do
   sess <- lookupChanUnfold c env
   env' <- case sess of
-               SPutTy v sCont -> do
-                 tyCkRes <- seqTyCk env putExpr v
-                 case tyCkRes of
-                      TCSuccess -> updateSession c sCont $ markSeqUsed (freeVars putExpr) env
-                      TCMismatch inferred -> throwError $ TypeMismatch c inferred
+               SPutTy v sCont ->
+                 case seqTyCk env putExpr v of
+                      -- Better error reporting
+                      Left (SeqErrs [CGTypeMismatch inferred]) -> throwError $ TypeMismatch c inferred
+                      Right _ -> updateSession c sCont $ markSeqUsed (freeVars putExpr) env
+                      Left x -> Left x
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
@@ -649,14 +650,14 @@ seqTyInf env expr = do
   seqEnv <- mkSeqEnv env
   case typeInf seqEnv expr of
        Left e -> throwError $ SeqErrs [e]
-       Right ty -> return ty
+       Right typedEx -> return (tyOf typedEx)
 
-seqTyCk :: ConcTyEnv -> CGEx -> Ty -> SessTyErrM CGTypeCheck
+seqTyCk :: ConcTyEnv -> CGEx -> Ty -> SessTyErrM ()
 seqTyCk env expr ty = do
   seqEnv <- mkSeqEnv env
   case typeCheck seqEnv expr ty of
        Left e -> throwError $ SeqErrs [e]
-       Right x -> return x
+       Right _ -> return ()
 
 -- The current env, the env in which the recursive definition was made, the
 -- recursion variable, and the parameters to the recursive call
@@ -694,11 +695,14 @@ checkProcArgErrs env n as sig = do
       acc <- m
       case (argType, argVal) of
            -- Make sure the type of e matches t
-           (TorSTy t  , Right expr) -> do
-             ckRes <- seqTyCk env expr t
-             return $ case ckRes of
-                           TCMismatch _ -> argName:acc
-                           TCSuccess    -> acc
+           (TorSTy t  , Right expr) ->
+             case seqTyCk env expr t of
+                  -- Better error reporting, first case reports when a type is
+                  -- infered but it is incorrect, second reports other inference
+                  -- errors.
+                  Left (SeqErrs [CGTypeMismatch _]) -> return $ argName:acc
+                  Left  e -> throwError e
+                  Right _ -> return acc
            -- Make sure the type of c matches s
            (TorSSess s,  Left c) -> case M.lookup c (cteLin env) of
                                          Just le -> if s `coIndEq` leSess le
@@ -716,7 +720,7 @@ checkProcArgErrs env n as sig = do
   let interferingArgMap = foldr
         (\c m ->
           let cEnv = M.findWithDefault
-                       (error "Should error before this point if channel is\
+                       (error "Should error before this point if the channel is\
                              \ not in the linear environemnt.")
                        c (cteLin env)
               interferingChans = leIntSet cEnv `S.intersection` chanArgSet

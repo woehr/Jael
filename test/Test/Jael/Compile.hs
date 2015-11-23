@@ -5,6 +5,7 @@ module Test.Jael.Compile
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Jael.Compile
+import           Jael.Seq.CG_AST (CGTypeErr(..))
 import qualified Test.Framework as T
 
 compileTests :: [T.Test]
@@ -112,7 +113,7 @@ fnArityMismatch = (pack [raw|
   func x(a: Int) : Int {
     a
   }
-  y = x(1, 2);
-|], ParseErr ""
+  y = x(42, 43, 44);
+|], TypeInfErr $ ArityMismatch $ M.fromList [("x", (1, 3))]
   )
 

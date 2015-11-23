@@ -56,8 +56,9 @@ concTyCkTests =
   , testCase "undefined co-rec expr arg" $ checkTyCkErr undefinedCoRecArgExpr
   -- same as above three tests but for the corecursive variable instead of definition
   , testCase "interfering corecursive variable arguments" $ checkTyCkErr interferingCoRecVarArgs
-  , testCase "undefined co-rec variable channel arg" $ checkTyCkErr undefinedCoRecVarArgChan
-  , testCase "undefined co-rec variable expr arg" $ checkTyCkErr undefinedCoRecVarArgExpr
+  , testCase "rec-var undefined channel arg" $ checkTyCkErr coRecVariableArgUndefChan
+  , testCase "rec-var undefined expr arg" $ checkTyCkErr coRecVariableArgUndefExpr
+  , testCase "rec-var argument type mismatch" $ checkTyCkErr coRecVariableArgTypeMismatch
   , testCase "test residual environment with corecursive definition" $ checkTyCkErr coRecResidualEnv
   , testCase "test inductive sessions equal under renaming" $ shouldTyCk equalityOfCoinductiveSessions
   , testCase "test inductive sessions equal under renaming (2)" $ shouldTyCk equalityOfCoinductiveSessions2
@@ -640,8 +641,8 @@ interferingCoRecArgs = (pack [raw|
       ]
   )
 
-undefinedCoRecVarArgChan :: (Text, SessTyErr)
-undefinedCoRecVarArgChan = (pack [raw|
+coRecVariableArgUndefChan :: (Text, SessTyErr)
+coRecVariableArgUndefChan = (pack [raw|
   proc P(^a : ![Int]) {
     rec X(^a=^a) {
       X(^b)
@@ -650,14 +651,24 @@ undefinedCoRecVarArgChan = (pack [raw|
 |], UndefinedChan "b"
   )
 
-undefinedCoRecVarArgExpr :: (Text, SessTyErr)
-undefinedCoRecVarArgExpr = (pack [raw|
+coRecVariableArgUndefExpr :: (Text, SessTyErr)
+coRecVariableArgUndefExpr = (pack [raw|
   proc P(a : Int) {
     rec X(a=a) {
       X(b)
     }
   }
 |], SeqErrs [InferenceErr (UnboundVar "b")]
+  )
+
+coRecVariableArgTypeMismatch :: (Text, SessTyErr)
+coRecVariableArgTypeMismatch = (pack [raw|
+  proc P(a : Int) {
+    rec X(a=a) {
+      X(true)
+    }
+  }
+|], ProcArgTypeMismatch (S.fromList ["a"])
   )
 
 interferingCoRecVarArgs :: (Text, SessTyErr)

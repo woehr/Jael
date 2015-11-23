@@ -65,12 +65,9 @@ instance F.Unfoldable CGTypedEx where
   embed (CGTypedExF Ann{ann=t, unAnn=e}) = CGTypedEx Ann{ann=t, unAnn=e}
 
 data CGTypeErr = ArityMismatch (M.Map Text (Integer, Integer))
+               | CGTypeMismatch Ty
                | InferenceErr SeqTIErr
                deriving (Eq, Show)
-
-data CGTypeCheck = TCMismatch Ty
-                 | TCSuccess
-                 deriving (Eq, Show)
 
 checkArityErr :: M.Map Text Integer -> Text -> [M.Map Text (Integer, Integer)] -> M.Map Text (Integer, Integer)
 checkArityErr arityMap n as =
@@ -91,28 +88,39 @@ arityCheck env expr =
       arityErrs = F.cata arityAlg expr
    in unless (null arityErrs) (Left $ ArityMismatch arityErrs)
 
--- Returns either an error or the type of the expression and a map of the types
--- inferred for the names within the expression.
-typeCheck :: TyEnv -> CGEx -> Ty -> Either CGTypeErr CGTypeCheck
-typeCheck env expr ty = do
-  arityCheck env expr
-  case seqInferTypedEx env (toHM expr) of
+typeCheck' :: TyEnv -> HM.Ex -> Ty -> Either CGTypeErr HM.TypedEx
+typeCheck' env expr ty = case seqInferTypedEx env expr of
        Left err -> Left $ InferenceErr err
        Right te ->
          let inferred = tyOf te
           in case mgu inferred ty of
-                  Left  _ -> Right (TCMismatch inferred)
-                  Right _ -> Right TCSuccess
+                  Left  _ -> throwError $ CGTypeMismatch inferred
+                  Right _ -> return te
 
-typeInf :: TyEnv -> CGEx -> Either CGTypeErr Ty
+-- Returns either an error or the type of the expression and a map of the types
+-- inferred for the names within the expression.
+typeCheck :: TyEnv -> CGEx -> Ty -> Either CGTypeErr HM.TypedEx
+typeCheck env expr ty = do
+  arityCheck env expr
+  typeCheck' env (toHM expr) ty
+
+-- CGEx can't do abstraction so we need to do some juggling to check a function
+typeCheckFunc :: TyEnv -> CGEx -> ([(Text, Ty)], Ty) -> Either CGTypeErr HM.TypedEx
+typeCheckFunc env expr (args, retTy) = do
+  arityCheck env expr
+  let hmExpr = toHM expr
+      hmFunc = foldr (HM.EAbs . fst) hmExpr args
+  typeCheck' env hmFunc $ foldr (TFun . snd) retTy args
+
+typeInf :: TyEnv -> CGEx -> Either CGTypeErr HM.TypedEx
 typeInf env expr = do
   arityCheck env expr
   case seqInferTypedEx env (toHM expr) of
        Left err -> Left $ InferenceErr err
-       Right te -> return (tyOf te)
+       Right te -> return te
 
 recoverCGTy :: M.Map Text CGTy -> Ty -> CGTy
-recoverCGTy m = undefined
+recoverCGTy = undefined
 
 -- Given a type-annotated HM.Ex convert it to a type-annotated CGEx.
 -- The conversion from a CGTy to a Ty is lossy so we need a map of type names to
