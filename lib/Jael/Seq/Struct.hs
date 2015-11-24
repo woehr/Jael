@@ -5,6 +5,7 @@ import qualified Data.Set as S
 import Jael.Grammar
 import Jael.UserDefTy
 import Jael.Util
+import Jael.Seq.CG_Types
 import Jael.Seq.HM_Types
 
 type Field = (Text, Ty)
@@ -50,8 +51,8 @@ structTypeDeps (Struct fs) = S.fromList
   )
 
 gToField :: GTStructElement -> Field
-gToField (GTStructElement (LIdent gfn) gt) = (pack gfn, gToType gt)
-gToField (GTStructElementAnn _ (LIdent gfn) gt) = (pack gfn, gToType gt)
+gToField (GTStructElement (LIdent gfn) gt) = (pack gfn, (tyOf . gToType) gt)
+gToField (GTStructElementAnn _ (LIdent gfn) gt) = (pack gfn, (tyOf . gToType) gt)
 
 gToStruct :: GTStructDef -> Struct
 gToStruct (GTStructDef fields) =

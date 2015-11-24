@@ -5,6 +5,7 @@ import qualified Data.Set as S
 import Jael.Grammar
 import Jael.UserDefTy
 import Jael.Util
+import Jael.Seq.CG_Types
 import Jael.Seq.HM_Types
 
 data Tag = Tag Text
@@ -63,7 +64,7 @@ enumTypeDeps (Enumer fs) = S.fromList $ mapMaybe
 
 gToTag :: GTEnumElem -> Tag
 gToTag (GTEnumElemNoTy (LIdent t)) = Tag (pack t)
-gToTag (GTEnumElemWithTy (LIdent t) ty) = TagWithTy (pack t) (gToType ty)
+gToTag (GTEnumElemWithTy (LIdent t) ty) = TagWithTy (pack t) ((tyOf . gToType) ty)
 
 gToEnumer :: GTEnumDef -> Enumer
 gToEnumer (GTEnumDef elems) =

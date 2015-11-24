@@ -7,6 +7,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Seq.CG_AST
+import Jael.Seq.CG_Types
 import Jael.Seq.HM_Types
 import Jael.Conc.Session
 import Jael.UserDefTy
@@ -281,7 +282,7 @@ redefinedCoRecVar ns p = ns `S.intersection` coRecNames p
 
 gToProcArg :: GProcArg -> (Text, TyOrSess)
 gToProcArg (GProcArgType (LIdent i) x) =
-  (pack i, TorSTy (gToType x))
+  (pack i, TorSTy ((tyOf . gToType) x))
 gToProcArg (GProcArgSess (LIdent i) x) =
   (pack i, TorSSess (gToSession x))
 

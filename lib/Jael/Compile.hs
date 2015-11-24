@@ -11,6 +11,7 @@ import Jael.Conc.Env
 import Jael.Conc.Proc
 import Jael.Conc.Session
 import Jael.Seq.CG_AST
+import Jael.Seq.CG_Types
 import Jael.Seq.Enum
 import Jael.Seq.Env
 import Jael.Seq.HM_AST
@@ -30,72 +31,74 @@ data CompileErr = ParseErr Text
 
 type CompileErrM = Either CompileErr
 
-data TopGlob a = TopGlob { tgExpr :: a }
-                 deriving (Show)
+type Program = ( [(Text, TopExpr CGEx CGTy)]
+               , [(Text, Struct)]
+               , [(Text, Enumer)]
+               , [(Text, TopArea)]
+               , [(Text, Session)]
+               , [(Text, TopProc)]
+               )
 
-gToTopGlob :: GExpr -> TopGlob CGEx
-gToTopGlob e = TopGlob { tgExpr = gToCGEx e }
+data TopExpr e t = TopGlob { tgExpr :: e }
+                 | TopFunc { tfArgs  :: [(Text, t)]
+                           , tfRetTy :: t
+                           , tfExpr  :: e
+                 } deriving (Show)
 
-globFreeVars :: TopGlob CGEx -> S.Set Text
-globFreeVars = freeVars . tgExpr
+instance (SeqTypable e, SeqTypable t) => SeqTypable (TopExpr e t) where
+  tyOf (TopGlob{..}) = tyOf tgExpr
+  tyOf (TopFunc{..}) = typesToFun (map (tyOf . snd) tfArgs) (tyOf tfRetTy)
 
-data TopFunc a = TopFunc { tfArgs  :: [(Text, Ty)]
-                         , tfRetTy :: Ty
-                         , tfExpr  :: a }
-                 deriving (Show)
+gGlobToTop :: GExpr -> TopExpr CGEx t
+gGlobToTop e = TopGlob { tgExpr = gToCGEx e }
 
-gToTopFunc :: [GFuncArg] -> GType -> GExpr -> TopFunc CGEx
-gToTopFunc as rt e = TopFunc { tfArgs = map (\(GFuncArg (LIdent n) t) ->
-                                               (pack n, gToType t)
+gFuncToTop :: [GFuncArg] -> GType -> GExpr -> TopExpr CGEx CGTy
+gFuncToTop as rt e = TopFunc { tfArgs = map (\(GFuncArg (LIdent n) t) ->
+                                                (pack n, gToType t)
                                             )
-                                           as
+                                            as
                              , tfRetTy = gToType rt
                              , tfExpr = gToCGEx e
                              }
 
-funcFreeVars :: TopFunc CGEx -> S.Set Text
-funcFreeVars (TopFunc{tfArgs=as, tfExpr=ex}) =
-  freeVars ex S.\\ S.fromList (map fst as)
+exprFreeVars :: TopExpr CGEx t -> S.Set Text
+exprFreeVars (TopGlob{..}) = freeVars tgExpr
+exprFreeVars (TopFunc{..}) = freeVars tfExpr S.\\ S.fromList (map fst tfArgs)
+
+recoverCGTop :: M.Map Text CGTy -> TopExpr TypedEx Ty -> TopExpr CGTypedEx CGTy
+recoverCGTop = undefined
 
 data TopArea = TopArea { taAddr :: Integer
-                       , taType :: Text }
-                       deriving (Show)
+                       , taType :: Text
+                       } deriving (Show)
 
 gToTopArea :: GAnyInt -> UIdent -> TopArea
 gToTopArea i (UIdent t) = TopArea { taAddr = parseAnyInt i, taType = pack t }
 
 -- splits the top level definition into its different types of components
-splitTop :: GProg -> ( [(Text, TopGlob CGEx)] -- a
-                     , [(Text, Struct)]       -- b
-                     , [(Text, Enumer)]       -- c
-                     , [(Text, TopArea)]      -- d
-                     , [(Text, Session)]      -- e
-                     , [(Text, TopProc)]      -- f
-                     , [(Text, TopFunc CGEx)] -- g
-                     )
-splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f, g) ->
+splitTop :: GProg -> Program
+splitTop (GProg xs) = foldr (\x (a, b, c, d, e, f) ->
   case x of
        (GTopDefGGlobal (GGlobal (LIdent n) y))
-         -> ((pack n, gToTopGlob y)                    :a,b,c,d,e,f,g)
-       (GTopDefGTypeDef (GTDefStruct (UIdent n) y))
-         -> (a,(pack n, gToUserDefTy y)                  :b,c,d,e,f,g)
-       (GTopDefGTypeDef (GTDefEnum (UIdent n) y))
-         -> (a,b,(pack n, gToUserDefTy y)                  :c,d,e,f,g)
-       (GTopDefGTypeDef (GTDefArea (UIdent n) addr ty))
-         -> (a,b,c,(pack n, gToTopArea addr ty)              :d,e,f,g)
-       (GTopDefGTypeDef (GTDefProto (UIdent n) y))
-         -> (a,b,c,d,(pack n, dual $ gToUserDefTy y)           :e,f,g)
-       (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) ys p))
-         -> (a,b,c,d,e,(pack n, gToTopProc (ys, p))              :f,g)
+         -> ((pack n, gGlobToTop y)                    :a,b,c,d,e,f)
        (GTopDefGFunc (GFunc (GFuncName (LIdent n)) as retTy fnBody))
-         -> (a,b,c,d,e,f,(pack n, gToTopFunc as retTy fnBody)      :g)
-  ) ([],[],[],[],[],[],[]) xs
+         -> ((pack n, gFuncToTop as retTy fnBody)      :a,b,c,d,e,f)
+       (GTopDefGTypeDef (GTDefStruct (UIdent n) y))
+         -> (a,(pack n, gToUserDefTy y)                  :b,c,d,e,f)
+       (GTopDefGTypeDef (GTDefEnum (UIdent n) y))
+         -> (a,b,(pack n, gToUserDefTy y)                  :c,d,e,f)
+       (GTopDefGTypeDef (GTDefArea (UIdent n) addr ty))
+         -> (a,b,c,(pack n, gToTopArea addr ty)              :d,e,f)
+       (GTopDefGTypeDef (GTDefProto (UIdent n) y))
+         -> (a,b,c,d,(pack n, dual $ gToUserDefTy y)           :e,f)
+       (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) ys p))
+         -> (a,b,c,d,e,(pack n, gToTopProc (ys, p))              :f)
+  ) ([],[],[],[],[],[]) xs
 
 dupDefs :: [Text] -> CompileErrM ()
 dupDefs ns =
   let repeats = repeated ns
-   in unless (null repeats)
-        $ throwError $ DupDef repeats
+   in unless (null repeats) (throwError $ DupDef repeats)
 
 addToTyEnv :: TyEnv -> [(Text, PolyTy)] -> CompileErrM TyEnv
 addToTyEnv env xs = either (throwError . DupDef) return (addToEnv env xs)
@@ -138,95 +141,89 @@ nameCycle depMap =
        Right order -> return order
 
 processSeqTypes :: TyEnv
-                -> [(Text, Struct)]
-                -> [(Text, Enumer)]
+                -> M.Map Text Struct
+                -> M.Map Text Enumer
                 -> CompileErrM TyEnv
 processSeqTypes env s e =
-  addToTyEnv env (concatMap envItems s ++ concatMap envItems e)
+  let structItems = M.mapWithKey (curry envItems) s
+      enumerItems = M.mapWithKey (curry envItems) e
+   in addToTyEnv env (concat . M.elems $ structItems `M.union` enumerItems)
 
-typeCheckTopGlob :: TyEnv -> TopGlob CGEx -> CompileErrM TypedEx
-typeCheckTopGlob env (TopGlob{..}) =
-  either (throwError . TypeInfErr) return $ typeInf env tgExpr
+typeCheckTopExpr :: TyEnv -> TopExpr CGEx CGTy -> CompileErrM (TopExpr TypedEx Ty)
+typeCheckTopExpr env (TopGlob{..}) =
+  either (throwError . TypeInfErr)
+         (\x -> return TopGlob{ tgExpr = x })
+         (typeInf env tgExpr)
+typeCheckTopExpr env (TopFunc{..}) =
+  either (throwError . TypeInfErr)
+         (\(as,rt,ex) -> return TopFunc{ tfArgs  = zip (map fst tfArgs) as
+                                       , tfRetTy = rt
+                                       , tfExpr  = ex }
+         )
+         (typeCheckFunc env (tfArgs, tfRetTy, tfExpr))
 
-typeCheckTopFunc :: TyEnv -> TopFunc CGEx -> CompileErrM TypedEx
-typeCheckTopFunc env (TopFunc{..}) =
-  either (throwError . TypeInfErr) return $ typeCheckFunc env tfExpr (tfArgs, tfRetTy)
-
-typeCheckSeq :: M.Map Text (Either (TopGlob CGEx) (TopFunc CGEx))
+typeCheckSeq :: M.Map Text (TopExpr CGEx CGTy)
              -> [Text]
              -> TyEnv
-             -> CompileErrM (M.Map Text (TopGlob TypedEx), M.Map Text (TopFunc TypedEx))
+             -> CompileErrM (M.Map Text (TopExpr TypedEx Ty))
 typeCheckSeq exprs order env = do
   mapTypedTopExpr <- foldM (\(env', acc) def ->
     case M.lookup def exprs of
-         Just (Left g) -> do
-           te <- typeCheckTopGlob env' g
-           env'' <- addToTyEnv env' [(def, polyTy (tyOf te))]
-           return (env'', M.insert def (Left g{tgExpr=te}) acc)
-         Just (Right f) -> do
-           te <- typeCheckTopFunc env' f
-           env'' <- addToTyEnv env' [(def, polyTy (tyOf te))]
-           return (env'', M.insert def (Right f{tfExpr=te}) acc)
+         Just x -> do
+           typedTopEx <- typeCheckTopExpr env' x
+           env'' <- addToTyEnv env' [(def, polyTy (tyOf typedTopEx))]
+           return (env'', M.insert def typedTopEx acc)
          Nothing -> error "Any name in the order list should be in the map of\
                          \ top level expressions."
     ) (env, M.empty) order
-  return . M.mapEither id . snd $ mapTypedTopExpr
+  return (snd mapTypedTopExpr)
 
-processConcTypes :: [(Text, Session)]
+processConcTypes :: M.Map Text Session
                  -> CompileErrM ConcTyEnv
 processConcTypes = undefined
 
-compile :: Text -> CompileErrM Text
-compile p = do
-  prog <- case parseProgram p of
-               Left e  -> throwError $ ParseErr e
-               Right x -> return x
-
-  let (globs, structs, enums, areas, protocols, procs, funcs) = splitTop prog
-
-  let topLevelNames = map fst globs     ++
+nameChecks :: Program -> CompileErrM ()
+nameChecks (exprs, structs, enums, areas, protocols, procs) = do
+  let topLevelNames = map fst exprs     ++
                       map fst structs   ++
                       map fst enums     ++
                       map fst areas     ++
                       map fst protocols ++
-                      map fst procs     ++
-                      map fst funcs
+                      map fst procs
 
   -- Find duplicate name definitions
   dupDefs topLevelNames
 
-  -- Check for errors in a definition
-  defErrs (map snd structs)
-          (map snd enums)
-          (map snd protocols)
-          (map snd procs)
-
   -- Checks for recursive process names that conflict
   shadowingDef topLevelNames procs
 
-  let globDepMap = M.map globFreeVars . M.fromList $ globs
-  let funcDepMap = M.map funcFreeVars . M.fromList $ funcs
-  let exprDepMap = globDepMap `M.union` funcDepMap
-
+-- Checks for circular dependencies in types, expressions, and processes
+-- Returns the order in which expressions and types should be processed
+dependencyAndUndefinedChecks :: M.Map Text (TopExpr CGEx CGTy)
+                             -> M.Map Text Struct
+                             -> M.Map Text Enumer
+                             -> M.Map Text Session
+                             -> M.Map Text TopProc
+                             -> CompileErrM ([Text], [Text])
+dependencyAndUndefinedChecks exprs structs enums protocols procs = do
   -- Find uses of undefined variables
+  let exprDepMap = M.map exprFreeVars exprs
   undefinedNames exprDepMap
   exprOrder <- liftM reverse $ nameCycle exprDepMap
 
-  let typeDepMap = (M.map typeDeps . M.fromList $ structs)
-         `M.union` (M.map typeDeps . M.fromList $ enums)
-
   -- Find uses of undefined types
+  let typeDepMap = M.map typeDeps structs `M.union` M.map typeDeps enums
   undefinedNames typeDepMap
   typeOrder <- liftM reverse $ nameCycle typeDepMap
 
-  let sessDepMap = M.map freeIndVars . M.fromList $ protocols
   -- Find uses of undefined sessions
+  let sessDepMap = M.map freeIndVars protocols
   undefinedNames sessDepMap
   _ <- nameCycle sessDepMap
 
-  let procDepMap = M.map procDeps . M.fromList $ procs
   -- Processes on the other hand can continue with a process by name, and they
   -- can not be called recursively (recursion must be explicitly defined).
+  let procDepMap = M.map procDeps procs
   undefinedNames procDepMap
 
   -- Processes are explicitly typed so the order in which they're processed does
@@ -234,14 +231,54 @@ compile p = do
   -- within named processes
   _ <- nameCycle procDepMap
 
-  -- Run
-  let globAndFuncMap = M.fromList $ map (second Left)  globs
-                                 ++ map (second Right) funcs
-  seqTyEnv <- processSeqTypes defaultEnv structs enums
-          >>= typeCheckSeq globAndFuncMap exprOrder
+  return (typeOrder, exprOrder)
+
+annotateSeqExprs :: M.Map Text Struct
+                 -> M.Map Text Enumer
+                 -> M.Map Text (TopExpr CGEx CGTy)
+                 -> [Text]
+                 -> CompileErrM (M.Map Text (TopExpr CGTypedEx CGTy))
+annotateSeqExprs structs enums exprs exprOrder = do
+  env <- processSeqTypes defaultEnv structs enums
+  -- The TopExpr map is returned with CG types and expr replaced by HM ones
+  hmTypedExprs <- typeCheckSeq exprs exprOrder env
+  let cgTypeMap = M.empty
+  return $ M.map (recoverCGTop cgTypeMap) hmTypedExprs
+
+compile :: Text -> CompileErrM Text
+compile p = do
+  prog <- case parseProgram p of
+               Left e  -> throwError $ ParseErr e
+               Right x -> return x
+
+  let components@(lExprs, lStructs, lEnums, lAreas, lProtocols, lProcs)
+        = splitTop prog
+
+  nameChecks components
+
+  -- No more chance of duplicate names, so now we use a map.
+  let (exprs, structs, enums, areas, protocols, procs) =
+        ( M.fromList lExprs
+        , M.fromList lStructs
+        , M.fromList lEnums
+        , M.fromList lAreas
+        , M.fromList lProtocols
+        , M.fromList lProcs
+        )
+
+  -- Check for errors in a definition
+  defErrs (M.elems structs)
+          (M.elems enums)
+          (M.elems protocols)
+          (M.elems procs)
+
+  (_, exprOrder) <- dependencyAndUndefinedChecks
+                              exprs structs enums protocols procs
+
+  -- Type check all expressions in the order required by their dependencies
+  typedExprs <- annotateSeqExprs structs enums exprs exprOrder
 
   -- Create an environment from concurrent types
-  conTyEnv <- processConcTypes protocols
-  -- Uses variables to quiet warnings
-  undefined exprOrder typeOrder seqTyEnv conTyEnv
+  concTyEnv <- processConcTypes protocols
+  return "Unimplemented"
 

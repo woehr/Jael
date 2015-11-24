@@ -3,7 +3,6 @@ module Jael.Seq.HM_Types where
 import qualified Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
-import           Jael.Grammar
 
 data Ty = TyVar Text
         | TUnit
@@ -49,6 +48,9 @@ instance F.Unfoldable Ty where
 
 class SeqTypable a where
   tyOf :: a -> Ty
+
+instance SeqTypable Ty where
+  tyOf = id
 
 data PolyTy = PolyTy [Text] Ty
               deriving (Show)
@@ -139,16 +141,6 @@ tyEquiv t u =
 polyEquiv :: PolyTy -> PolyTy -> Bool
 polyEquiv (PolyTy _ t) (PolyTy _ u) = t `tyEquiv` u
 
-gToType :: GType -> Ty
-gToType GTInt = TInt
-gToType GTBool = TBool
-gToType GTUnit = TUnit
-gToType (GTNamed (UIdent n) GTNamedNoParam) = TNamed (pack n) []
-gToType (GTNamed (UIdent n) (GTNamedParams xs)) =
-  TNamed (pack n) (map (\(GTNamedParam t) -> gToType t) xs)
-gToType (GTTVar (LIdent s)) = TyVar (pack s)
-gToType (GTTup x xs) = TTup $ map (\(GTTupArg y) -> gToType y) (x:xs)
-
 -- Return the type variables of a type
 typeVars :: Ty -> S.Set Text
 typeVars = F.cata alg
@@ -171,4 +163,8 @@ polyTy t = PolyTy (typeVars' t) t
 arityOf :: Ty -> Integer
 arityOf (TFun _ x) = 1 + arityOf x
 arityOf _ = 0
+
+-- Converts a list of argument types and a return type to a function
+typesToFun :: [Ty] -> Ty -> Ty
+typesToFun = flip (foldr TFun)
 

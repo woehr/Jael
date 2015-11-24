@@ -6,6 +6,7 @@ import qualified Data.Set as S
 import Jael.Grammar
 import Jael.UserDefTy
 import Jael.Util
+import Jael.Seq.CG_Types
 import Jael.Seq.HM_Types
 
 instance UserDefTy Session where
@@ -126,9 +127,9 @@ gToSession = ana coalg
         coalg (GSessVar (UIdent var)) = SVarF (pack var)
         coalg (GSessVarDual (UIdent var)) = SDualVarF (pack var)
         coalg (GSessRec (UIdent var) c) = SCoIndF (pack var) c
-        coalg (GSessGet (GSessTy t) c) = SGetTyF (gToType t) c
+        coalg (GSessGet (GSessTy t) c) = SGetTyF ((tyOf . gToType) t) c
         coalg (GSessGet (GSessSess s) c) = SGetSessF (gToSession s) c
-        coalg (GSessPut (GSessTy t) c) = SPutTyF (gToType t) c
+        coalg (GSessPut (GSessTy t) c) = SPutTyF ((tyOf . gToType) t) c
         coalg (GSessPut (GSessSess s) c) = SPutSessF (gToSession s) c
         coalg (GSessSel ss) = SSelectF (convLabelList ss)
         coalg (GSessCho ss) = SChoiceF (convLabelList ss)

@@ -6,7 +6,7 @@ import qualified Data.Functor.Foldable as F
 import           Jael.Seq.CG_AST
 import           Jael.Seq.CG_Types
 import           Jael.Seq.Literal
-import           Jael.Seq.Prm
+--import           Jael.Seq.Prm
 import           LLVM.General.AST
 import           LLVM.General.AST.Constant
 
@@ -26,8 +26,6 @@ instance GenLLVM CGTy where
           alg (CGTySimpleF CGBit{..}) = IntegerType
             { typeBits=fromIntegral cgBitSize }
           alg (CGTyTupF xs) = StructureType { isPacked=False, elementTypes=xs }
-          alg (CGTyStructF) = undefined
-          alg (CGTyEnumerF) = undefined
 
 instance GenLLVM CGEx where
   type LLVMOutput CGEx = [BasicBlock]

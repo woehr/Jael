@@ -105,12 +105,15 @@ typeCheck env expr ty = do
   typeCheck' env (toHM expr) ty
 
 -- CGEx can't do abstraction so we need to do some juggling to check a function
-typeCheckFunc :: TyEnv -> CGEx -> ([(Text, Ty)], Ty) -> Either CGTypeErr HM.TypedEx
-typeCheckFunc env expr (args, retTy) = do
+typeCheckFunc :: TyEnv -> ([(Text, CGTy)], CGTy, CGEx)
+              -> Either CGTypeErr ([Ty], Ty, HM.TypedEx)
+typeCheckFunc env (args, retTy, expr) = do
   arityCheck env expr
   let hmExpr = toHM expr
       hmFunc = foldr (HM.EAbs . fst) hmExpr args
-  typeCheck' env hmFunc $ foldr (TFun . snd) retTy args
+      hmFunTy = typesToFun (map (tyOf . snd) args) (tyOf retTy)
+  typedEx <- typeCheck' env hmFunc hmFunTy
+  return (undefined, undefined, typedEx)
 
 typeInf :: TyEnv -> CGEx -> Either CGTypeErr HM.TypedEx
 typeInf env expr = do
