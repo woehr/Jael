@@ -69,7 +69,8 @@ data CGTypeErr = ArityMismatch (M.Map Text (Integer, Integer))
                | InferenceErr SeqTIErr
                deriving (Eq, Show)
 
-checkArityErr :: M.Map Text Integer -> Text -> [M.Map Text (Integer, Integer)] -> M.Map Text (Integer, Integer)
+checkArityErr :: M.Map Text Integer -> Text -> [M.Map Text (Integer, Integer)]
+              -> M.Map Text (Integer, Integer)
 checkArityErr arityMap n as =
   let argErrs = M.unions as
       nArity = M.findWithDefault (error $ "Expected to find " <> show n <> " in\
@@ -119,7 +120,7 @@ typeCheckFunc env (args, retTy, expr) = do
       hmFunTy = typesToFun (map (tyOf . snd) args, tyOf retTy)
   typedEx <- typeCheck' env hmFunc hmFunTy
   let (args', retTy') = funToTypes (tyOf typedEx)
-  return (args', retTy', dropAbs (length args) typedEx)
+  return (args', retTy', dropAbs (length args') typedEx)
 
 typeInf :: TyEnv -> CGEx -> Either CGTypeErr HM.TypedEx
 typeInf env expr = do

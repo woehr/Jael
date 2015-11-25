@@ -65,7 +65,7 @@ exprFreeVars :: TopExpr CGEx t -> S.Set Text
 exprFreeVars (TopGlob{..}) = freeVars tgExpr
 exprFreeVars (TopFunc{..}) = freeVars tfExpr S.\\ S.fromList (map fst tfArgs)
 
-recoverCGTop :: M.Map Text CGTy -> TopExpr TypedEx Ty -> TopExpr CGTypedEx CGTy
+recoverCGTop :: TopExpr TypedEx Ty -> TopExpr CGTypedEx CGTy
 recoverCGTop = undefined
 
 data TopArea = TopArea { taAddr :: Integer
@@ -242,8 +242,7 @@ annotateSeqExprs structs enums exprs exprOrder = do
   env <- processSeqTypes defaultEnv structs enums
   -- The TopExpr map is returned with CG types and expr replaced by HM ones
   hmTypedExprs <- typeCheckSeq exprs exprOrder env
-  let cgTypeMap = M.empty
-  return $ M.map (recoverCGTop cgTypeMap) hmTypedExprs
+  return $ M.map recoverCGTop hmTypedExprs
 
 compile :: Text -> CompileErrM Text
 compile p = do
