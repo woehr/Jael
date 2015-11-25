@@ -104,6 +104,11 @@ typeCheck env expr ty = do
   arityCheck env expr
   typeCheck' env (toHM expr) ty
 
+dropAbs :: Int -> HM.TypedEx -> HM.TypedEx
+dropAbs 0 expr = expr
+dropAbs n (HM.TypedEx Ann{unAnn=(HM.EAbsF _ expr)}) = dropAbs (n-1) expr
+dropAbs _ _ = error "Attempted to remove abstraction where there was none."
+
 -- CGEx can't do abstraction so we need to do some juggling to check a function
 typeCheckFunc :: TyEnv -> ([(Text, CGTy)], CGTy, CGEx)
               -> Either CGTypeErr ([Ty], Ty, HM.TypedEx)
@@ -111,9 +116,10 @@ typeCheckFunc env (args, retTy, expr) = do
   arityCheck env expr
   let hmExpr = toHM expr
       hmFunc = foldr (HM.EAbs . fst) hmExpr args
-      hmFunTy = typesToFun (map (tyOf . snd) args) (tyOf retTy)
+      hmFunTy = typesToFun (map (tyOf . snd) args, tyOf retTy)
   typedEx <- typeCheck' env hmFunc hmFunTy
-  return (undefined, undefined, typedEx)
+  let (args', retTy') = funToTypes (tyOf typedEx)
+  return (args', retTy', dropAbs (length args) typedEx)
 
 typeInf :: TyEnv -> CGEx -> Either CGTypeErr HM.TypedEx
 typeInf env expr = do
@@ -124,8 +130,8 @@ typeInf env expr = do
 
 -- Partial function. Callers must ensure the type being recovered is not a
 -- function type.
-recoverCGTy :: M.Map Text CGTy -> Ty -> CGTy
-recoverCGTy m = F.cata alg
+recoverCGTy :: Ty -> CGTy
+recoverCGTy = F.cata alg
   where alg (TUnitF) = CGTySimple CGUnit
         alg (TIntF)  = CGTySimple CGInt{ cgIntMin=fromIntegral (minBound::Int32)
                                        , cgIntMax=fromIntegral (maxBound::Int32)}
@@ -133,16 +139,16 @@ recoverCGTy m = F.cata alg
         alg (TBitF)  = CGTySimple CGBit{cgBitSize=32}
         alg (TyVarF n) = CGTyVar n
         alg (TTupF ts) = CGTyTup ts
-        alg (TNamedF n ts) = undefined n ts
+        alg (TNamedF n ts) = CGTyNamed n ts
         alg (TFunF _ _) = error "Cannot recover a HM function type."
 
 -- Given a type-annotated HM.Ex convert it to a type-annotated CGEx.
 -- The conversion from a CGTy to a Ty is lossy so we need a map of type names to
 -- the original CGTy. Some of the type variables in the original type may now be
 -- replaced with a concrete type.
-recoverCGTypedEx :: M.Map Text CGTy -> HM.TypedEx -> CGTypedEx
-recoverCGTypedEx m = F.ana coalg
-  where coalg (HM.TypedEx Ann{ann=ty, unAnn=(HM.EVarF x)}) = CGTypedExF Ann{ann=recoverCGTy m ty, unAnn=CGVarF x}
+recoverCGTypedEx :: HM.TypedEx -> CGTypedEx
+recoverCGTypedEx = F.ana coalg
+  where coalg (HM.TypedEx Ann{ann=ty, unAnn=(HM.EVarF x)}) = CGTypedExF Ann{ann=recoverCGTy ty, unAnn=CGVarF x}
 
 toHM :: CGEx -> HM.Ex
 toHM = F.cata alg

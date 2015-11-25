@@ -47,7 +47,7 @@ data TopExpr e t = TopGlob { tgExpr :: e }
 
 instance (SeqTypable e, SeqTypable t) => SeqTypable (TopExpr e t) where
   tyOf (TopGlob{..}) = tyOf tgExpr
-  tyOf (TopFunc{..}) = typesToFun (map (tyOf . snd) tfArgs) (tyOf tfRetTy)
+  tyOf (TopFunc{..}) = typesToFun (map (tyOf . snd) tfArgs, tyOf tfRetTy)
 
 gGlobToTop :: GExpr -> TopExpr CGEx t
 gGlobToTop e = TopGlob { tgExpr = gToCGEx e }

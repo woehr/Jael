@@ -9,6 +9,7 @@ import Test.Jael.CodeGen.Types (codeGenTypeTests)
 import Test.Jael.Conc.Proc (procTests)
 import Test.Jael.Conc.Session (sessionTests)
 import Test.Jael.Conc.TyCk (concTyCkTests)
+import Test.Jael.Properties (propTests)
 import Test.Jael.Seq.AST (astTests)
 import Test.Jael.Seq.Builtin (builtinTests)
 import Test.Jael.Seq.Enum (enumTests)
@@ -16,7 +17,7 @@ import Test.Jael.Seq.Struct (structTests)
 import Test.Jael.Seq.TI (seqInfTests)
 
 main :: IO ()
-main = defaultMainWithOpts
+main = defaultMain
   -- seq grammar
   [ testGroup "Expr grammar" gExprTests
   , testGroup "Type grammar" gTypeTests
@@ -39,5 +40,7 @@ main = defaultMainWithOpts
   , testGroup "Compilation" compileTests
   , testGroup "Code gen, types" codeGenTypeTests
   , testGroup "Code gen, expr ast gen" codeGenExprTests
-  ] mempty
+  -- quickcheck property tests
+  , testGroup "Property tests" propTests
+  ]
 

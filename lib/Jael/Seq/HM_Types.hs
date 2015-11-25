@@ -165,6 +165,12 @@ arityOf (TFun _ x) = 1 + arityOf x
 arityOf _ = 0
 
 -- Converts a list of argument types and a return type to a function
-typesToFun :: [Ty] -> Ty -> Ty
-typesToFun = flip (foldr TFun)
+typesToFun :: ([Ty], Ty) -> Ty
+typesToFun = uncurry $ flip (foldr TFun)
+
+-- The inverse of typesToFun
+funToTypes :: Ty -> ([Ty], Ty)
+funToTypes = recFun []
+  where recFun acc (TFun x y) = first (x:) (recFun acc y)
+        recFun acc x = (acc, x)
 
