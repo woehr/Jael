@@ -1,9 +1,4 @@
 import Test.Jael.Compile (compileTests)
-import Test.Jael.Grammar.Enum (gEnumTests)
-import Test.Jael.Grammar.Expr (gExprTests)
-import Test.Jael.Grammar.Proc (gProcTests)
-import Test.Jael.Grammar.Struct (gStructTests)
-import Test.Jael.Grammar.Type (gTypeTests)
 import Test.Jael.CodeGen.Expr (codeGenExprTests)
 import Test.Jael.CodeGen.Types (codeGenTypeTests)
 import Test.Jael.Conc.Proc (procTests)
@@ -18,13 +13,8 @@ import Test.Jael.Seq.TI (seqInfTests)
 
 main :: IO ()
 main = defaultMain
-  -- seq grammar
-  [ testGroup "Expr grammar" gExprTests
-  , testGroup "Type grammar" gTypeTests
-  , testGroup "Struct grammar" gStructTests
-  , testGroup "Enum grammar" gEnumTests
   -- seq
-  , testGroup "AST tests" astTests
+  [ testGroup "AST tests" astTests
   , testGroup "Builtin tests" builtinTests
   , testGroup "Seq type inference" seqInfTests
   -- seq types
@@ -33,7 +23,6 @@ main = defaultMain
   -- sessions
   , testGroup "Session types" sessionTests
   -- processes
-  , testGroup "Process grammar" gProcTests
   , testGroup "Process definition and type checking" procTests
   , testGroup "Process type checking" concTyCkTests
   -- everything else

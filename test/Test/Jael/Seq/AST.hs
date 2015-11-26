@@ -23,8 +23,8 @@ assertTyEquiv ts@(t1, t2) =
              ) $ uncurry tyEquiv ts
 
 tyEq1 :: (Ty, Ty)
-tyEq1 = ( TInt
-        , TInt
+tyEq1 = ( TySimple TyInt
+        , TySimple TyInt
         )
 
 tyEq2 :: (Ty, Ty)
@@ -33,22 +33,22 @@ tyEq2 = ( TyVar "a"
         )
 
 tyEq3 :: (Ty, Ty)
-tyEq3 = ( (TyVar "a")
-        , (TyVar "b")
+tyEq3 = ( TyVar "a"
+        , TyVar "b"
         )
 
 tyEq4 :: (Ty, Ty)
-tyEq4 = ( (TFun (TyVar "a") (TyVar "b"))
-        , (TFun (TyVar "c") (TyVar "d"))
+tyEq4 = ( TyFun (TyVar "a") (TyVar "b")
+        , TyFun (TyVar "c") (TyVar "d")
         )
 
 tyEq5 :: (Ty, Ty)
-tyEq5 = ( (TFun (TyVar "a") (TyVar "b"))
-        , (TFun (TyVar "b") (TyVar "c"))
+tyEq5 = ( TyFun (TyVar "a") (TyVar "b")
+        , TyFun (TyVar "b") (TyVar "c")
         )
 
 tyEq6 :: (Ty, Ty)
-tyEq6 = ( (TFun (TyVar "a") (TyVar "a"))
-        , (TFun (TyVar "b") (TyVar "b"))
+tyEq6 = ( TyFun (TyVar "a") (TyVar "a")
+        , TyFun (TyVar "b") (TyVar "b")
         )
 

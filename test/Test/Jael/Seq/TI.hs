@@ -28,31 +28,31 @@ testTypes = pack [raw|
 exprPlus :: (Text, Ty)
 exprPlus = (pack [raw|
   1+~2+3
-|], TInt)
+|], (TySimple TyInt))
 
 exprIntDiv :: (Text, Ty)
 exprIntDiv = (pack [raw|
   1/2
-|], TNamed "IntDivRes" [])
+|], TyNamed "IntDivRes" [])
 
 exprConstrIntDivRes :: (Text, Ty)
 exprConstrIntDivRes = (pack [raw|
   intDivRes
-|], TFun TInt (TFun TInt (TNamed "IntDivRes" [])))
+|], TyFun (TySimple TyInt) (TyFun (TySimple TyInt) (TyNamed "IntDivRes" [])))
 
 exprAccessor0 :: (Text, Ty)
 exprAccessor0 = (pack [raw|
   s::f0(s(true, 0))
-|], TBool)
+|], (TySimple TyBool))
 
 exprAccessor1 :: (Text, Ty)
 exprAccessor1 = (pack [raw|
   s::f1(s(true, 4))
-|], TInt)
+|], (TySimple TyInt))
 
 exprTup :: (Text, Ty)
 exprTup = (pack [raw|
   (1,true)
-|], TTup [TInt, TBool]
+|], TyTup [(TySimple TyInt), (TySimple TyBool)]
   )
 

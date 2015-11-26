@@ -16,22 +16,22 @@ instance Arbitrary Text where
 arbitraryLeaf :: Gen Ty
 arbitraryLeaf = oneof
   [ TyVar <$> arbitrary
-  , pure TUnit
-  , pure TInt
-  , pure TBool
-  , pure TBit
+  , pure (TySimple TyUnit)
+  , pure (TySimple TyInt)
+  , pure (TySimple TyBool)
+  , pure (TySimple TyBit)
   ]
 
 arbNotFun :: Gen Ty
 arbNotFun = oneof $ arbitraryLeaf:
-              [ TTup <$> listOf1 arbitraryLeaf
-              , TNamed <$> arbitrary <*> listOf arbitraryLeaf
+              [ TyTup <$> listOf1 arbitraryLeaf
+              , TyNamed <$> arbitrary <*> listOf arbitraryLeaf
               ]
 
 -- Not truly arbitrary but close enough because we don't expect tups and named
 -- types to have TFun elements.
 arbFun :: Gen Ty
-arbFun = TFun <$> arbNotFun <*> oneof (arbFun:[arbNotFun])
+arbFun = TyFun <$> arbNotFun <*> oneof (arbFun:[arbNotFun])
 
 instance Arbitrary Ty where
   arbitrary = oneof (arbFun:[arbNotFun])

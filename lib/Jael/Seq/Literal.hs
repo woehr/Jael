@@ -13,8 +13,8 @@ data Literal = LUnit
              deriving (Eq, Show)
 
 instance SeqTypable Literal where
-  tyOf (LUnit) = TUnit
-  tyOf (LInt _) = TInt
-  tyOf (LBool _) = TBool
-  tyOf (LBit _) = TBit
+  tyOf (LUnit)   = TySimple TyUnit
+  tyOf (LInt _)  = TySimple TyInt
+  tyOf (LBool _) = TySimple TyBool
+  tyOf (LBit _)  = TySimple TyBit
 

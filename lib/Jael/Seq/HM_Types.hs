@@ -4,47 +4,42 @@ import qualified Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 
-data Ty = TyVar Text
-        | TUnit
-        | TInt
-        | TBool
-        | TBit
-        | TTup [Ty]
-        | TNamed Text [Ty]
-        | TFun Ty Ty
+data SimpleType = TyUnit
+                | TyInt
+                | TyBool
+                | TyBit
+                | TyBuffer
+                deriving (Eq, Show)
+
+data Ty = TySimple SimpleType
+        | TyVar Text
+        | TyTup [Ty]
+        | TyNamed Text [Ty]
+        | TyFun Ty Ty
         deriving (Eq, Show)
 
-data TyF a = TyVarF Text
-           | TUnitF
-           | TIntF
-           | TBoolF
-           | TBitF
-           | TTupF [a]
-           | TNamedF Text [a]
-           | TFunF a a
+data TyF a = TySimpleF SimpleType
+           | TyVarF Text
+           | TyTupF [a]
+           | TyNamedF Text [a]
+           | TyFunF a a
            deriving (Show, Functor)
 
 type instance F.Base Ty = TyF
 
 instance F.Foldable Ty where
+  project (TySimple x) = TySimpleF x
   project (TyVar x) = TyVarF x
-  project (TUnit) = TUnitF
-  project (TInt) = TIntF
-  project (TBool) = TBoolF
-  project (TBit) = TBitF
-  project (TTup x) = TTupF x
-  project (TNamed x y) = TNamedF x y
-  project (TFun x y) = TFunF x y
+  project (TyTup x) = TyTupF x
+  project (TyNamed x y) = TyNamedF x y
+  project (TyFun x y) = TyFunF x y
 
 instance F.Unfoldable Ty where
+  embed (TySimpleF x) = TySimple x
   embed (TyVarF x) = TyVar x
-  embed (TUnitF) = TUnit
-  embed (TIntF) = TInt
-  embed (TBoolF) = TBool
-  embed (TBitF) = TBit
-  embed (TTupF x) = TTup x
-  embed (TNamedF x y) = TNamed x y
-  embed (TFunF x y) = TFun x y
+  embed (TyTupF x) = TyTup x
+  embed (TyNamedF x y) = TyNamed x y
+  embed (TyFunF x y) = TyFun x y
 
 class SeqTypable a where
   tyOf :: a -> Ty
@@ -67,9 +62,9 @@ class TyOps a where
 instance TyOps Ty where
   ftv = F.cata ftvFn
     where ftvFn (TyVarF t)     = S.singleton t
-          ftvFn (TNamedF _ ts) = S.unions ts
-          ftvFn (TTupF ts)     = S.unions ts
-          ftvFn (TFunF t1 t2)  = t1 `S.union` t2
+          ftvFn (TyNamedF _ ts) = S.unions ts
+          ftvFn (TyTupF ts)     = S.unions ts
+          ftvFn (TyFunF t1 t2)  = t1 `S.union` t2
           ftvFn _              = S.empty
 
   apply s = F.cata applyFn
@@ -94,16 +89,13 @@ instance TyOps TyEnv where
 
 identical :: Ty -> Ty -> Bool
 identical (TyVar a) (TyVar b) = a == b
-identical (TUnit) (TUnit) = True
-identical (TInt) (TInt) = True
-identical (TBool) (TBool) = True
-identical (TBit) (TBit) = True
-identical (TTup as) (TTup bs) = length as == length bs &&
-                                  and (zipWith identical as bs)
-identical (TNamed n ts) (TNamed m us) = n == m &&
-                                        length ts == length us &&
-                                        and (zipWith identical ts us)
-identical (TFun w x) (TFun y z) = w `identical` y && x `identical` z
+identical (TySimple x) (TySimple y) = x == y
+identical (TyTup as) (TyTup bs) = length as == length bs &&
+                                    and (zipWith identical as bs)
+identical (TyNamed n ts) (TyNamed m us) = n == m &&
+                                          length ts == length us &&
+                                          and (zipWith identical ts us)
+identical (TyFun w x) (TyFun y z) = w `identical` y && x `identical` z
 identical _ _ = False
 
 -- Two PolyTy are equivalent when their structure is the same and there exists a
@@ -122,15 +114,15 @@ tyEquiv t u =
                                           then Just sub
                                           else Nothing
                  _ -> Just (M.insert a b sub)
-          mkSub sub (TNamed n as) (TNamed m bs) =
+          mkSub sub (TyNamed n as) (TyNamed m bs) =
             if n == m && length as == length bs
                then foldM (\acc (a, b) -> mkSub acc a b) sub (zip as bs)
                else Nothing
-          mkSub sub (TTup as) (TTup bs) =
+          mkSub sub (TyTup as) (TyTup bs) =
             if length as == length bs
                then foldM (\acc (a, b) -> mkSub acc a b) sub (zip as bs)
                else Nothing
-          mkSub sub (TFun a a') (TFun b b') =
+          mkSub sub (TyFun a a') (TyFun b b') =
             case mkSub sub a b of
                  Just sub' -> mkSub sub' a' b'
                  Nothing -> Nothing
@@ -146,9 +138,9 @@ typeVars :: Ty -> S.Set Text
 typeVars = F.cata alg
   where alg :: TyF (S.Set Text) -> S.Set Text
         alg (TyVarF x)   = S.singleton x
-        alg (TNamedF _ ts) = S.unions ts
-        alg (TTupF ts) = S.unions ts
-        alg (TFunF x y) = x `S.union` y
+        alg (TyNamedF _ ts) = S.unions ts
+        alg (TyTupF ts) = S.unions ts
+        alg (TyFunF x y) = x `S.union` y
         alg _           = S.empty
 
 typeVars' :: Ty -> [Text]
@@ -161,16 +153,16 @@ polyTy :: Ty -> PolyTy
 polyTy t = PolyTy (typeVars' t) t
 
 arityOf :: Ty -> Integer
-arityOf (TFun _ x) = 1 + arityOf x
+arityOf (TyFun _ x) = 1 + arityOf x
 arityOf _ = 0
 
 -- Converts a list of argument types and a return type to a function
 typesToFun :: ([Ty], Ty) -> Ty
-typesToFun = uncurry $ flip (foldr TFun)
+typesToFun = uncurry $ flip (foldr TyFun)
 
 -- The inverse of typesToFun
 funToTypes :: Ty -> ([Ty], Ty)
 funToTypes = recFun []
-  where recFun acc (TFun x y) = first (x:) (recFun acc y)
+  where recFun acc (TyFun x y) = first (x:) (recFun acc y)
         recFun acc x = (acc, x)
 

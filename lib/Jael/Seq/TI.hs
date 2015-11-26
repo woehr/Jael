@@ -4,9 +4,8 @@ module Jael.Seq.TI where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Jael.Seq.HM_AST
-import Jael.Seq.Literal
-import Jael.Seq.HM_Types
+import           Jael.Seq.HM_AST
+import           Jael.Seq.HM_Types
 
 data SeqTIErr = NamedUnificationMismatch Text Text
               | NonUnification Ty Ty
@@ -90,15 +89,15 @@ instantiation (PolyTy vs ty) = do
 -- Most general unifier. Used in the application rule for determining the return
 -- type after application to a function
 mgu :: Ty -> Ty -> Either SeqTIErr TySub
-mgu (TFun l1 r1) (TFun l2 r2) = do
+mgu (TyFun l1 r1) (TyFun l2 r2) = do
   sub1 <- mgu l1 l2
   sub2 <- mgu (apply sub1 r1) (apply sub1 r2)
   return $ sub2 `compSub` sub1
 mgu (TyVar u) t = varBind u t
 mgu t (TyVar u) = varBind u t
-mgu TInt    TInt    = Right nullSub
-mgu TBool   TBool   = Right nullSub
-mgu (TNamed n xs) (TNamed m ys) =
+mgu (TySimple TyInt)    (TySimple TyInt)    = Right nullSub
+mgu (TySimple TyBool)   (TySimple TyBool)   = Right nullSub
+mgu (TyNamed n xs) (TyNamed m ys) =
   if n /= m
      then Left $ NamedUnificationMismatch n m
      else foldM (\sub (x, y) ->
@@ -127,7 +126,7 @@ ti env (EApp e1 e2) = do
   tv <- newTV
   (sub1, te1) <- ti env e1
   (sub2, te2) <- ti (apply sub1 env) e2
-  let sub3 = mgu (apply sub2 (tyOf te1)) (TFun (tyOf te2) tv)
+  let sub3 = mgu (apply sub2 (tyOf te1)) (TyFun (tyOf te2) tv)
   case sub3 of
        Left err -> tiError err
        Right sub3' -> return ( sub3' `compSub` sub2 `compSub` sub1
@@ -139,7 +138,7 @@ ti env (EAbs x e) = do
   let (TyEnv env') = remove env x
       env'' = TyEnv $ env' `M.union` M.singleton x (PolyTy [] tv)
   (s1, te1) <- ti env'' e
-  return (s1, mkTyped (TFun (apply s1 tv) (tyOf te1)) $ EAbsF x te1)
+  return (s1, mkTyped (TyFun (apply s1 tv) (tyOf te1)) $ EAbsF x te1)
 
 -- Let
 ti env (ELet x e1 e2) = do
@@ -151,10 +150,7 @@ ti env (ELet x e1 e2) = do
   return (s2 `compSub` s1, mkTyped (tyOf te2) $ ELetF x te1 te2)
 
 -- Literals
-ti _ (ELit LUnit)     = return (nullSub, mkTyped TUnit $ ELitF LUnit)
-ti _ (ELit (LInt x))  = return (nullSub, mkTyped TInt  $ ELitF $ LInt x)
-ti _ (ELit (LBool x)) = return (nullSub, mkTyped TBool $ ELitF $ LBool x)
-ti _ (ELit (LBit x))  = return (nullSub, mkTyped TBit  $ ELitF $ LBit x)
+ti _ (ELit lit) = return (nullSub, mkTyped (tyOf lit) $ ELitF lit)
 
 -- Primitives
 ti _ (EPrm x) = return (nullSub, mkTyped (tyOf x) $ EPrmF x)

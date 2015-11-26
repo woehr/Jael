@@ -111,7 +111,7 @@ dropAbs n (HM.TypedEx Ann{unAnn=(HM.EAbsF _ expr)}) = dropAbs (n-1) expr
 dropAbs _ _ = error "Attempted to remove abstraction where there was none."
 
 -- CGEx can't do abstraction so we need to do some juggling to check a function
-typeCheckFunc :: TyEnv -> ([(Text, CGTy)], CGTy, CGEx)
+typeCheckFunc :: TyEnv -> ([(Text, GramTy)], GramTy, CGEx)
               -> Either CGTypeErr ([Ty], Ty, HM.TypedEx)
 typeCheckFunc env (args, retTy, expr) = do
   arityCheck env expr
@@ -129,27 +129,12 @@ typeInf env expr = do
        Left err -> Left $ InferenceErr err
        Right te -> return te
 
--- Partial function. Callers must ensure the type being recovered is not a
--- function type.
-recoverCGTy :: Ty -> CGTy
-recoverCGTy = F.cata alg
-  where alg (TUnitF) = CGTySimple CGUnit
-        alg (TIntF)  = CGTySimple CGInt{ cgIntMin=fromIntegral (minBound::Int32)
-                                       , cgIntMax=fromIntegral (maxBound::Int32)}
-        alg (TBoolF) = CGTySimple CGBool
-        alg (TBitF)  = CGTySimple CGBit{cgBitSize=32}
-        alg (TyVarF n) = CGTyVar n
-        alg (TTupF ts) = CGTyTup ts
-        alg (TNamedF n ts) = CGTyNamed n ts
-        alg (TFunF _ _) = error "Cannot recover a HM function type."
-
 -- Given a type-annotated HM.Ex convert it to a type-annotated CGEx.
 -- The conversion from a CGTy to a Ty is lossy so we need a map of type names to
 -- the original CGTy. Some of the type variables in the original type may now be
 -- replaced with a concrete type.
 recoverCGTypedEx :: HM.TypedEx -> CGTypedEx
-recoverCGTypedEx = F.ana coalg
-  where coalg (HM.TypedEx Ann{ann=ty, unAnn=(HM.EVarF x)}) = CGTypedExF Ann{ann=recoverCGTy ty, unAnn=CGVarF x}
+recoverCGTypedEx = undefined
 
 toHM :: CGEx -> HM.Ex
 toHM = F.cata alg
@@ -199,18 +184,20 @@ gToCGEx (GELogNot    e    ) = CGCallPrm PNot [gToCGEx e]
 
 gToCGEx (GEIf b e1 e2) = CGIf (gToCGEx b) (gLetToCGEx e1) (gLetToCGEx e2)
 
-gToCGEx (GEApp _ []) = notEnoughElements 1 "GEAppArg" "GEApp"
+gToCGEx (GEApp _ []) = error "The grammar should ensure there is always at\
+                            \ least one argument to an application."
 gToCGEx (GEApp (LIdent n) as) = CGCall (pack n) (map (\(GEAppArg x) -> gToCGEx x) as)
-gToCGEx (GEAppScoped _ []) = notEnoughElements 1 "GEAppArg" "GEAppScoped"
+gToCGEx (GEAppScoped _ []) = error "The grammar should ensure there is at least\
+                                  \ one argument to a (scoped) application."
 gToCGEx (GEAppScoped (LScopedIdent n) as) = CGCall (pack n) (map (\(GEAppArg x) -> gToCGEx x) as)
 
 gToCGEx (GEInt i) = CGLit $ LInt $ parseDecInt i
 gToCGEx (GETrue)  = CGLit $ LBool True
 gToCGEx (GEFalse) = CGLit $ LBool False
-gToCGEx (GETup x xs) = let as = map (\(GETupArg a) -> a) (x:xs)
-                        in if null as
-                              then notEnoughElements 1 "GETupArg" "GETup"
-                              else CGTup (map gToCGEx as)
+gToCGEx (GETup x xs) = if null xs
+                          then error "The grammar should ensure at least 2\
+                                    \ tuple arguments."
+                          else CGTup (map (\(GETupArg a) -> gToCGEx a) (x:xs))
 gToCGEx (GEUnit)  = CGLit LUnit
 gToCGEx (GEVar (LIdent i)) = CGVar (pack i)
 

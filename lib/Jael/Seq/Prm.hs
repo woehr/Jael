@@ -17,24 +17,24 @@ data Prm = PAdd
          | PLt
          | PNot
          | PBitCat
-         deriving (Enum, Eq)
+         deriving (Bounded, Enum, Eq)
 
 instance SeqTypable Prm where
-  tyOf (PAdd)   = TFun TInt (TFun TInt TInt)
-  tyOf (PSub)   = TFun TInt (TFun TInt TInt)
-  tyOf (PTimes) = TFun TInt (TFun TInt TInt)
-  tyOf (PDiv)   = TFun TInt (TFun TInt $ TNamed "IntDivRes" [])
-  tyOf (PMod)   = TFun TInt (TFun TInt TInt)
-  tyOf (POr)    = TFun TBool (TFun TBool TBool)
-  tyOf (PAnd)   = TFun TBool (TFun TBool TBool)
-  tyOf (PEq)    = TFun TBool (TFun TBool TBool)
-  tyOf (PNeq)   = TFun TBool (TFun TBool TBool)
-  tyOf (PGeq)   = TFun TBool (TFun TBool TBool)
-  tyOf (PLeq)   = TFun TBool (TFun TBool TBool)
-  tyOf (PGt)    = TFun TBool (TFun TBool TBool)
-  tyOf (PLt)    = TFun TBool (TFun TBool TBool)
-  tyOf (PNot)   = TFun TBool TBool
-  tyOf (PBitCat)= TFun TBit (TFun TBit TBit)
+  tyOf (PAdd)   = TyFun (TySimple TyInt) (TyFun (TySimple TyInt) (TySimple TyInt))
+  tyOf (PSub)   = TyFun (TySimple TyInt) (TyFun (TySimple TyInt) (TySimple TyInt))
+  tyOf (PTimes) = TyFun (TySimple TyInt) (TyFun (TySimple TyInt) (TySimple TyInt))
+  tyOf (PDiv)   = TyFun (TySimple TyInt) (TyFun (TySimple TyInt) $ TyNamed "IntDivRes" [])
+  tyOf (PMod)   = TyFun (TySimple TyInt) (TyFun (TySimple TyInt) (TySimple TyInt))
+  tyOf (POr)    = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
+  tyOf (PAnd)   = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
+  tyOf (PEq)    = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
+  tyOf (PNeq)   = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
+  tyOf (PGeq)   = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
+  tyOf (PLeq)   = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
+  tyOf (PGt)    = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
+  tyOf (PLt)    = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
+  tyOf (PNot)   = TyFun (TySimple TyBool) (TySimple TyBool)
+  tyOf (PBitCat)= TyFun (TySimple TyBit) (TyFun (TySimple TyBit) (TySimple TyBit))
 
 instance Show Prm where
   show (PAdd)    = "+"
@@ -54,7 +54,7 @@ instance Show Prm where
   show (PBitCat) = "#"
 
 allPrm :: [Prm]
-allPrm = [PAdd ..]
+allPrm = [minBound .. maxBound]
 
 prmFuncs :: [(Text, PolyTy)]
 prmFuncs = map (\p -> (tshow p, polyTy $ tyOf p)) allPrm

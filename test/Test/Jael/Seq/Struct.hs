@@ -2,23 +2,24 @@ module Test.Jael.Seq.Struct
 ( structTests
 ) where
 
+import qualified Data.Set as S
 import           Jael.Grammar
 import           Jael.Seq.HM_Types
-import           Jael.Seq.Struct
-import           Jael.UserDefTy
+import           Jael.Seq.UserDefinedType
 import qualified Test.Framework as T
 import           Test.Jael.Util
 
-validator :: GTypeDef -> Either StructDefError [(Text, PolyTy)]
+validator :: GTypeDef -> Either UserDefinedTypeErr [(Text, PolyTy)]
 validator (GTDefStruct (UIdent i) s) =
-  validate' (pack i, gToUserDefTy s :: Struct)
+  let structDef = gStructToUDT s
+   in maybe (Right . seqEnvItems $ (pack i, structDef)) Left (validateUDT structDef)
 validator _ = error "Parsed non-struct typedef"
 
 checkStruct :: (Text, [(Text, PolyTy)]) -> Assertion
 checkStruct =
   checkParsedTypes pGTypeDef ((either (Left . tshow) Right) . validator)
 
-checkErr :: (Text, StructDefError) -> Assertion
+checkErr :: (Text, UserDefinedTypeErr) -> Assertion
 checkErr = checkTDefErr pGTypeDef validator
 
 structTests :: [T.Test]
@@ -30,15 +31,15 @@ structTests =
 structValidSimple :: (Text, [(Text, PolyTy)])
 structValidSimple = (pack [raw|
   struct X { f0 : Int ,f1:Bool}
-|], [ ("x",     PolyTy [] $ TFun TInt (TFun TBool (TNamed "X" [])))
-    , ("x::f0", PolyTy [] $ TFun (TNamed "X" []) TInt)
-    , ("x::f1", PolyTy [] $ TFun (TNamed "X" []) TBool)
+|], [ ("x",     PolyTy [] $ TyFun (TySimple TyInt) (TyFun (TySimple TyBool) (TyNamed "X" [])))
+    , ("x::f0", PolyTy [] $ TyFun (TyNamed "X" []) (TySimple TyInt))
+    , ("x::f1", PolyTy [] $ TyFun (TyNamed "X" []) (TySimple TyBool))
     ]
   )
 
-structDupFields :: (Text, StructDefError)
+structDupFields :: (Text, UserDefinedTypeErr)
 structDupFields = (pack [raw|
   struct X { same : Int , same : Bool }
-|], SDEDupFields ["same"]
+|], UDTDuplicateFieldsErr $ S.fromList ["same"]
   )
 

@@ -137,7 +137,7 @@ emptyProc = pack [raw|
 unusedLinearArg :: (Text, SessTyErr)
 unusedLinearArg = (pack [raw|
   proc X(^x: ?[Int]){ }
-|], UnusedResources{ unusedLin=M.fromList [("x", SGetTy TInt SEnd)]
+|], UnusedResources{ unusedLin=M.fromList [("x", SGetTy (TySimple TyInt) SEnd)]
                    , unusedSeq=M.empty
                    }
   )
@@ -164,7 +164,7 @@ unusedSeqVars = (pack [raw|
   proc X(^x: ?[Int], y: Bool) {
     ^x -> z;
   }
-|], UnusedResources{ unusedSeq=M.fromList [("y", TBool), ("z", TInt)]
+|], UnusedResources{ unusedSeq=M.fromList [("y", (TySimple TyBool)), ("z", (TySimple TyInt))]
                    , unusedLin=M.empty
                    }
   )
@@ -184,7 +184,7 @@ channelGetUnusedLin = (pack [raw|
   proc X(^x: ?[<GetInt>]) {
     ^x -> ^y;
   }
-|], UnusedResources{ unusedLin=M.fromList [("y", SGetTy TInt SEnd)]
+|], UnusedResources{ unusedLin=M.fromList [("y", SGetTy (TySimple TyInt) SEnd)]
                    , unusedSeq=M.empty
                    }
   )
@@ -199,10 +199,10 @@ recDefUnfold = (pack [raw|
     ^x -> z;
   }
 |], UnusedResources{ unusedLin=M.fromList
-                      [ ("x", SCoInd "X" $ SPutTy TInt $ SGetTy TInt $ SVar "X")
-                      , ("y", SCoInd "X" $ SPutTy TInt $ SGetTy TInt $ SVar "X")
+                      [ ("x", SCoInd "X" $ SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SVar "X")
+                      , ("y", SCoInd "X" $ SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SVar "X")
                       ]
-                   , unusedSeq=M.fromList [("z", TInt)]
+                   , unusedSeq=M.fromList [("z", (TySimple TyInt))]
                    }
   )
 
@@ -223,13 +223,13 @@ reusedRecVarInAlias = (pack [raw|
     ^y select a;
   }
 |], UnusedResources{ unusedLin=M.fromList
-                      [ ("x", SCoInd "X" $ SPutTy TInt $ SGetTy TInt $ SVar "X")
+                      [ ("x", SCoInd "X" $ SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SVar "X")
                       , ("y", SCoInd "X" $ SSelect [ ("a", SVar "X")
                                                    , ("b", SVar "AltTxRxInt")
                                                    ]
                         )
                       ]
-                   , unusedSeq=M.fromList [("z", TInt)]
+                   , unusedSeq=M.fromList [("z", (TySimple TyInt))]
                    }
   )
 
@@ -570,15 +570,15 @@ caseTypeErrors = (pack [raw|
     | ^a <- 42; ^a <- 42;
     )
   }
-|], CaseProcErrs $ M.fromList [ ("a", ProtocolMismatch "d" $ SGetTy TInt SEnd)
-                              , ("b", TypeMismatch "z" TBool)
+|], CaseProcErrs $ M.fromList [ ("a", ProtocolMismatch "d" $ SGetTy (TySimple TyInt) SEnd)
+                              , ("b", TypeMismatch "z" (TySimple TyBool))
                               , ("c", UnusedResources
-                                        { unusedLin=M.fromList [("d", SGetTy TInt SEnd)]
+                                        { unusedLin=M.fromList [("d", SGetTy (TySimple TyInt) SEnd)]
                                         , unusedSeq=M.empty
                                         }
                                 )
                               , ("d", UnusedResources
-                                        { unusedLin=M.fromList [("b", SGetTy TInt SEnd)]
+                                        { unusedLin=M.fromList [("b", SGetTy (TySimple TyInt) SEnd)]
                                         , unusedSeq=M.empty
                                         }
                                 )
@@ -697,7 +697,7 @@ coRecResidualEnv = (pack [raw|
     )
   }
 |], UnusedResources
-      { unusedLin=M.fromList [("a", SCoInd "X" $ SPutTy TInt $ SVar "X")]
+      { unusedLin=M.fromList [("a", SCoInd "X" $ SPutTy (TySimple TyInt) $ SVar "X")]
       , unusedSeq=M.empty
       }
   )

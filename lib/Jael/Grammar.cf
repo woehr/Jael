@@ -27,11 +27,18 @@ GTNamedParams.  GTNamedParams ::= "(" [GTNamedParam] ")" ;
 GTTupArg.    GTTupArg ::= GType ;
 separator    nonempty GTTupArg "," ;
 
-GTVars.      GTVars ::= LIdent ;
-terminator   GTVars "" ;
+GIntParam1.      GIntParamOne ::= "<" GAnyInt ">" ;
+GIntParam1Empty. GIntParamOne ::= ;
 
-GTInt.       GType ::= "Int" ;
+GIntParam2.      GIntParamTwo ::= "<" GAnyInt "," GAnyInt ">" ;
+GIntParam2Lower. GIntParamTwo ::= "<" GAnyInt "," ">" ;
+GIntParam2Upper. GIntParamTwo ::= "<" "," GAnyInt ">" ;
+GIntParam2Empty. GIntParamTwo ::= ;
+
+GTBit.       GType ::= "Bit"    GIntParamOne ;
 GTBool.      GType ::= "Bool" ;
+GTBuffer.    GType ::= "Buffer" GIntParamTwo ;
+GTInt.       GType ::= "Int"    GIntParamTwo ;
 GTUnit.      GType ::= "Void" ;
 GTTup.       GType ::= "(" GTTupArg "," [GTTupArg] ")";
 GTNamed.     GType ::= UIdent GTNamedParams ;
@@ -62,11 +69,10 @@ coercions GSession 3 ;
 
 -- Enums
 
-GTEnumElemNoTy.   GTEnumElem ::= LIdent ;
-GTEnumElemWithTy. GTEnumElem ::= LIdent GType ;
-separator         nonempty GTEnumElem "," ;
+GTEnumElem. GTEnumElem ::= LIdent GType ;
+separator nonempty GTEnumElem "," ;
 
-GTEnumDef.   GTEnumDef   ::= "{" [GTEnumElem] "}" ;
+GTEnumDef.  GTEnumDef   ::= "{" [GTEnumElem] "}" ;
 
 -- Structs
 

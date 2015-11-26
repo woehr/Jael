@@ -4,11 +4,9 @@ import qualified Data.Map as M
 import Jael.Grammar
 import Jael.Parser
 import Jael.Seq.CG_AST
-import Jael.Seq.Enum
 import Jael.Seq.Env
 import Jael.Seq.HM_Types
-import Jael.Seq.Struct
-import Jael.UserDefTy
+import Jael.Seq.UserDefinedType
 
 shouldNotParse :: ParseFun a -> Text -> Assertion
 shouldNotParse p t = either (\_ -> return ())
@@ -49,19 +47,17 @@ checkInference testTypes (tx, expected) =
     (GProg prog) <- runParser pGProg testTypes
     let sDefs = mapMaybe (\x -> case x of
                                      (GTopDefGTypeDef (GTDefStruct (UIdent n) m))
-                                       -> Just (pack n, gToUserDefTy m)
+                                       -> Just (pack n, gStructToUDT m)
                                      _ -> Nothing
-                         ) prog :: [(Text, Struct)]
+                         ) prog
     let eDefs = mapMaybe (\x -> case x of
                                      (GTopDefGTypeDef (GTDefEnum (UIdent n) m))
-                                       -> Just (pack n, gToUserDefTy m)
+                                       -> Just (pack n, gEnumToUDT m)
                                      _ -> Nothing
-                         ) prog :: [(Text, Enumer)]
-    let structEnumErrs = mapMaybe (liftA tshow . validate . snd) sDefs ++
-                         mapMaybe (liftA tshow . validate . snd) eDefs
+                         ) prog
+    let structEnumErrs = mapMaybe (liftA tshow . validateUDT . snd) (sDefs ++ eDefs)
     funs <- if null structEnumErrs
-               then Right $ join (map envItems sDefs) ++
-                            join (map envItems eDefs)
+               then Right $ join (map seqEnvItems (sDefs ++ eDefs))
                else Left . intercalate "\n" $ structEnumErrs
     env <- either
              (\x -> Left . intercalate "\n" $ "Duplicates in env: " : x)

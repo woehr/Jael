@@ -47,17 +47,17 @@ testDual = (pack [raw|
            ]
    , e => rec X. ?[Bool] ![Int] <X>
    ]
-|], SGetTy TInt
-  $ SPutSess (SPutTy TInt $ SGetTy TInt $ SEnd)
+|], SGetTy (TySimple TyInt)
+  $ SPutSess (SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SEnd)
   $ SChoice [ ("a", SEnd)
-            , ("b", SGetTy TInt SEnd)
-            , ("c", SPutSess (SPutTy TInt $ SGetTy TInt $ SEnd) SEnd)
+            , ("b", SGetTy (TySimple TyInt) SEnd)
+            , ("c", SPutSess (SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SEnd) SEnd)
             , ("d", SSelect [ ("a", SEnd)
-                            , ("b", SGetTy TInt SEnd)
-                            , ("c", SPutSess (SPutTy TInt $ SGetTy TInt $ SEnd) SEnd)
+                            , ("b", SGetTy (TySimple TyInt) SEnd)
+                            , ("c", SPutSess (SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SEnd) SEnd)
                             ]
               )
-            , ("e", SCoInd "X" $ SPutTy TBool $ SGetTy TInt $ SVar "X")
+            , ("e", SCoInd "X" $ SPutTy (TySimple TyBool) $ SGetTy (TySimple TyInt) $ SVar "X")
             ]
   )
 

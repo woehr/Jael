@@ -6,11 +6,10 @@ import Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
+import Jael.Conc.Session
 import Jael.Seq.CG_AST
 import Jael.Seq.CG_Types
 import Jael.Seq.HM_Types
-import Jael.Conc.Session
-import Jael.UserDefTy
 import Jael.Util
 
 data ProcDefErr = ProcDefErr
@@ -32,16 +31,6 @@ data TyOrSess = TorSTy Ty
 
 data TopProc = TopProc [(Text, TyOrSess)] Proc
   deriving (Show)
-
-instance UserDefTy TopProc where
-  type TGrammar TopProc = ([GProcArg], GProc)
-  type TError   TopProc = ProcDefErr
-  type TEnvItem TopProc = ()
-
-  gToUserDefTy = gToTopProc
-  validate = validateTopProc
-  typeDeps _ = S.empty
-  envItems _ = []
 
 data Proc = PGetChan Channel Channel Proc
           | PGetVal  Channel Text    Proc

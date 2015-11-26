@@ -34,15 +34,13 @@ library
                        Jael.Seq.Builtin
                        Jael.Seq.CG_AST
                        Jael.Seq.CG_Types
-                       Jael.Seq.Enum
                        Jael.Seq.Env
                        Jael.Seq.HM_AST
                        Jael.Seq.HM_Types
                        Jael.Seq.Literal
                        Jael.Seq.Prm
-                       Jael.Seq.Struct
                        Jael.Seq.TI
-                       Jael.UserDefTy
+                       Jael.Seq.UserDefinedType
                        Jael.Util
 
   default-extensions:  DeriveFunctor,

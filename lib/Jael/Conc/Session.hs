@@ -4,24 +4,9 @@ import Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
-import Jael.UserDefTy
 import Jael.Util
 import Jael.Seq.CG_Types
 import Jael.Seq.HM_Types
-
-instance UserDefTy Session where
-  type TGrammar Session = GSession
-  type TError   Session = SessDefErr
-  type TEnvItem Session = ()
-
-  gToUserDefTy = gToSession
-  validate = validateSession
-  -- The way sessions are defined in the grammar currently means they can't
-  -- refer to other session types
-  typeDeps _ = S.empty
-  -- The act of defining a session doesn't create other items that get added
-  -- to the environment (unlike structures or enums which add functions)
-  envItems _ = []
 
 data SessDefErr = SessDefErr
   { sessErrDupInd      :: S.Set Text

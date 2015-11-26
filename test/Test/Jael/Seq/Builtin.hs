@@ -21,16 +21,16 @@ builtinTests =
 
 sIntDivRes :: [(Text, PolyTy)]
 sIntDivRes = [ ( "intDivRes"
-               , PolyTy [] $ TFun TInt
-                                  (TFun TInt
-                                        (TNamed "IntDivRes" [])
-                                  )
+               , PolyTy [] $ TyFun (TySimple TyInt)
+                                   (TyFun (TySimple TyInt)
+                                          (TyNamed "IntDivRes" [])
+                                   )
                )
              , ( "intDivRes::quot"
-               , PolyTy [] $ TFun (TNamed "IntDivRes" []) TInt
+               , PolyTy [] $ TyFun (TyNamed "IntDivRes" []) (TySimple TyInt)
                )
              , ( "intDivRes::rem"
-               , PolyTy [] $ TFun (TNamed "IntDivRes" []) TInt
+               , PolyTy [] $ TyFun (TyNamed "IntDivRes" []) (TySimple TyInt)
                )
              ]
 

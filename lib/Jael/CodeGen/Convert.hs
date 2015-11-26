@@ -19,13 +19,15 @@ class GenLLVM a where
 instance GenLLVM CGTy where
   type LLVMOutput CGTy = Type
   toLLVM = F.cata alg
-    where alg (CGTySimpleF CGUnit) = VoidType
-          alg (CGTySimpleF CGInt{..}) = IntegerType
-            { typeBits=max (numBitsForInt cgIntMin) (numBitsForInt cgIntMax) }
-          alg (CGTySimpleF CGBool) = IntegerType { typeBits=1 }
-          alg (CGTySimpleF CGBit{..}) = IntegerType
-            { typeBits=fromIntegral cgBitSize }
+    where alg (CGTySimpleF BTUnit) = VoidType
+          alg (CGTySimpleF BTBit{..}) = IntegerType
+            { typeBits=fromIntegral btBits }
+          alg (CGTySimpleF BTBool) = IntegerType { typeBits=1 }
+          alg (CGTySimpleF BTBuffer{..}) = undefined
+          alg (CGTySimpleF BTInt{..}) = IntegerType
+            { typeBits=max (numBitsForInt btIntMin) (numBitsForInt btIntMax) }
           alg (CGTyTupF xs) = StructureType { isPacked=False, elementTypes=xs }
+          alg (CGTyNamedF _ _) = undefined
 
 instance GenLLVM CGEx where
   type LLVMOutput CGEx = [BasicBlock]
