@@ -30,8 +30,7 @@ validateUDT (UDTStruct{..}) =
    in if null dups
          then Nothing
          else Just $ UDTDuplicateFieldsErr $ S.fromList dups
-
-
+validateUDT (UDTData) = Nothing
 
 typeDependencies :: UserDefinedType -> S.Set Text
 typeDependencies x =
@@ -39,6 +38,7 @@ typeDependencies x =
    in case x of
            (UDTEnum{..}) -> mergeDeps udteTags
            (UDTStruct{..}) -> mergeDeps udtsFields
+           (UDTData) -> S.empty
 
 seqEnvItems :: (Text, UserDefinedType) -> [(Text, PolyTy)]
 seqEnvItems (n, UDTEnum{..}) =
@@ -54,6 +54,8 @@ seqEnvItems (n, UDTStruct{..}) =
   in (nLowered, PolyTy [] consTy)
      : map (\(f, t) -> (nLowered <> "::" <> f, PolyTy [] $ TyFun structTy (tyOf t))
            ) udtsFields
+
+seqEnvItems (_, UDTData) = []
 
 gToField :: GTStructElement -> (Text, GramTy)
 gToField (GTStructElement (LIdent gfn) gt) = (pack gfn, gToType gt)

@@ -20,6 +20,9 @@ library
                        Jael.CodeGen.Module
                        Jael.CodeGen.Passes
                        Jael.Compile
+                       Jael.Compile.Common
+                       Jael.Compile.Stage1
+                       Jael.Compile.Stage2
                        Jael.Conc.Env
                        Jael.Conc.Proc
                        Jael.Conc.Session

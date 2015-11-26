@@ -1,0 +1,183 @@
+{-# Language RecordWildCards #-}
+
+module Jael.Compile.Stage1 where
+
+import qualified Data.Map as M
+import qualified Data.Set as S
+import Jael.Grammar
+import Jael.Parser
+import Jael.Util
+import Jael.Compile.Common
+import Jael.Conc.Proc
+import Jael.Conc.Session
+import Jael.Seq.CG_AST
+import Jael.Seq.CG_Types
+import Jael.Seq.UserDefinedType
+
+gGlobToTop :: GExpr -> TopExpr CGEx t
+gGlobToTop e = TopGlob { tgExpr = gToCGEx e }
+
+gFuncToTop :: [GFuncArg] -> GType -> GExpr -> TopExpr CGEx GramTy
+gFuncToTop as rt e = TopFunc { tfArgs = map (\(GFuncArg (LIdent n) t) ->
+                                                (pack n, gToType t)
+                                            )
+                                            as
+                             , tfRetTy = gToType rt
+                             , tfExpr = gToCGEx e
+                             }
+
+gToTopArea :: GAnyInt -> UIdent -> TopArea
+gToTopArea i (UIdent t) = TopArea { taAddr = parseAnyInt i, taType = pack t }
+
+-- splits the top level definition into its different types of components
+splitTop :: GProg -> ( [(Text, TopExpr CGEx GramTy)]
+                     , [(Text, UserDefinedType)]
+                     , [(Text, TopArea)]
+                     , [(Text, Session)]
+                     , [(Text, TopProc)]
+                     )
+splitTop (GProg xs) = foldr (\x (a, b, c, d, e) ->
+  case x of
+       (GTopDefGGlobal (GGlobal (LIdent n) y))
+         -> ((pack n, gGlobToTop y)                      :a,b,c,d,e)
+       (GTopDefGFunc (GFunc (GFuncName (LIdent n)) as retTy fnBody))
+         -> ((pack n, gFuncToTop as retTy fnBody)        :a,b,c,d,e)
+       (GTopDefGTypeDef (GTDefStruct (UIdent n) y))
+         -> (a,(pack n, gStructToUDT y)                    :b,c,d,e)
+       (GTopDefGTypeDef (GTDefEnum (UIdent n) y))
+         -> (a,(pack n, gEnumToUDT y)                      :b,c,d,e)
+       (GTopDefGTypeDef (GTDefArea (UIdent n) addr ty))
+         -> (a,b,(pack n, gToTopArea addr ty)                :c,d,e)
+       (GTopDefGTypeDef (GTDefProto (UIdent n) y))
+         -> (a,b,c,(pack n, dual $ gToSession y)               :d,e)
+       (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) ys p))
+         -> (a,b,c,d,(pack n, gToTopProc (ys, p))                :e)
+  ) ([],[],[],[],[]) xs
+
+dupDefs :: [Text] -> CompileErrM ()
+dupDefs ns =
+  let repeats = repeated ns
+   in unless (null repeats) (throwError $ DupDef repeats)
+
+shadowingDef :: [Text] -> [(Text, TopProc)] -> CompileErrM ()
+shadowingDef ns ps =
+  let nameSet = S.fromList ns
+      redefMap = foldr (\(n, TopProc _ p) a ->
+          let redefs = redefinedCoRecVar nameSet p
+           in if S.size redefs /= 0
+                 then M.insert n redefs a
+                 else a
+        ) M.empty ps
+   in unless (null redefMap)
+        $ throwError $ AmbigName redefMap
+
+nameChecks :: ( [(Text, TopExpr CGEx GramTy)]
+              , [(Text, UserDefinedType)]
+              , [(Text, TopArea)]
+              , [(Text, Session)]
+              , [(Text, TopProc)]
+              )
+           -> CompileErrM ()
+nameChecks (exprs, udts, areas, protocols, procs) = do
+  let topLevelNames = map fst exprs     ++
+                      map fst udts     ++
+                      map fst areas     ++
+                      map fst protocols ++
+                      map fst procs
+
+  -- Find duplicate name definitions
+  dupDefs topLevelNames
+
+  -- Checks for recursive process names that conflict
+  shadowingDef topLevelNames procs
+
+defErrs :: [UserDefinedType]
+        -> [Session]
+        -> [TopProc]
+        -> CompileErrM ()
+defErrs udts ss ps =
+  let errs = mapMaybe (liftA (pack . show) . validateUDT) udts
+          ++ mapMaybe (liftA (pack . show) . validateSession) ss
+          ++ mapMaybe (liftA (pack . show) . validateTopProc) ps
+   in unless (null errs)
+        $ throwError $ TypeDefErr errs
+
+undefinedNames :: M.Map Text (S.Set Text) -> CompileErrM ()
+undefinedNames depMap =
+  case hasUndefined depMap of
+       Just undefed -> throwError $ UndefName undefed
+       Nothing -> return ()
+
+exprFreeVars :: TopExpr CGEx t -> S.Set Text
+exprFreeVars (TopGlob{..}) = freeVars tgExpr
+exprFreeVars (TopFunc{..}) = freeVars tfExpr S.\\ S.fromList (map fst tfArgs)
+
+nameCycle :: M.Map Text (S.Set Text) -> CompileErrM [Text]
+nameCycle depMap =
+  case findCycles depMap of
+       Left cycles -> throwError $ DepCycle cycles
+       Right order -> return order
+
+-- Checks for circular dependencies in types, expressions, and processes
+-- Returns the order in which expressions and types should be processed
+dependencyAndUndefinedChecks :: M.Map Text (TopExpr CGEx GramTy)
+                             -> M.Map Text UserDefinedType
+                             -> M.Map Text Session
+                             -> M.Map Text TopProc
+                             -> CompileErrM [Text]
+dependencyAndUndefinedChecks exprs udts protocols procs = do
+  -- Find uses of undefined variables
+  let exprDepMap = M.map exprFreeVars exprs
+  undefinedNames exprDepMap
+  exprOrder <- liftM reverse $ nameCycle exprDepMap
+
+  -- Find uses of undefined types
+  let typeDepMap = M.map typeDependencies udts
+  undefinedNames typeDepMap
+  _ <- liftM reverse $ nameCycle typeDepMap
+
+  -- Find uses of undefined sessions
+  let sessDepMap = M.map freeIndVars protocols
+  undefinedNames sessDepMap
+  _ <- nameCycle sessDepMap
+
+  -- Processes on the other hand can continue with a process by name, and they
+  -- can not be called recursively (recursion must be explicitly defined).
+  let procDepMap = M.map procDeps procs
+  undefinedNames procDepMap
+
+  -- Processes are explicitly typed so the order in which they're processed does
+  -- not matter. We still need to check for and prevent recursion between and
+  -- within named processes
+  _ <- nameCycle procDepMap
+
+  return exprOrder
+
+stage1 :: Text -> CompileErrM ([Text], Program)
+stage1 p = do
+  prog <- case parseProgram p of
+               Left e  -> throwError $ ParseErr e
+               Right x -> return x
+
+  let components@(lExprs, lUDTs, lAreas, lProtocols, lProcs)
+        = splitTop prog
+
+  nameChecks components
+
+  -- No more chance of duplicate names, so now we use a map.
+  let progMaps@(exprs, udts, _, protocols, procs) =
+        ( M.fromList lExprs
+        , M.fromList lUDTs
+        , M.fromList lAreas
+        , M.fromList lProtocols
+        , M.fromList lProcs
+        )
+
+  -- Check for errors in a definition
+  defErrs (M.elems udts)
+          (M.elems protocols)
+          (M.elems procs)
+
+  exprOrder <- dependencyAndUndefinedChecks exprs udts protocols procs
+  return (exprOrder, progMaps)
+

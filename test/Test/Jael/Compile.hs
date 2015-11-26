@@ -5,6 +5,7 @@ module Test.Jael.Compile
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Jael.Compile
+import           Jael.Compile.Common
 import           Jael.Seq.CG_AST (CGTypeErr(..))
 import qualified Test.Framework as T
 
