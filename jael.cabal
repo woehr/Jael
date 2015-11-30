@@ -34,15 +34,13 @@ library
                        Jael.Grammar.Par
                        Jael.Grammar.Print
                        Jael.Parser
-                       Jael.Seq.Builtin
                        Jael.Seq.CG_AST
-                       Jael.Seq.CG_Types
                        Jael.Seq.Env
                        Jael.Seq.HM_AST
-                       Jael.Seq.HM_Types
                        Jael.Seq.Literal
                        Jael.Seq.Prm
                        Jael.Seq.TI
+                       Jael.Seq.Types
                        Jael.Seq.UserDefinedType
                        Jael.Util
 

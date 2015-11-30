@@ -1,6 +1,6 @@
 module Jael.Seq.Prm where
 
-import Jael.Seq.HM_Types
+import Jael.Seq.Types
 
 data Prm = PAdd
          | PSub
@@ -19,22 +19,22 @@ data Prm = PAdd
          | PBitCat
          deriving (Bounded, Enum, Eq)
 
-instance SeqTypable Prm where
-  tyOf (PAdd)   = TyFun (TySimple TyInt) (TyFun (TySimple TyInt) (TySimple TyInt))
-  tyOf (PSub)   = TyFun (TySimple TyInt) (TyFun (TySimple TyInt) (TySimple TyInt))
-  tyOf (PTimes) = TyFun (TySimple TyInt) (TyFun (TySimple TyInt) (TySimple TyInt))
-  tyOf (PDiv)   = TyFun (TySimple TyInt) (TyFun (TySimple TyInt) $ TyNamed "IntDivRes" [])
-  tyOf (PMod)   = TyFun (TySimple TyInt) (TyFun (TySimple TyInt) (TySimple TyInt))
-  tyOf (POr)    = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
-  tyOf (PAnd)   = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
-  tyOf (PEq)    = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
-  tyOf (PNeq)   = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
-  tyOf (PGeq)   = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
-  tyOf (PLeq)   = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
-  tyOf (PGt)    = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
-  tyOf (PLt)    = TyFun (TySimple TyBool) (TyFun (TySimple TyBool) (TySimple TyBool))
-  tyOf (PNot)   = TyFun (TySimple TyBool) (TySimple TyBool)
-  tyOf (PBitCat)= TyFun (TySimple TyBit) (TyFun (TySimple TyBit) (TySimple TyBit))
+instance HMTypable Prm where
+  hmTyOf (PAdd)   = HMTyFun HMTyInt  (HMTyFun HMTyInt   HMTyInt)
+  hmTyOf (PSub)   = HMTyFun HMTyInt  (HMTyFun HMTyInt   HMTyInt)
+  hmTyOf (PTimes) = HMTyFun HMTyInt  (HMTyFun HMTyInt   HMTyInt)
+  hmTyOf (PDiv)   = HMTyFun HMTyInt  (HMTyFun HMTyInt   (HMTyNamed "IntDivRes" []))
+  hmTyOf (PMod)   = HMTyFun HMTyInt  (HMTyFun HMTyInt   HMTyInt)
+  hmTyOf (POr)    = HMTyFun HMTyBool (HMTyFun HMTyBool  HMTyBool)
+  hmTyOf (PAnd)   = HMTyFun HMTyBool (HMTyFun HMTyBool  HMTyBool)
+  hmTyOf (PEq)    = HMTyFun HMTyBool (HMTyFun HMTyBool  HMTyBool)
+  hmTyOf (PNeq)   = HMTyFun HMTyBool (HMTyFun HMTyBool  HMTyBool)
+  hmTyOf (PGeq)   = HMTyFun HMTyBool (HMTyFun HMTyBool  HMTyBool)
+  hmTyOf (PLeq)   = HMTyFun HMTyBool (HMTyFun HMTyBool  HMTyBool)
+  hmTyOf (PGt)    = HMTyFun HMTyBool (HMTyFun HMTyBool  HMTyBool)
+  hmTyOf (PLt)    = HMTyFun HMTyBool (HMTyFun HMTyBool  HMTyBool)
+  hmTyOf (PNot)   = HMTyFun HMTyBool HMTyBool
+  hmTyOf (PBitCat)= HMTyFun HMTyBit  (HMTyFun HMTyBit HMTyBit)
 
 instance Show Prm where
   show (PAdd)    = "+"
@@ -56,8 +56,8 @@ instance Show Prm where
 allPrm :: [Prm]
 allPrm = [minBound .. maxBound]
 
-prmFuncs :: [(Text, PolyTy)]
-prmFuncs = map (\p -> (tshow p, polyTy $ tyOf p)) allPrm
+prmFuncs :: [(Text, HMPolyTy)]
+prmFuncs = map (\p -> (tshow p, polyTy $ hmTyOf p)) allPrm
 
 readPrm :: Text -> Maybe Prm
 readPrm s = case s of

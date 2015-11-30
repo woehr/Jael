@@ -4,7 +4,7 @@ module Jael.CodeGen.Convert where
 
 import qualified Data.Functor.Foldable as F
 import           Jael.Seq.CG_AST
-import           Jael.Seq.CG_Types
+import           Jael.Seq.Types
 import           Jael.Seq.Literal
 --import           Jael.Seq.Prm
 import           LLVM.General.AST

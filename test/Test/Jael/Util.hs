@@ -85,3 +85,38 @@ envEq (TyEnv expected) (TyEnv actual) =
                  )
                  (M.size expected == M.size inter && and inter)
 
+-- Two PolyTy are equivalent when their structure is the same and there exists a
+-- one-to-one mapping of the type variables of both types to each other.
+-- a -> b -> b is equivalent to b -> c -> c because the substituion a->b; b->c
+-- makes the first into the second and b->a; c->b makes the second.
+tyEquiv :: Ty -> Ty -> Bool
+tyEquiv t u =
+    case mkSub M.empty t u of
+         Nothing -> False
+         Just s  -> apply s t == u
+    where mkSub :: TySub -> Ty -> Ty -> Maybe TySub
+          mkSub sub (TyVar a) b@(TyVar bname) =
+            case M.lookup a sub of
+                 Just (TyVar b'name) -> if bname == b'name
+                                          then Just sub
+                                          else Nothing
+                 _ -> Just (M.insert a b sub)
+          mkSub sub (TyNamed n as) (TyNamed m bs) =
+            if n == m && length as == length bs
+               then foldM (\acc (a, b) -> mkSub acc a b) sub (zip as bs)
+               else Nothing
+          mkSub sub (TyTup as) (TyTup bs) =
+            if length as == length bs
+               then foldM (\acc (a, b) -> mkSub acc a b) sub (zip as bs)
+               else Nothing
+          mkSub sub (TyFun a a') (TyFun b b') =
+            case mkSub sub a b of
+                 Just sub' -> mkSub sub' a' b'
+                 Nothing -> Nothing
+          mkSub sub a b = if a == b
+                             then Just sub
+                             else Nothing
+
+polyEquiv :: PolyTy -> PolyTy -> Bool
+polyEquiv (PolyTy _ t) (PolyTy _ u) = t `tyEquiv` u
+

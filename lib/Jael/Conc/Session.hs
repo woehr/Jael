@@ -5,8 +5,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Util
-import Jael.Seq.CG_Types
-import Jael.Seq.HM_Types
+import Jael.Seq.Types
 
 data SessDefErr = SessDefErr
   { sessErrDupInd      :: S.Set Text
@@ -16,8 +15,8 @@ data SessDefErr = SessDefErr
   , sessErrNoBehaviour :: S.Set Text
   } deriving (Eq, Show)
 
-data Session = SGetTy Ty Session
-             | SPutTy Ty Session
+data Session = SGetTy S1Ty Session
+             | SPutTy S1Ty Session
              | SGetSess Session Session
              | SPutSess Session Session
              | SChoice [(Text, Session)]
@@ -31,8 +30,8 @@ data Session = SGetTy Ty Session
 -- Some functions in this module recurse into the session in SGetSess and
 -- SPutSess while others do not. This is why that session is a Session instead
 -- of an "a"
-data SessionF a = SGetTyF Ty a
-                | SPutTyF Ty a
+data SessionF a = SGetTyF S1Ty a
+                | SPutTyF S1Ty a
                 | SGetSessF Session a
                 | SPutSessF Session a
                 | SChoiceF [(Text, a)]
@@ -112,9 +111,9 @@ gToSession = ana coalg
         coalg (GSessVar (UIdent var)) = SVarF (pack var)
         coalg (GSessVarDual (UIdent var)) = SDualVarF (pack var)
         coalg (GSessRec (UIdent var) c) = SCoIndF (pack var) c
-        coalg (GSessGet (GSessTy t) c) = SGetTyF ((tyOf . gToType) t) c
+        coalg (GSessGet (GSessTy t) c) = SGetTyF (gToType t) c
         coalg (GSessGet (GSessSess s) c) = SGetSessF (gToSession s) c
-        coalg (GSessPut (GSessTy t) c) = SPutTyF ((tyOf . gToType) t) c
+        coalg (GSessPut (GSessTy t) c) = SPutTyF (gToType t) c
         coalg (GSessPut (GSessSess s) c) = SPutSessF (gToSession s) c
         coalg (GSessSel ss) = SSelectF (convLabelList ss)
         coalg (GSessCho ss) = SChoiceF (convLabelList ss)

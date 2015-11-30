@@ -4,7 +4,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Conc.Proc
 import Jael.Conc.Session
-import Jael.Seq.HM_Types
+import Jael.Seq.Types
 
 data EnvValue = NewLinear Channel Channel Session
               | RxdLinear Channel Session

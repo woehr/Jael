@@ -11,7 +11,7 @@ import Jael.Compile.Common
 import Jael.Conc.Proc
 import Jael.Conc.Session
 import Jael.Seq.CG_AST
-import Jael.Seq.CG_Types
+import Jael.Seq.Types
 import Jael.Seq.UserDefinedType
 
 gGlobToTop :: GExpr -> TopExpr CGEx t
@@ -153,7 +153,7 @@ dependencyAndUndefinedChecks exprs udts protocols procs = do
 
   return exprOrder
 
-stage1 :: Text -> CompileErrM ([Text], Program)
+stage1 :: Text -> CompileErrM Stage1
 stage1 p = do
   prog <- case parseProgram p of
                Left e  -> throwError $ ParseErr e
@@ -179,5 +179,12 @@ stage1 p = do
           (M.elems procs)
 
   exprOrder <- dependencyAndUndefinedChecks exprs udts protocols procs
-  return (exprOrder, progMaps)
+  return Stage1
+           { s1Exprs     = exprs
+           , s1Udts      = udts
+           , s1Areas     = areas
+           , s1Protos    = protocols
+           , s1Procs     = procs
+           , s1ExprOrder = exprOrder
+           }
 

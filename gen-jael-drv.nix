@@ -20,8 +20,7 @@ let
     buildInputs = [pkgs.cabal2nix];
   };
 
-  #shell-inputs = (with ghc; [cabal-install]);
-  shell-inputs = (with ghc; [cabal-install ghc-mod]);
+  shell-inputs = [];
 
   # Override function common to default and shell derivations
   overrideJael = extra-inputs: drv: (stdenv.lib.overrideDerivation drv (old: {

@@ -8,8 +8,7 @@ import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Conc.Session
 import Jael.Seq.CG_AST
-import Jael.Seq.CG_Types
-import Jael.Seq.HM_Types
+import Jael.Seq.Types
 import Jael.Util
 
 data ProcDefErr = ProcDefErr

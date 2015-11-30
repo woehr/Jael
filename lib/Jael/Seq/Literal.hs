@@ -1,6 +1,6 @@
 module Jael.Seq.Literal where
 
-import Jael.Seq.HM_Types
+import Jael.Seq.Types
 
 data BitValue = BVSet
               | BVNotSet
@@ -12,9 +12,9 @@ data Literal = LUnit
              | LBit [BitValue] -- MSB at front of list
              deriving (Eq, Show)
 
-instance SeqTypable Literal where
-  tyOf (LUnit)   = TySimple TyUnit
-  tyOf (LInt _)  = TySimple TyInt
-  tyOf (LBool _) = TySimple TyBool
-  tyOf (LBit _)  = TySimple TyBit
+instance HMTypable Literal where
+  hmTyOf (LUnit)   = HMTyUnit
+  hmTyOf (LInt _)  = HMTyInt
+  hmTyOf (LBool _) = HMTyBool
+  hmTyOf (LBit _)  = HMTyBit
 

@@ -7,12 +7,12 @@ import Jael.Compile.Stage2
 -- Split the compilation process into somewhat arbitrary stages to facilitate
 -- easier testing.
 compile :: Text -> CompileErrM Text
-compile p =
+compile =
   -- Stage 1 parses the program and does basic sanity checks on various things
   -- later stages assume.
   -- Stage 1 returns the orders in which to process things and maps of names to
   -- structures for the various program constructs.
-  stage1 p
+  stage1 >=>
 
   -- Stage 2 processes sequential constructs. It does type inference and
   -- constraint checking.
@@ -22,7 +22,7 @@ compile p =
   --   2) an map of typed expressions, possibly still with type variables (at
   --      this point all constraints on types ints, bits, buffers should be
   --      known)
-  >>= \(exprOrder, (exprs, udts, _, _, _)) -> stage2 exprs exprOrder udts
+  stage2 >=>
 
   -- Stage 3 type checks all the processes in the program. This includes type
   -- checking/inference on sequential fragments within processes, which are
@@ -30,7 +30,7 @@ compile p =
   -- in the future, perhaps for code space or performance, but for now this
   -- should suffice. I expect that the LLVM optimizer will take care of most
   -- redundancy passing arguments around.
-  >>= \(seqEnv, cgTopExprs) -> return "Unimplemented"
+  (\_ -> return "Unimplemented")
 
   -- Stage 4 monomorphizes all sequential code and converts it to the AST that
   -- is transformed to LLVM IR. The LLVM IR is optimized and the worst case

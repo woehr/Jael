@@ -4,12 +4,11 @@ import qualified Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 import           Jael.Grammar
-import           Jael.Seq.CG_Types
 import qualified Jael.Seq.HM_AST as HM
-import           Jael.Seq.HM_Types
 import           Jael.Seq.Literal
 import           Jael.Seq.Prm
 import           Jael.Seq.TI (SeqTIErr, mgu, seqInferTypedEx)
+import           Jael.Seq.Types
 import           Jael.Util
 
 data CGEx = CGCall Text [CGEx]

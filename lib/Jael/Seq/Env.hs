@@ -1,37 +1,42 @@
-module Jael.Seq.Env
-( defaultEnv
-, addToEnv
-) where
+module Jael.Seq.Env where
 
-import Jael.Seq.Builtin
-import Jael.Seq.HM_Types
-import Jael.Seq.Prm
-import Jael.Seq.UserDefinedType
-import Jael.Util
+import qualified Data.Map as M
+import qualified Data.Set as S
+import           Jael.Seq.Types
+import           Jael.Seq.Prm
+import           Jael.Util
 
-defaultEnv :: TyEnv
+newtype HMTyEnv = HMTyEnv (M.Map Text HMPolyTy)
+  deriving (Show)
+
+instance TIOps HMTyEnv where
+  ftv (HMTyEnv env) = S.unions . map ftv . M.elems $ env
+  apply sub (HMTyEnv env) = HMTyEnv $ M.map (apply sub) env
+
+defaultEnv :: HMTyEnv
 defaultEnv =
-  case builtinErrs of
-       Just es -> error $ unpack . intercalate "\n"
-                        $ "Errors validating builtins:" : es
-       Nothing -> case addToEnv builtinFuncs $
-                         prmFuncs ++
-                         concatMap seqEnvItems builtinTypes
-                  of
-                       Left dups -> error $ unpack . intercalate "\n"
-                                          $ "Duplicates in environment when\
-                                            \ adding builtins:" : dups
-                       Right env' -> env'
+  case addToEnv builtinFuncs prmFuncs of
+       Left dups -> error $ unpack . intercalate "\n"
+                          $ "Duplicates in environment when adding builtins:"
+                            :dups
+       Right env' -> env'
 
-userDefErr :: (Text, UserDefinedType) -> Maybe Text
-userDefErr (n, t) =
-  case validateUDT t of
-       Just e -> Just $ "Error validating " <> n <> ":\n\t" <> (pack . show) e
-       Nothing -> Nothing
+addToEnv :: HMTyEnv -> [(Text, HMPolyTy)] -> Either [Text] HMTyEnv
+addToEnv (HMTyEnv env) = liftA HMTyEnv . insertCollectDups env
 
-builtinErrs :: Maybe [Text]
-builtinErrs = mapM userDefErr builtinTypes
+maxBuiltinTupSize :: Int
+maxBuiltinTupSize = 10
 
-addToEnv :: TyEnv -> [(Text, PolyTy)] -> Either [Text] TyEnv
-addToEnv (TyEnv env) = liftA TyEnv . insertCollectDups env
+buildTup :: Int -> (Text, HMPolyTy)
+buildTup i | i < 2 = error "Tuples need at least 2 elements"
+buildTup i = (tupFun i, HMPolyTy (map tshow [1..i]) $ buildTupTy 1)
+  where buildTupTy x | x == i+1 = HMTyTup $ map (HMTyVar . tshow) [1..i]
+        buildTupTy x = HMTyFun (HMTyVar $ tshow x) (buildTupTy $ x+1)
+
+builtinFuncs :: HMTyEnv
+builtinFuncs = HMTyEnv $ M.fromList $
+  ( "if"
+  , HMPolyTy ["a"] $ HMTyFun HMTyBool $ HMTyFun (HMTyVar "a") $ HMTyFun (HMTyVar "a") (HMTyVar "a")
+  )
+  : map buildTup [2..maxBuiltinTupSize]
 

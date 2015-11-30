@@ -6,9 +6,8 @@ import qualified Data.Map as M
 import           Jael.Compile.Common
 import           Jael.Seq.Env
 import           Jael.Seq.CG_AST
-import           Jael.Seq.CG_Types
 import           Jael.Seq.HM_AST
-import           Jael.Seq.HM_Types
+import           Jael.Seq.Types
 import           Jael.Seq.UserDefinedType
 
 addToTyEnv :: TyEnv -> [(Text, PolyTy)] -> CompileErrM TyEnv
@@ -51,11 +50,9 @@ typeCheckSeq exprs order env =
                          \ top level expressions."
     ) (env, M.empty) order
 
-stage2 :: M.Map Text (TopExpr CGEx GramTy)
-       -> [Text]
-       -> M.Map Text UserDefinedType
-       -> CompileErrM (TyEnv, M.Map Text (TopExpr CGTypedEx GramTy))
-stage2 exprs exprOrder udts = do
+stage2 :: Stage1
+       -> CompileErrM Stage2
+stage2 s1@(Stage1{..}) = do
   env <- processSeqTypes defaultEnv udts
 
   -- The TopExpr map is returned with CG types and expr replaced by HM ones
@@ -65,5 +62,9 @@ stage2 exprs exprOrder udts = do
   -- solve constraints on builtin types that have them.
   -- TODO
 
-  undefined env' hmTopExpr
+  return Stage2
+           { s1Data   = s1
+           , s2SeqEnv = env'
+           , s2Exprs  = undefined
+           }
 

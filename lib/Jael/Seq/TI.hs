@@ -4,12 +4,13 @@ module Jael.Seq.TI where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
+import           Jael.Seq.Env
 import           Jael.Seq.HM_AST
-import           Jael.Seq.HM_Types
+import           Jael.Seq.Types
 
 data SeqTIErr = NamedUnificationMismatch Text Text
-              | NonUnification Ty Ty
-              | FreeTyVarBind Text Ty
+              | NonUnification HMTy HMTy
+              | FreeTyVarBind Text HMTy
               | UnboundVar Text
   deriving (Eq, Show)
 
@@ -33,10 +34,12 @@ instance Applicative SeqTI where
 instance Functor SeqTI where
   fmap = liftM
 
-seqInfer :: TyEnv -> Ex -> Either SeqTIErr Ty
+type HMTySub = M.Map Text HMTy
+
+seqInfer :: HMTyEnv -> Ex -> Either SeqTIErr HMTy
 seqInfer env = runSeqTI . seqTypeInference env
 
-seqInferTypedEx :: TyEnv -> Ex -> Either SeqTIErr TypedEx
+seqInferTypedEx :: HMTyEnv -> Ex -> Either SeqTIErr HMTypedEx
 seqInferTypedEx env = runSeqTI . seqTypedExInference env
 
 runSeqTI :: SeqTI a -> Either SeqTIErr a
@@ -44,10 +47,10 @@ runSeqTI t = let (SeqTI stateFunc) = t
                  initState = SeqTIState{ tvCount = 0 }
               in fst (stateFunc initState)
 
-seqTypeInference :: TyEnv -> Ex -> SeqTI Ty
-seqTypeInference env = liftM tyOf . seqTypedExInference env
+seqTypeInference :: HMTyEnv -> Ex -> SeqTI HMTy
+seqTypeInference env = liftM hmTyOf . seqTypedExInference env
 
-seqTypedExInference :: TyEnv -> Ex -> SeqTI TypedEx
+seqTypedExInference :: HMTyEnv -> Ex -> SeqTI HMTypedEx
 seqTypedExInference env e = do
   (sub, te) <- ti env e
   return $ apply sub te
@@ -58,64 +61,69 @@ getTvCount = SeqTI $ \s -> (Right (tvCount s), s)
 incTvCount :: SeqTI ()
 incTvCount = SeqTI $ \s -> (Right (), s{tvCount = tvCount s + 1})
 
-newTV :: SeqTI Ty
-newTV = getTvCount >>= (\i -> (incTvCount >>) $ return . TyVar $ "a" <> (pack . show) i)
+newTV :: SeqTI HMTy
+newTV = getTvCount >>= (\i -> (incTvCount >>) $ return . HMTyVar $ "a" <> (pack . show) i)
 
 -- Halts inference and records the error
 tiError :: SeqTIErr -> SeqTI a
 tiError err = SeqTI $ \s -> (Left err, s)
 
-remove :: TyEnv -> Text -> TyEnv
-remove (TyEnv env) t = TyEnv $ M.delete t env
+teRemove :: HMTyEnv -> Text -> HMTyEnv
+teRemove (HMTyEnv env) t = HMTyEnv $ M.delete t env
 
-nullSub :: TySub
+teInsert :: Text -> HMPolyTy -> HMTyEnv -> HMTyEnv
+teInsert x t (HMTyEnv m) = HMTyEnv $ M.insert x t m
+
+teLookup :: Text -> HMTyEnv -> Maybe HMPolyTy
+teLookup x (HMTyEnv m) = M.lookup x m
+
+nullSub :: HMTySub
 nullSub = M.empty
 
-compSub :: TySub -> TySub -> TySub
+compSub :: HMTySub -> HMTySub -> HMTySub
 compSub a b = M.map (apply a) b `M.union` a
 
 -- Creates a scheme from a type by adding the qualified type variables of the
 -- environment
-generalization :: TyEnv -> Ty -> PolyTy
-generalization env t = PolyTy (S.toList $ ftv t `S.difference` ftv env) t
+generalization :: HMTyEnv -> HMTy -> HMPolyTy
+generalization env t = HMPolyTy (S.toList $ ftv t `S.difference` ftv env) t
 
 -- Creates a type from a scheme by making new type variables and applying
 -- a substituion from the old to the new
-instantiation :: PolyTy -> SeqTI Ty
-instantiation (PolyTy vs ty) = do
+instantiation :: HMPolyTy -> SeqTI HMTy
+instantiation (HMPolyTy vs ty) = do
   nvs <- mapM (const newTV) vs
   return $ apply (M.fromList $ zip vs nvs) ty
 
 -- Most general unifier. Used in the application rule for determining the return
 -- type after application to a function
-mgu :: Ty -> Ty -> Either SeqTIErr TySub
-mgu (TyFun l1 r1) (TyFun l2 r2) = do
+mgu :: HMTy -> HMTy -> Either SeqTIErr HMTySub
+mgu (HMTyFun l1 r1) (HMTyFun l2 r2) = do
   sub1 <- mgu l1 l2
   sub2 <- mgu (apply sub1 r1) (apply sub1 r2)
   return $ sub2 `compSub` sub1
-mgu (TyVar u) t = varBind u t
-mgu t (TyVar u) = varBind u t
-mgu (TySimple TyInt)    (TySimple TyInt)    = Right nullSub
-mgu (TySimple TyBool)   (TySimple TyBool)   = Right nullSub
-mgu (TyNamed n xs) (TyNamed m ys) =
+mgu (HMTyVar u) t = varBind u t
+mgu t (HMTyVar u) = varBind u t
+mgu (HMTyNamed n xs) (HMTyNamed m ys) =
   if n /= m
      then Left $ NamedUnificationMismatch n m
      else foldM (\sub (x, y) ->
                    liftA (M.unionWith (error "Expected unique keys") sub) (mgu x y)
                 ) M.empty (zip xs ys)
+mgu t1 t2 | t1 == t2 = Right nullSub
 mgu t1 t2 = Left $ NonUnification t1 t2
 
-varBind :: Text -> Ty -> Either SeqTIErr TySub
-varBind u t@(TyVar t')
+varBind :: Text -> HMTy -> Either SeqTIErr HMTySub
+varBind u t@(HMTyVar t')
   | u == t'    = Right nullSub
   | otherwise  = Right $ M.singleton u t
 varBind u t
   | S.member u (ftv t) = Left $ FreeTyVarBind u t
   | otherwise          = Right $ M.singleton u t
 
-ti :: TyEnv -> Ex -> SeqTI (TySub, TypedEx)
+ti :: HMTyEnv -> Ex -> SeqTI (HMTySub, HMTypedEx)
 -- Variables
-ti (TyEnv env) (EVar v) = case M.lookup v env of
+ti env (EVar v) = case teLookup v env of
     Nothing -> tiError $ UnboundVar v
     Just sigma -> do
        t <- instantiation sigma
@@ -126,7 +134,7 @@ ti env (EApp e1 e2) = do
   tv <- newTV
   (sub1, te1) <- ti env e1
   (sub2, te2) <- ti (apply sub1 env) e2
-  let sub3 = mgu (apply sub2 (tyOf te1)) (TyFun (tyOf te2) tv)
+  let sub3 = mgu (apply sub2 (hmTyOf te1)) (HMTyFun (hmTyOf te2) tv)
   case sub3 of
        Left err -> tiError err
        Right sub3' -> return ( sub3' `compSub` sub2 `compSub` sub1
@@ -135,23 +143,23 @@ ti env (EApp e1 e2) = do
 -- Abstraction
 ti env (EAbs x e) = do
   tv <- newTV
-  let (TyEnv env') = remove env x
-      env'' = TyEnv $ env' `M.union` M.singleton x (PolyTy [] tv)
+  let env' = teRemove env x
+      env'' = teInsert x (HMPolyTy [] tv) env'
   (s1, te1) <- ti env'' e
-  return (s1, mkTyped (TyFun (apply s1 tv) (tyOf te1)) $ EAbsF x te1)
+  return (s1, mkTyped (HMTyFun (apply s1 tv) (hmTyOf te1)) $ EAbsF x te1)
 
 -- Let
 ti env (ELet x e1 e2) = do
   (s1, te1) <- ti env e1
-  let (TyEnv env') = remove env x
-      t' = generalization (apply s1 env) (tyOf te1)
-      env'' = TyEnv $ M.insert x t' env'
+  let env' = teRemove env x
+      t' = generalization (apply s1 env) (hmTyOf te1)
+      env'' = teInsert x t' env'
   (s2, te2) <- ti (apply s1 env'') e2
-  return (s2 `compSub` s1, mkTyped (tyOf te2) $ ELetF x te1 te2)
+  return (s2 `compSub` s1, mkTyped (hmTyOf te2) $ ELetF x te1 te2)
 
 -- Literals
-ti _ (ELit lit) = return (nullSub, mkTyped (tyOf lit) $ ELitF lit)
+ti _ (ELit lit) = return (nullSub, mkTyped (hmTyOf lit) $ ELitF lit)
 
 -- Primitives
-ti _ (EPrm x) = return (nullSub, mkTyped (tyOf x) $ EPrmF x)
+ti _ (EPrm x) = return (nullSub, mkTyped (hmTyOf x) $ EPrmF x)
 

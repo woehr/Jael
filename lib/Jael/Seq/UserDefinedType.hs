@@ -4,16 +4,15 @@ module Jael.Seq.UserDefinedType where
 
 import qualified Data.Set as S
 import           Jael.Grammar
-import           Jael.Seq.CG_Types
-import           Jael.Seq.HM_Types
+import           Jael.Seq.Types
 import           Jael.Util
 
 data UserDefinedTypeErr = UDTDuplicateFieldsErr (S.Set Text)
                         deriving (Eq, Show)
 
-data UserDefinedType = UDTStruct { udtsFields :: [(Text, GramTy)]
+data UserDefinedType = UDTStruct { udtsFields :: [(Text, S1Ty)]
                                  }
-                     | UDTEnum   { udteTags :: [(Text, GramTy)]
+                     | UDTEnum   { udteTags :: [(Text, S1Ty)]
                                  }
                      | UDTData -- unimplemented
                      deriving (Eq, Show)
@@ -34,30 +33,18 @@ validateUDT (UDTData) = Nothing
 
 typeDependencies :: UserDefinedType -> S.Set Text
 typeDependencies x =
-  let mergeDeps ts = S.unions $ map (gramTypeDepends . snd) ts
+  let mergeDeps ts = S.unions $ map (s1TyDepends . snd) ts
    in case x of
            (UDTEnum{..}) -> mergeDeps udteTags
            (UDTStruct{..}) -> mergeDeps udtsFields
            (UDTData) -> S.empty
 
-seqEnvItems :: (Text, UserDefinedType) -> [(Text, PolyTy)]
-seqEnvItems (n, UDTEnum{..}) =
-  let enumTy = TyNamed n []
-      nLowered = lowerFirst n
-   in map (\(tn, ty) -> (nLowered <> "::" <> tn, PolyTy [] $ TyFun (tyOf ty) enumTy)
-          ) udteTags
-
-seqEnvItems (n, UDTStruct{..}) =
-  let structTy = TyNamed n []
-      consTy = foldr (\(_, ft) t -> TyFun (tyOf ft) t) structTy udtsFields
-      nLowered = lowerFirst n
-  in (nLowered, PolyTy [] consTy)
-     : map (\(f, t) -> (nLowered <> "::" <> f, PolyTy [] $ TyFun structTy (tyOf t))
-           ) udtsFields
-
+seqEnvItems :: (Text, UserDefinedType) -> [(Text, HMPolyTy)]
+seqEnvItems (_, UDTEnum{..}) = []
+seqEnvItems (_, UDTStruct{..}) = []
 seqEnvItems (_, UDTData) = []
 
-gToField :: GTStructElement -> (Text, GramTy)
+gToField :: GTStructElement -> (Text, S1Ty)
 gToField (GTStructElement (LIdent gfn) gt) = (pack gfn, gToType gt)
 gToField (GTStructElementAnn _ (LIdent gfn) gt) = (pack gfn, gToType gt)
 
@@ -73,6 +60,6 @@ gEnumToUDT (GTEnumDef elems) =
        [] -> error "Grammar should ensure at least 1 field in an enum."
        xs -> UDTEnum $ map gToTag xs
 
-gToTag :: GTEnumElem -> (Text, GramTy)
+gToTag :: GTEnumElem -> (Text, S1Ty)
 gToTag (GTEnumElem (LIdent t) ty) = (pack t, gToType ty)
 
