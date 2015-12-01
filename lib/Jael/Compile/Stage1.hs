@@ -10,27 +10,27 @@ import Jael.Util
 import Jael.Compile.Common
 import Jael.Conc.Proc
 import Jael.Conc.Session
-import Jael.Seq.CG_AST
+import Jael.Seq.AST
 import Jael.Seq.Types
 import Jael.Seq.UserDefinedType
 
-gGlobToTop :: GExpr -> TopExpr CGEx t
-gGlobToTop e = TopGlob { tgExpr = gToCGEx e }
+gGlobToTop :: GExpr -> TopExpr S1Ex t
+gGlobToTop e = TopGlob { tgExpr = gToS1Ex e }
 
-gFuncToTop :: [GFuncArg] -> GType -> GExpr -> TopExpr CGEx GramTy
+gFuncToTop :: [GFuncArg] -> GType -> GExpr -> TopExpr S1Ex S1Ty
 gFuncToTop as rt e = TopFunc { tfArgs = map (\(GFuncArg (LIdent n) t) ->
                                                 (pack n, gToType t)
                                             )
                                             as
                              , tfRetTy = gToType rt
-                             , tfExpr = gToCGEx e
+                             , tfExpr = gToS1Ex e
                              }
 
 gToTopArea :: GAnyInt -> UIdent -> TopArea
 gToTopArea i (UIdent t) = TopArea { taAddr = parseAnyInt i, taType = pack t }
 
 -- splits the top level definition into its different types of components
-splitTop :: GProg -> ( [(Text, TopExpr CGEx GramTy)]
+splitTop :: GProg -> ( [(Text, TopExpr S1Ex S1Ty)]
                      , [(Text, UserDefinedType)]
                      , [(Text, TopArea)]
                      , [(Text, Session)]
@@ -71,7 +71,7 @@ shadowingDef ns ps =
    in unless (null redefMap)
         $ throwError $ AmbigName redefMap
 
-nameChecks :: ( [(Text, TopExpr CGEx GramTy)]
+nameChecks :: ( [(Text, TopExpr S1Ex S1Ty)]
               , [(Text, UserDefinedType)]
               , [(Text, TopArea)]
               , [(Text, Session)]
@@ -108,7 +108,7 @@ undefinedNames depMap =
        Just undefed -> throwError $ UndefName undefed
        Nothing -> return ()
 
-exprFreeVars :: TopExpr CGEx t -> S.Set Text
+exprFreeVars :: TopExpr S1Ex t -> S.Set Text
 exprFreeVars (TopGlob{..}) = freeVars tgExpr
 exprFreeVars (TopFunc{..}) = freeVars tfExpr S.\\ S.fromList (map fst tfArgs)
 
@@ -120,7 +120,7 @@ nameCycle depMap =
 
 -- Checks for circular dependencies in types, expressions, and processes
 -- Returns the order in which expressions and types should be processed
-dependencyAndUndefinedChecks :: M.Map Text (TopExpr CGEx GramTy)
+dependencyAndUndefinedChecks :: M.Map Text (TopExpr S1Ex S1Ty)
                              -> M.Map Text UserDefinedType
                              -> M.Map Text Session
                              -> M.Map Text TopProc

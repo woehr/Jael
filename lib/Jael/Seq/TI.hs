@@ -163,3 +163,6 @@ ti _ (ELit lit) = return (nullSub, mkTyped (hmTyOf lit) $ ELitF lit)
 -- Primitives
 ti _ (EPrm x) = return (nullSub, mkTyped (hmTyOf x) $ EPrmF x)
 
+mkTyped :: HMTy -> ExF HMTypedEx -> HMTypedEx
+mkTyped t e = HMTypedEx Ann {ann=t, unAnn=e}
+

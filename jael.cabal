@@ -34,9 +34,8 @@ library
                        Jael.Grammar.Par
                        Jael.Grammar.Print
                        Jael.Parser
-                       Jael.Seq.CG_AST
+                       Jael.Seq.AST
                        Jael.Seq.Env
-                       Jael.Seq.HM_AST
                        Jael.Seq.Literal
                        Jael.Seq.Prm
                        Jael.Seq.TI
