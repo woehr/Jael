@@ -8,7 +8,7 @@ let
   overrideCabal = pkgs.haskell.lib.overrideCabal;
 
   jael-exprs = stdenv.mkDerivation {
-    name = "jael-default-expr";
+    name = "jael-nix-expr";
     src = ./jael.cabal;
     builder = builtins.toFile "builder.sh" ''
       source $stdenv/setup

@@ -48,10 +48,6 @@ library
                        TypeFamilies,
                        OverloadedStrings
 
-  build-depends:       alex,
-                       happy,
-                       BNFC
-
   build-depends:       base-noprelude >=4.8,
                        classy-prelude,
                        mtl-prelude
