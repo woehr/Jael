@@ -14,7 +14,7 @@ before_install:
  - |
    echo "binary-caches = http://cache.nixos.org http://hydra.nixos.org
    trusted-binary-caches = http://hydra.nixos.org
-   build-max-jobs = 4" >> /etc/nix/nix.conf
+   build-max-jobs = 4" | sudo tee /etc/nix/nix.conf > /dev/null
 
 install:
  - true
