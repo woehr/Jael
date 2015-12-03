@@ -10,6 +10,7 @@ copyright:           Copyright (c) 2015 Jordan Woehr
 category:            Language
 build-type:          Custom
 cabal-version:       >=1.22
+tested-with:         GHC == 7.10.*
 
 source-repository head
   type: git
@@ -46,6 +47,10 @@ library
   default-extensions:  DeriveFunctor,
                        TypeFamilies,
                        OverloadedStrings
+
+  build-depends:       alex,
+                       happy,
+                       BNFC
 
   build-depends:       base-noprelude >=4.8,
                        classy-prelude,
