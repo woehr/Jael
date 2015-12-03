@@ -1,7 +1,3 @@
-Continuous Integration
-
+Jael
+====
 [![Build Status](https://travis-ci.org/woehr/Jael.svg?branch=master)](https://travis-ci.org/woehr/Jael)
-
-Travis config generated with the following (with zsh):
-`runhaskell =( curl https://raw.githubusercontent.com/hvr/multi-ghc-travis/master/make_travis_yml.hs ) jael.cabal alex-3.1.4 happy-1.19.5 > .travis.yml`
-
