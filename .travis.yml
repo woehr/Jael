@@ -12,15 +12,13 @@ before_install:
  - source $HOME/.nix-profile/etc/profile.d/nix.sh
  - sudo mkdir /etc/nix
  - |
-   sudo tee /etc/nix/nix.conf <<EOF >/dev/null
-   binary-caches = http://cache.nixos.org http://hydra.nixos.org
+   echo "binary-caches = http://cache.nixos.org http://hydra.nixos.org
    trusted-binary-caches = http://hydra.nixos.org
-   build-max-jobs = 4
-   EOF
+   build-max-jobs = 4" >> /etc/nix/nix.conf
 
 install:
  - true
 
 script:
-  - nix-build
+ - nix-build
 
