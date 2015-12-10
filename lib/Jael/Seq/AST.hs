@@ -41,7 +41,7 @@ data S1ExF a = S1CallF Text [a]
              | S1TupF [a]
              | S1VarF Text
              | S1LitF Literal
-             deriving (Functor, Show)
+             deriving (Eq, Functor, Show)
 
 type instance F.Base S1Ex = S1ExF
 
@@ -138,7 +138,7 @@ instance HMTypable HMTypedEx where
 -- stage 1 (for now), but now every expression is annotated with a stage 2 type.
 
 data S2TyEx = S2TyEx (Ann S2Ty S1ExF S2TyEx)
-  deriving (Show)
+  deriving (Eq, Show)
 
 data S2TyExF a = S2TyExF (Ann S2Ty S1ExF a)
   deriving (Show, Functor)
@@ -152,7 +152,10 @@ instance F.Unfoldable S2TyEx where
   embed (S2TyExF Ann{ann=t, unAnn=e}) = S2TyEx Ann{ann=t, unAnn=e}
 
 instance HMTypable S2TyEx where
-  hmTyOf (S2TyEx (Ann x _)) = hmTyOf x
+  hmTyOf (S2TyEx Ann{ann=t}) = hmTyOf t
+
+s2TyOf :: S2TyEx -> S2Ty
+s2TyOf (S2TyEx Ann{ann=t}) = t
 
 --------------------------------------------------------------------------------
 -- Functions

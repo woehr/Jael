@@ -34,14 +34,10 @@ data TopProc a b = TopProc [(Text, TyOrSess b)] a
 type S1TopProc = TopProc S1Proc S1Ty
 type S2TopProc = TopProc S2Proc S2Ty
 
--- The expression extracted from the process with the necessary information
--- about its free variables
-data ProcExpr = ProcExpr { peExpr :: S2TyEx
-                         , peFree :: S.Set (Text, S2Ty)
-                         } deriving (Show)
-
--- The information needed about an expression to type check the processs
-type S2PEx = (Text, S2Ty)
+-- The expression extracted from the process
+data S2PEx = S2PEx { peExpr :: S2TyEx
+                   , peFree :: S.Set (Text, S2Ty)
+                   } deriving (Eq, Show)
 
 data S1Proc = S1PGetChan Channel   Channel S1Proc
             | S1PGetVal  Channel   Text    S1Proc

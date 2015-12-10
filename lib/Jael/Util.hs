@@ -13,7 +13,7 @@ import Jael.Grammar
 -- An annotated type. Takes 1) a type with which nodes (right word?) of a functor
 -- are annotated with, and 2) a functor to be annotated.
 data Ann x f a = Ann { ann :: x, unAnn :: f a }
-  deriving (Show, Functor)
+  deriving (Eq, Show, Functor)
 
 addIfUnique :: Ord a => (a, b) -> M.Map a b -> Maybe (M.Map a b)
 addIfUnique (k, v) m = case M.insertLookupWithKey (\_ n _ -> n) k v m of

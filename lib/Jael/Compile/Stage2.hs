@@ -55,13 +55,15 @@ typeCheckSeq exprs order env =
 checkSeqInProcs :: HMTyEnv
                 -> M.Map Text S1TopProc
                 -> CompileErrM ( M.Map Text S2TopProc
-                               , M.Map Text ProcExpr
+                               , M.Map Text S2PEx
                                )
 checkSeqInProcs env s1Procs = do
   let (errMap, resMap) = M.mapEither (s1ProcToS2Proc env) s1Procs
   when (not . null $ errMap) $ throwError (ProcSeqErr errMap)
   let s2Tops = M.map fst resMap
-      exprs  = M.elems $ M.mapWithKey (\k (_, pExs) -> map (first (k <>)) pExs) resMap
+      exprs  = M.elems $
+                 M.mapWithKey (\k (_, pExs) -> map (first ((k <> "$") <>)) pExs)
+                              resMap
       peMap  = M.fromList (concat exprs)
   return (s2Tops, peMap)
 

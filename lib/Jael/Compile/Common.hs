@@ -20,7 +20,7 @@ data CompileErr = ParseErr Text
                 | TypeDefErr [Text]
                 | TypeInfErr S2TypeErr
                 | AmbigName (M.Map Text (S.Set Text))
-                | ProcSeqErr (M.Map Text ProcSeqErr)
+                | ProcSeqErr (M.Map Text [S2ProcSeqErr])
   deriving (Eq, Show)
 
 type CompileErrM = Either CompileErr
@@ -39,7 +39,7 @@ data Stage1 = Stage1 { s1Exprs     :: M.Map Text (TopExpr S1Ex S1Ty)
 
 data Stage2 = Stage2 { s1Data      :: Stage1
                      , s2Exprs     :: M.Map Text (TopExpr S2TyEx S2Ty)
-                     , s2ProcExprs :: M.Map Text ProcExpr
+                     , s2ProcExprs :: M.Map Text S2PEx
                      , s2Procs     :: M.Map Text (TopProc S2Proc S2Ty)
                      } deriving (Show)
 

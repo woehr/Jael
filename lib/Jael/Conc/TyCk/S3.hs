@@ -1,3 +1,5 @@
+{-# Language RecordWildCards #-}
+
 module Jael.Conc.TyCk.S3 where
 
 import qualified Data.Map as M
@@ -18,7 +20,7 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Channel Session
                | UndefinedChan Channel
                | RedefinedName Text
                | ProtocolMismatch Channel Session
-               | TypeMismatch Channel HMTy
+               | TypeMismatch Channel S2Ty S2Ty
                | DuplicateSeqEnvItem [Text]
                | SeqErrs [S2TypeErr]
                | UnknownLabel Label
@@ -398,15 +400,14 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (S2PPutChan c putChan pCont) = do
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
-tyCkProc env (S2PPutVal c putExpr pCont) = do
+tyCkProc env (S2PPutVal c (S2PEx{..}) pCont) = do
   sess <- lookupChanUnfold c env
   env' <- case sess of
                SPutTy v sCont ->
-                 case seqTyCk env putExpr v of
-                      -- Better error reporting
-                      Left (SeqErrs [S2HMTyMismatch inferred]) -> throwError $ TypeMismatch c inferred
-                      Right _ -> updateSession c sCont $ markSeqUsed (freeVars putExpr) env
-                      Left x -> Left x
+                 let exprTy = s2TyOf peExpr
+                 in if exprTy `isSubtypeOf` v
+                       then updateSession c sCont $ markSeqUsed (S.map fst peFree) env
+                       else throwError $ TypeMismatch c v exprTy
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
@@ -473,10 +474,7 @@ tyCkProc env (S2PCase chan cases) = do
                        ) retEnv (M.map fst splitEs)
        _ -> throwError $ ProtocolMismatch chan sess
 
-tyCkProc env (S2PNewVal name expr pCont) = do
-  ty <- seqTyInf env expr
-  env' <- addIfNotRedefinition (Base name ty) env
-  tyCkProc env' pCont
+tyCkProc env (S2PNewVal _ _ pCont) = tyCkProc env pCont
 
 tyCkProc env (S2PNewChan n1 n2 sTy pCont) =
       addIfNotRedefinition (NewLinear n1 n2 sTy) env
@@ -569,7 +567,7 @@ tyCkProc env (S2PCoRec n is p) = do
                               (True, _) -> throwError $ NonPrimaryIndSessArg c
                               _ -> return . TorSSess $ s
                    Nothing -> throwError $ UndefinedChan c
-            Right e -> liftM TorSTy $ seqTyInf env e
+            Right (S2PEx{..}) -> liftM TorSTy $ s2TyOf peExpr
     ) argVals
   let coRecSig = zip varNames argTypes
   -- Check for errors in the arguments passed to the corecursive process
@@ -676,14 +674,11 @@ checkProcArgErrs env n as sig = do
       acc <- m
       case (argType, argVal) of
            -- Make sure the type of e matches t
-           (TorSTy t  , Right expr) ->
-             case seqTyCk env expr t of
-                  -- Better error reporting, first case reports when a type is
-                  -- infered but it is incorrect, second reports other inference
-                  -- errors.
-                  Left (SeqErrs [S2HMTyMismatch _]) -> return $ argName:acc
-                  Left  e -> throwError e
-                  Right _ -> return acc
+           (TorSTy t  , Right (S2PEx{..})) ->
+             let exprTy = s2TyOf peExpr
+              in if exprTy `isSubtypeOf` t
+                    then return acc
+                    else return (argName:acc)
            -- Make sure the type of c matches s
            (TorSSess s,  Left c) -> case M.lookup c (cteLin env) of
                                          Just le -> if s `coIndEq` leSess le

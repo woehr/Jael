@@ -6,6 +6,11 @@ import qualified Data.Set as S
 import           Jael.Grammar
 import           Jael.Util
 
+-- A class for types that can be subtypes. isSubtypeOf should return True when
+-- the first argument is a subtype of the second.
+class Subtypable a where
+  isSubtypeOf :: a -> a -> Bool
+
 class HMTypable a where
   hmTyOf :: a -> HMTy
 
@@ -17,12 +22,22 @@ data BasicType a = BTUnit
                  | BTBit { btBits :: a }
                  | BTBool
                  | BTBuffer { btBufferMin :: a
-                            , btBufferMax :: a
+                           -- , btBufferMax :: a
                             }
                  | BTInt { btIntMin :: a
                          , btIntMax :: a
                          }
                  deriving (Eq, Show)
+
+instance Subtypable (BasicType Integer) where
+  (BTUnit) `isSubtypeOf` (BTUnit) = True
+  (BTBit{btBits=b1}) `isSubtypeOf` (BTBit{btBits=b2}) = b1 == b2
+  (BTBool) `isSubtypeOf` (BTBool) = True
+  (BTBuffer{btBufferMin=min1}) `isSubtypeOf` (BTBuffer{btBufferMin=min2}) =
+    min1 >= min2
+  (BTInt{btIntMin=min1, btIntMax=max1}) `isSubtypeOf`
+   (BTInt{btIntMin=min2, btIntMax=max2}) = min1 >= min2 && max1 <= max2
+  _ `isSubtypeOf` _ = False
 
 -- The stage 1 type most closely reflects the types in the code
 
@@ -193,6 +208,16 @@ instance HMTypable S2Ty where
           alg (S2TyTupF xs)            = HMTyTup xs
           alg (S2TyNamedF n xs)        = HMTyNamed n xs
           alg (S2TyVarF n)             = HMTyVar n
+
+-- Returns true if t1 is a more general type than t2
+instance Subtypable S2Ty where
+  (S2TySimple t1) `isSubtypeOf` (S2TySimple t2) = t1 `isSubtypeOf` t2
+  (S2TyTup t1) `isSubtypeOf` (S2TyTup t2) = all (uncurry isSubtypeOf) (zip t1 t2)
+  (S2TyNamed n1 t1) `isSubtypeOf` (S2TyNamed n2 t2) =
+    n1 == n2 && all (uncurry isSubtypeOf) (zip t1 t2)
+  (S2TyVar _) `isSubtypeOf` _ = error "TODO"
+  _ `isSubtypeOf` (S2TyVar _) = error "TODO"
+  _ `isSubtypeOf` _ = False
 
 -- Stage 3 does not modify how types are represented
 -- Stage 4 removes polymorphism from types
