@@ -10,7 +10,6 @@ copyright:           Copyright (c) 2015 Jordan Woehr
 category:            Language
 build-type:          Custom
 cabal-version:       >=1.22
-tested-with:         GHC == 7.10.*
 
 source-repository head
   type: git
@@ -27,7 +26,8 @@ library
                        Jael.Conc.Env
                        Jael.Conc.Proc
                        Jael.Conc.Session
-                       Jael.Conc.TyCk
+                       Jael.Conc.TyCk.S2
+                       Jael.Conc.TyCk.S3
                        Jael.Grammar
                        Jael.Grammar.Abs
                        Jael.Grammar.ErrM
@@ -39,7 +39,8 @@ library
                        Jael.Seq.Env
                        Jael.Seq.Literal
                        Jael.Seq.Prm
-                       Jael.Seq.TI
+                       Jael.Seq.TI.S2
+                       Jael.Seq.TI.HM
                        Jael.Seq.Types
                        Jael.Seq.UserDefinedType
                        Jael.Util

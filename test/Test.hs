@@ -3,7 +3,8 @@ import Test.Jael.CodeGen.Expr (codeGenExprTests)
 import Test.Jael.CodeGen.Types (codeGenTypeTests)
 import Test.Jael.Conc.Proc (procTests)
 import Test.Jael.Conc.Session (sessionTests)
-import Test.Jael.Conc.TyCk (concTyCkTests)
+import Test.Jael.Conc.S2TyCk (procS2TyCkTests)
+import Test.Jael.Conc.S3TyCk (procS3TyCkTests)
 import Test.Jael.Properties (propTests)
 import Test.Jael.Seq.AST (astTests)
 import Test.Jael.Seq.Builtin (builtinTests)
@@ -24,7 +25,8 @@ main = defaultMain
   , testGroup "Session types" sessionTests
   -- processes
   , testGroup "Process definition and type checking" procTests
-  , testGroup "Process type checking" concTyCkTests
+  , testGroup "Process seq type checking" procS2TyCkTests
+  , testGroup "Process type checking" procS3TyCkTests
   -- everything else
   , testGroup "Compilation" compileTests
   , testGroup "Code gen, types" codeGenTypeTests

@@ -6,6 +6,13 @@ import qualified Data.Set as S
 import           Jael.Grammar
 import           Jael.Util
 
+class HMTypable a where
+  hmTyOf :: a -> HMTy
+
+class TIOps a where
+  ftv :: a -> S.Set Text
+  apply :: M.Map Text HMTy -> a -> a
+
 data BasicType a = BTUnit
                  | BTBit { btBits :: a }
                  | BTBool
@@ -45,14 +52,25 @@ instance F.Unfoldable S1Ty where
   embed (S1TyNamedF n xs) = S1TyNamed n xs
   embed (S1TyVarF n)      = S1TyVar n
 
+instance HMTypable S1Ty where
+  hmTyOf = F.cata alg
+    where alg (S1TySimpleF BTUnit)     = HMTyUnit
+          alg (S1TySimpleF BTBit{})    = HMTyBit
+          alg (S1TySimpleF BTBool)     = HMTyBool
+          alg (S1TySimpleF BTBuffer{}) = HMTyBuffer
+          alg (S1TySimpleF BTInt{})    = HMTyInt
+          alg (S1TyTupF xs)            = HMTyTup xs
+          alg (S1TyNamedF n xs)        = HMTyNamed n xs
+          alg (S1TyVarF n)             = HMTyVar n
+
 -- The structure used for type inference is an intermediate structure between
 -- stage 1 and stage 2
 
 data HMTy = HMTyUnit
-          | HMTyInt
           | HMTyBool
           | HMTyBit
           | HMTyBuffer
+          | HMTyInt
           | HMTyVar Text
           | HMTyTup [HMTy]
           | HMTyNamed Text [HMTy]
@@ -94,12 +112,8 @@ instance F.Unfoldable HMTy where
   embed (HMTyNamedF x y) = HMTyNamed x y
   embed (HMTyFunF x y)   = HMTyFun x y
 
-class HMTypable a where
-  hmTyOf :: a -> HMTy
-
-class TIOps a where
-  ftv :: a -> S.Set Text
-  apply :: M.Map Text HMTy -> a -> a
+instance HMTypable HMTy where
+  hmTyOf = id
 
 instance TIOps HMTy where
   ftv = F.cata alg
@@ -168,6 +182,17 @@ instance F.Unfoldable S2Ty where
   embed (S2TyTupF xs)     = S2TyTup xs
   embed (S2TyNamedF n xs) = S2TyNamed n xs
   embed (S2TyVarF x)      = S2TyVar x
+
+instance HMTypable S2Ty where
+  hmTyOf = F.cata alg
+    where alg (S2TySimpleF BTUnit)     = HMTyUnit
+          alg (S2TySimpleF BTBit{})    = HMTyBit
+          alg (S2TySimpleF BTBool)     = HMTyBool
+          alg (S2TySimpleF BTBuffer{}) = HMTyBuffer
+          alg (S2TySimpleF BTInt{})    = HMTyInt
+          alg (S2TyTupF xs)            = HMTyTup xs
+          alg (S2TyNamedF n xs)        = HMTyNamed n xs
+          alg (S2TyVarF n)             = HMTyVar n
 
 -- Stage 3 does not modify how types are represented
 -- Stage 4 removes polymorphism from types

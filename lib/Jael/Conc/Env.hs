@@ -4,11 +4,12 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Conc.Proc
 import Jael.Conc.Session
+import Jael.Seq.Env
 import Jael.Seq.Types
 
 data EnvValue = NewLinear Channel Channel Session
               | RxdLinear Channel Session
-              | Base Text Ty
+              | Base Text S1Ty
   deriving (Show)
 
 -- A type tracking whether a channel is currently used in a concurrent context
@@ -58,11 +59,11 @@ data ConcTyEnv = ConcTyEnv
   -- Whether a channel has been used yet
   , cteFresh :: S.Set Channel
   -- Map of types for calling recursion variables
-  , cteRec   :: M.Map Text [(Text, TyOrSess)]
+  , cteRec   :: M.Map Text [(Text, TyOrSess S2Ty)]
   -- Types (and usage) of sequential variables
-  , cteBase  :: M.Map Text (Bool, Ty)
+  , cteBase  :: M.Map Text (Bool, S1Ty)
   -- Type environment with builtins and user defined types
-  , cteSeq   :: TyEnv
+  , cteSeq   :: HMTyEnv
   -- Top level names that have been given to sessions
   , cteAlias :: M.Map Text Session
   -- Names and argument types of top level processes
@@ -70,7 +71,7 @@ data ConcTyEnv = ConcTyEnv
   -- channels that are in each others interference sets can not be passed
   -- together. This also implies that passing two channels together causes
   -- them to be added to each others interference set.
-  , cteProcs :: M.Map Text [(Text, TyOrSess)]
+  , cteProcs :: M.Map Text [(Text, TyOrSess S2Ty)]
   } deriving (Show)
 
 emptyEnv :: ConcTyEnv
@@ -79,7 +80,7 @@ emptyEnv = ConcTyEnv
   , cteFresh = S.empty
   , cteRec   = M.empty
   , cteBase  = M.empty
-  , cteSeq   = TyEnv M.empty
+  , cteSeq   = HMTyEnv M.empty
   , cteAlias = M.empty
   , cteProcs = M.empty
   }

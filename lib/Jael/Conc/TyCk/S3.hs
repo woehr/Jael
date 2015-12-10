@@ -1,25 +1,26 @@
-module Jael.Conc.TyCk where
+module Jael.Conc.TyCk.S3 where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Conc.Env
 import Jael.Conc.Proc
 import Jael.Conc.Session
-import Jael.Seq.CG_AST
+import Jael.Seq.AST
 import Jael.Seq.Env
+import Jael.Seq.TI.S2
 import Jael.Seq.Types
 
 type SessTyErrM = Either SessTyErr
 
 data SessTyErr = UnusedResources { unusedLin :: M.Map Channel Session
-                                 , unusedSeq :: M.Map Text Ty
+                                 , unusedSeq :: M.Map Text HMTy
                                  }
                | UndefinedChan Channel
                | RedefinedName Text
                | ProtocolMismatch Channel Session
-               | TypeMismatch Channel Ty
+               | TypeMismatch Channel HMTy
                | DuplicateSeqEnvItem [Text]
-               | SeqErrs [CGTypeErr]
+               | SeqErrs [S2TypeErr]
                | UnknownLabel Label
                | CaseLabelMismatch (S.Set Label)
                | NonFreshChan Text
@@ -205,14 +206,8 @@ lookupFreshChan c (ConcTyEnv{cteLin=linEnv, cteFresh=freshEnv}) =
        (Nothing, _) -> throwError $ UndefinedChan c
        (Just _, False) -> throwError $ NonFreshChan c
 
-mkSeqEnv :: ConcTyEnv -> SessTyErrM TyEnv
-mkSeqEnv (ConcTyEnv{cteBase=bEnv, cteSeq=sEnv}) =
-  case addToEnv sEnv $ M.toList $ M.map polyTy (M.map snd bEnv) of
-       Left errs -> throwError $ DuplicateSeqEnvItem errs
-       Right env -> return env
-
 -- Separate the arguments of a TopProc into linear sessions and base types
-separateArgs :: [(Text, TyOrSess)] -> ([(Channel, Session)], [(Text, Ty)])
+separateArgs :: [(Text, TyOrSess S2Ty)] -> ([(Channel, Session)], [(Text, HMTy)])
 separateArgs = foldr
   (\(n, x) (ss, ts) -> case x of
                             TorSTy t   -> (ss, (n,t):ts)
@@ -294,10 +289,10 @@ splitEnvs origEnv newEnv@(ConcTyEnv{cteLin=le, cteBase=be}) = do
       , newEnv{cteLin=used, cteBase=resBase}
       )
 
-mkConcEnv :: [(Text, TyOrSess)]
-          -> TyEnv
+mkConcEnv :: [(Text, TyOrSess S2Ty)]
+          -> HMTyEnv
           -> M.Map Text Session
-          -> M.Map Text [(Text, TyOrSess)]
+          -> M.Map Text [(Text, TyOrSess S2Ty)]
           -> ConcTyEnv
 mkConcEnv as sEnv sessNames namedProcs =
   -- Separate arguments into linear and base types
@@ -314,10 +309,10 @@ mkConcEnv as sEnv sessNames namedProcs =
               }
    in foldr (unfoldAlias . fst) env ls
 
-tyCheckTopProc :: TyEnv
+tyCheckTopProc :: HMTyEnv
                -> M.Map Text Session
-               -> M.Map Text [(Text, TyOrSess)]
-               -> TopProc
+               -> M.Map Text [(Text, TyOrSess S2Ty)]
+               -> S2TopProc
                -> Maybe SessTyErr
 tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
    case tyCkProc (mkConcEnv as sEnv sessNames namedProcs) p of
@@ -326,8 +321,8 @@ tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
 
 -- Type checks a process. Returns either a type checking error or an updated
 -- environment
-tyCkProc :: ConcTyEnv -> Proc -> SessTyErrM ConcTyEnv
-tyCkProc env (PGetChan c name p) = do
+tyCkProc :: ConcTyEnv -> S2Proc -> SessTyErrM ConcTyEnv
+tyCkProc env (S2PGetChan c name p) = do
   -- Get the session the channel c is suppose to implement
   sess <- lookupChanUnfold c env
   -- Check that the session implements a "get", update the session in the
@@ -339,7 +334,7 @@ tyCkProc env (PGetChan c name p) = do
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
 
-tyCkProc env (PGetVal c name p) = do
+tyCkProc env (S2PGetVal c name p) = do
   -- Get the session the channel c is suppose to implement
   sess <- lookupChanUnfold c env
   -- Check that the session implements a "get", update the session in the
@@ -353,7 +348,7 @@ tyCkProc env (PGetVal c name p) = do
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
 
-tyCkProc env (PGetIgn c p) = do
+tyCkProc env (S2PGetIgn c p) = do
   sess <- lookupChanUnfold c env
   env' <- case sess of
                SGetTy _ s -> updateSession c s env
@@ -361,7 +356,7 @@ tyCkProc env (PGetIgn c p) = do
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
 
-tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPutChan c putChan pCont) = do
+tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (S2PPutChan c putChan pCont) = do
   sess <- lookupChanUnfold c env
   env' <- case sess of
                SPutSess v sCont -> do
@@ -403,19 +398,19 @@ tyCkProc env@(ConcTyEnv{cteLin=lEnv}) (PPutChan c putChan pCont) = do
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
-tyCkProc env (PPutVal c putExpr pCont) = do
+tyCkProc env (S2PPutVal c putExpr pCont) = do
   sess <- lookupChanUnfold c env
   env' <- case sess of
                SPutTy v sCont ->
                  case seqTyCk env putExpr v of
                       -- Better error reporting
-                      Left (SeqErrs [CGTypeMismatch inferred]) -> throwError $ TypeMismatch c inferred
+                      Left (SeqErrs [S2HMTyMismatch inferred]) -> throwError $ TypeMismatch c inferred
                       Right _ -> updateSession c sCont $ markSeqUsed (freeVars putExpr) env
                       Left x -> Left x
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
 
-tyCkProc env (PSel chan lab pCont) = do
+tyCkProc env (S2PSel chan lab pCont) = do
   sess <- lookupChanUnfold chan env
   env' <- case sess of
                SSelect ls -> case lookup lab ls of
@@ -424,7 +419,7 @@ tyCkProc env (PSel chan lab pCont) = do
                _ -> throwError $ ProtocolMismatch chan sess
   tyCkProc env' pCont
 
-tyCkProc env (PCase chan cases) = do
+tyCkProc env (S2PCase chan cases) = do
   sess <- lookupChanUnfold chan env
   case sess of
        SChoice ls ->
@@ -478,17 +473,17 @@ tyCkProc env (PCase chan cases) = do
                        ) retEnv (M.map fst splitEs)
        _ -> throwError $ ProtocolMismatch chan sess
 
-tyCkProc env (PNewVal name expr pCont) = do
+tyCkProc env (S2PNewVal name expr pCont) = do
   ty <- seqTyInf env expr
   env' <- addIfNotRedefinition (Base name ty) env
   tyCkProc env' pCont
 
-tyCkProc env (PNewChan n1 n2 sTy pCont) =
+tyCkProc env (S2PNewChan n1 n2 sTy pCont) =
       addIfNotRedefinition (NewLinear n1 n2 sTy) env
   >>= (\e -> return e{cteFresh=S.insert n1 $ S.insert n2 $ cteFresh e})
   >>= flip tyCkProc pCont
 
-tyCkProc env (PPar ps) = do
+tyCkProc env (S2PPar ps) = do
   -- Mark all channels as now in a concurrent context, this means that newly
   -- introduced channels can now be used
   let env' = env{cteLin=M.map (\le -> le{leConcCtx=True}) (cteLin env)}
@@ -558,7 +553,7 @@ tyCkProc env (PPar ps) = do
                      ) unusedEnv dualChans
     ) env' ps
 
-tyCkProc env (PCoRec n is p) = do
+tyCkProc env (S2PCoRec n is p) = do
   -- Determine the types of the arguments to the corecursive process
   let varNames = map fst is
   let argVals  = map snd is
@@ -610,24 +605,24 @@ tyCkProc env (PCoRec n is p) = do
 
   return retEnv
 
-tyCkProc env (PNamed n as) =
+tyCkProc env (S2PNamed n as) =
   -- Is what we're trying to type a recursion variable or a named process?
   case M.lookup n (cteRec env) of
        Just sig -> typeRecursionVar env n as sig
        Nothing -> typeNamedProc env n as
 
-tyCkProc env (PFwd c1 c2) = do
+tyCkProc env (S2PFwd c1 c2) = do
   s1 <- lookupChan c1 env
   s2 <- lookupChan c2 env
   unless (s1 `isDual` s2)
     $ throwError $ FordwardedChansNotDual c1 c2
   consumeLinear Nothing c1 env >>= consumeLinear Nothing c2
 
-tyCkProc env PNil = return env
+tyCkProc env S2PNil = return env
 
 -- Helper functions to keep things a bit cleaner
 
-updateEnvFromProcArgs :: ConcTyEnv -> [ChanEx] -> SessTyErrM ConcTyEnv
+updateEnvFromProcArgs :: ConcTyEnv -> [ChanEx S2PEx] -> SessTyErrM ConcTyEnv
 updateEnvFromProcArgs =
   foldM (
     \acc ce ->
@@ -636,7 +631,7 @@ updateEnvFromProcArgs =
            Right e -> return $ markSeqUsed (freeVars e) acc
     )
 
-updateEnvFromRecArgs :: ConcTyEnv -> [ChanEx] -> SessTyErrM ConcTyEnv
+updateEnvFromRecArgs :: ConcTyEnv -> [ChanEx S2PEx] -> SessTyErrM ConcTyEnv
 updateEnvFromRecArgs =
   foldM (
     \acc ce ->
@@ -645,32 +640,18 @@ updateEnvFromRecArgs =
            Right e -> return $ markSeqUsed (freeVars e) acc
     )
 
-seqTyInf :: ConcTyEnv -> CGEx -> SessTyErrM Ty
-seqTyInf env expr = do
-  seqEnv <- mkSeqEnv env
-  case typeInf seqEnv expr of
-       Left e -> throwError $ SeqErrs [e]
-       Right typedEx -> return (tyOf typedEx)
-
-seqTyCk :: ConcTyEnv -> CGEx -> Ty -> SessTyErrM ()
-seqTyCk env expr ty = do
-  seqEnv <- mkSeqEnv env
-  case typeCheck seqEnv expr ty of
-       Left e -> throwError $ SeqErrs [e]
-       Right _ -> return ()
-
 -- The current env, the env in which the recursive definition was made, the
 -- recursion variable, and the parameters to the recursive call
 typeRecursionVar :: ConcTyEnv
                  -> Text
-                 -> [ChanEx]
-                 -> [(Text, TyOrSess)]
+                 -> [ChanEx S2PEx]
+                 -> [(Text, TyOrSess S2Ty)]
                  -> SessTyErrM ConcTyEnv
 typeRecursionVar env n as sig = do
   checkProcArgErrs env n as sig
   updateEnvFromRecArgs env as
 
-typeNamedProc :: ConcTyEnv -> Text -> [ChanEx] -> SessTyErrM ConcTyEnv
+typeNamedProc :: ConcTyEnv -> Text -> [ChanEx S2PEx] -> SessTyErrM ConcTyEnv
 typeNamedProc env n as = do
   let procSig = fromMaybe (error "Previous analysis should have identified\
                                 \ unknown names.")
@@ -683,8 +664,8 @@ typeNamedProc env n as = do
 
 checkProcArgErrs :: ConcTyEnv
                  -> Text
-                 -> [ChanEx]
-                 -> [(Text, TyOrSess)]
+                 -> [ChanEx S2PEx]
+                 -> [(Text, TyOrSess S2Ty)]
                  -> SessTyErrM ()
 checkProcArgErrs env n as sig = do
   when (length sig /= length as)
@@ -700,7 +681,7 @@ checkProcArgErrs env n as sig = do
                   -- Better error reporting, first case reports when a type is
                   -- infered but it is incorrect, second reports other inference
                   -- errors.
-                  Left (SeqErrs [CGTypeMismatch _]) -> return $ argName:acc
+                  Left (SeqErrs [S2HMTyMismatch _]) -> return $ argName:acc
                   Left  e -> throwError e
                   Right _ -> return acc
            -- Make sure the type of c matches s

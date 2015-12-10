@@ -34,7 +34,7 @@ splitTop :: GProg -> ( [(Text, TopExpr S1Ex S1Ty)]
                      , [(Text, UserDefinedType)]
                      , [(Text, TopArea)]
                      , [(Text, Session)]
-                     , [(Text, TopProc)]
+                     , [(Text, S1TopProc)]
                      )
 splitTop (GProg xs) = foldr (\x (a, b, c, d, e) ->
   case x of
@@ -59,7 +59,7 @@ dupDefs ns =
   let repeats = repeated ns
    in unless (null repeats) (throwError $ DupDef repeats)
 
-shadowingDef :: [Text] -> [(Text, TopProc)] -> CompileErrM ()
+shadowingDef :: [Text] -> [(Text, S1TopProc)] -> CompileErrM ()
 shadowingDef ns ps =
   let nameSet = S.fromList ns
       redefMap = foldr (\(n, TopProc _ p) a ->
@@ -75,7 +75,7 @@ nameChecks :: ( [(Text, TopExpr S1Ex S1Ty)]
               , [(Text, UserDefinedType)]
               , [(Text, TopArea)]
               , [(Text, Session)]
-              , [(Text, TopProc)]
+              , [(Text, S1TopProc)]
               )
            -> CompileErrM ()
 nameChecks (exprs, udts, areas, protocols, procs) = do
@@ -93,7 +93,7 @@ nameChecks (exprs, udts, areas, protocols, procs) = do
 
 defErrs :: [UserDefinedType]
         -> [Session]
-        -> [TopProc]
+        -> [S1TopProc]
         -> CompileErrM ()
 defErrs udts ss ps =
   let errs = mapMaybe (liftA (pack . show) . validateUDT) udts
@@ -123,7 +123,7 @@ nameCycle depMap =
 dependencyAndUndefinedChecks :: M.Map Text (TopExpr S1Ex S1Ty)
                              -> M.Map Text UserDefinedType
                              -> M.Map Text Session
-                             -> M.Map Text TopProc
+                             -> M.Map Text S1TopProc
                              -> CompileErrM [Text]
 dependencyAndUndefinedChecks exprs udts protocols procs = do
   -- Find uses of undefined variables
@@ -165,7 +165,7 @@ stage1 p = do
   nameChecks components
 
   -- No more chance of duplicate names, so now we use a map.
-  let progMaps@(exprs, udts, _, protocols, procs) =
+  let (exprs, udts, areas, protocols, procs) =
         ( M.fromList lExprs
         , M.fromList lUDTs
         , M.fromList lAreas

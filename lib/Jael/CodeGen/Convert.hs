@@ -3,7 +3,7 @@
 module Jael.CodeGen.Convert where
 
 import qualified Data.Functor.Foldable as F
-import           Jael.Seq.CG_AST
+import           Jael.Seq.AST
 import           Jael.Seq.Types
 import           Jael.Seq.Literal
 --import           Jael.Seq.Prm
@@ -16,21 +16,21 @@ class GenLLVM a where
   type LLVMOutput a
   toLLVM :: a -> LLVMOutput a
 
-instance GenLLVM CGTy where
-  type LLVMOutput CGTy = Type
+instance GenLLVM S2Ty where
+  type LLVMOutput S2Ty = Type
   toLLVM = F.cata alg
-    where alg (CGTySimpleF BTUnit) = VoidType
-          alg (CGTySimpleF BTBit{..}) = IntegerType
+    where alg (S2TySimpleF BTUnit) = VoidType
+          alg (S2TySimpleF BTBit{..}) = IntegerType
             { typeBits=fromIntegral btBits }
-          alg (CGTySimpleF BTBool) = IntegerType { typeBits=1 }
-          alg (CGTySimpleF BTBuffer{..}) = undefined
-          alg (CGTySimpleF BTInt{..}) = IntegerType
+          alg (S2TySimpleF BTBool) = IntegerType { typeBits=1 }
+          alg (S2TySimpleF BTBuffer{..}) = undefined
+          alg (S2TySimpleF BTInt{..}) = IntegerType
             { typeBits=max (numBitsForInt btIntMin) (numBitsForInt btIntMax) }
-          alg (CGTyTupF xs) = StructureType { isPacked=False, elementTypes=xs }
-          alg (CGTyNamedF _ _) = undefined
+          alg (S2TyTupF xs) = StructureType { isPacked=False, elementTypes=xs }
+          alg (S2TyNamedF _ _) = undefined
 
-instance GenLLVM CGEx where
-  type LLVMOutput CGEx = [BasicBlock]
+instance GenLLVM S2TyEx where
+  type LLVMOutput S2TyEx = [BasicBlock]
   toLLVM = undefined
 
 instance GenLLVM Literal where

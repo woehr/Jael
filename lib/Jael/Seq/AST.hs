@@ -1,13 +1,25 @@
+{-# Language RecordWildCards #-}
+
 module Jael.Seq.AST where
 
 import qualified Data.Functor.Foldable as F
-import qualified Data.Map as M
 import qualified Data.Set as S
 import           Jael.Grammar
 import           Jael.Seq.Literal
 import           Jael.Seq.Prm
 import           Jael.Seq.Types
 import           Jael.Util
+
+data TopExpr e t = TopGlob  { tgExpr  :: e }
+                 | TopFunc  { tfArgs  :: [(Text, t)]
+                            , tfRetTy :: t
+                            , tfExpr  :: e
+                            }
+                 deriving (Show)
+
+instance (HMTypable e, HMTypable t) => HMTypable (TopExpr e t) where
+  hmTyOf (TopGlob{..}) = hmTyOf tgExpr
+  hmTyOf (TopFunc{..}) = typesToFun (map (hmTyOf . snd) tfArgs, hmTyOf tfRetTy)
 
 --------------------------------------------------------------------------------
 -- Stage 1
@@ -51,19 +63,16 @@ instance F.Unfoldable S1Ex where
   embed (S1VarF x)       = S1Var x
   embed (S1LitF x)       = S1Lit x
 
-data S1Prog = S1Prog (Ann (Maybe S1Ty) S1ExF S1Prog)
-  deriving (Show)
-
-data S1ProgF a = S1ProgF (Ann (Maybe S1Ty) S1ExF a)
-  deriving (Show, Functor)
-
-type instance F.Base S1Prog = S1ProgF
-
-instance F.Foldable S1Prog where
-  project (S1Prog Ann{ann=t, unAnn=e}) = S1ProgF Ann{ann=t, unAnn=e}
-
-instance F.Unfoldable S1Prog where
-  embed (S1ProgF Ann{ann=t, unAnn=e}) = S1Prog Ann{ann=t, unAnn=e}
+freeVars :: S1Ex -> S.Set Text
+freeVars = F.cata alg
+  where alg :: S1ExF (S.Set Text) -> S.Set Text
+        alg (S1CallF n es) = n `S.insert` S.unions es
+        alg (S1CallPrmF _ es) = S.unions es
+        alg (S1LetF x e1 e2) = e1 `S.union` S.delete x e2
+        alg (S1IfF e1 e2 e3) = e1 `S.union` e2 `S.union` e3
+        alg (S1TupF es) = S.unions es
+        alg (S1VarF x) = S.singleton x
+        alg _ = S.empty
 
 --------------------------------------------------------------------------------
 -- Type inference (intermidiate stage 2)
@@ -77,18 +86,16 @@ data HMEx = HMVar Text
           deriving (Eq, Show)
 
 data HMExF a = HMVarF Text
-             | HMPrmF Prm
              | HMLitF Literal
              | HMAppF a a
              | HMAbsF Text a
              | HMLetF Text a a
              deriving (Eq, Functor, Show)
 
-type instance Base HMEx = HMExF
+type instance F.Base HMEx = HMExF
 
 instance F.Foldable HMEx where
   project (HMVar x)     = HMVarF x
-  project (HMPrm x)     = HMPrmF x
   project (HMLit x)     = HMLitF x
   project (HMApp x y)   = HMAppF x y
   project (HMAbs x y)   = HMAbsF x y
@@ -96,7 +103,6 @@ instance F.Foldable HMEx where
 
 instance F.Unfoldable HMEx where
   embed (HMVarF x)     = HMVar x
-  embed (HMPrmF x)     = HMPrm x
   embed (HMLitF x)     = HMLit x
   embed (HMAppF x y)   = HMApp x y
   embed (HMAbsF x y)   = HMAbs x y
@@ -108,7 +114,7 @@ data HMTypedEx = HMTypedEx (Ann HMTy HMExF HMTypedEx)
 data HMTypedExF a = HMTypedExF (Ann HMTy HMExF a)
   deriving (Show, Functor)
 
-type instance Base HMTypedEx = HMTypedExF
+type instance F.Base HMTypedEx = HMTypedExF
 
 instance F.Foldable HMTypedEx where
   project (HMTypedEx Ann {ann=t, unAnn=e}) = HMTypedExF Ann {ann=t, unAnn=e}
@@ -118,7 +124,7 @@ instance F.Unfoldable HMTypedEx where
 
 instance TIOps HMTypedEx where
   ftv (HMTypedEx (Ann {ann=t})) = ftv t
-  apply s = cata alg
+  apply s = F.cata alg
     where alg (HMTypedExF Ann {ann=t, unAnn=e}) = HMTypedEx Ann {ann=apply s t, unAnn=e}
 
 instance HMTypable HMTypedEx where
@@ -131,19 +137,22 @@ instance HMTypable HMTypedEx where
 -- A program after stage 2 is represented by the same types of expressions as
 -- stage 1 (for now), but now every expression is annotated with a stage 2 type.
 
-data S2Prog = S2Prog (Ann S2Ty S1ExF S2Prog)
+data S2TyEx = S2TyEx (Ann S2Ty S1ExF S2TyEx)
   deriving (Show)
 
-data S2ProgF a = S2ProgF (Ann S2Ty S1ExF a)
+data S2TyExF a = S2TyExF (Ann S2Ty S1ExF a)
   deriving (Show, Functor)
 
-type instance F.Base S2Prog = S2ProgF
+type instance F.Base S2TyEx = S2TyExF
 
-instance F.Foldable S2Prog where
-  project (S2Prog Ann{ann=t, unAnn=e}) = S2ProgF Ann{ann=t, unAnn=e}
+instance F.Foldable S2TyEx where
+  project (S2TyEx Ann{ann=t, unAnn=e}) = S2TyExF Ann{ann=t, unAnn=e}
 
-instance F.Unfoldable S2Prog where
-  embed (S2ProgF Ann{ann=t, unAnn=e}) = S2Prog Ann{ann=t, unAnn=e}
+instance F.Unfoldable S2TyEx where
+  embed (S2TyExF Ann{ann=t, unAnn=e}) = S2TyEx Ann{ann=t, unAnn=e}
+
+instance HMTypable S2TyEx where
+  hmTyOf (S2TyEx (Ann x _)) = hmTyOf x
 
 --------------------------------------------------------------------------------
 -- Functions

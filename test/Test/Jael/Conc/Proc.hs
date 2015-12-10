@@ -8,7 +8,7 @@ import           Jael.Grammar
 import           Jael.Parser
 import           Jael.Conc.Proc
 import           Jael.Conc.Session
-import           Jael.Seq.CG_AST
+import           Jael.Seq.AST
 import           Jael.Seq.Literal
 import           Jael.Seq.Prm
 import qualified Test.Framework as T

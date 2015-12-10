@@ -1,12 +1,13 @@
 -- Implementation based off of https://github.com/wh5a/Algorithm-W-Step-By-Step
 
-module Jael.Seq.TI where
+module Jael.Seq.TI.HM where
 
 import qualified Data.Map as M
 import qualified Data.Set as S
+import           Jael.Seq.AST
 import           Jael.Seq.Env
-import           Jael.Seq.HM_AST
 import           Jael.Seq.Types
+import           Jael.Util
 
 data SeqTIErr = NamedUnificationMismatch Text Text
               | NonUnification HMTy HMTy
@@ -36,10 +37,10 @@ instance Functor SeqTI where
 
 type HMTySub = M.Map Text HMTy
 
-seqInfer :: HMTyEnv -> Ex -> Either SeqTIErr HMTy
+seqInfer :: HMTyEnv -> HMEx -> Either SeqTIErr HMTy
 seqInfer env = runSeqTI . seqTypeInference env
 
-seqInferTypedEx :: HMTyEnv -> Ex -> Either SeqTIErr HMTypedEx
+seqInferTypedEx :: HMTyEnv -> HMEx -> Either SeqTIErr HMTypedEx
 seqInferTypedEx env = runSeqTI . seqTypedExInference env
 
 runSeqTI :: SeqTI a -> Either SeqTIErr a
@@ -47,10 +48,10 @@ runSeqTI t = let (SeqTI stateFunc) = t
                  initState = SeqTIState{ tvCount = 0 }
               in fst (stateFunc initState)
 
-seqTypeInference :: HMTyEnv -> Ex -> SeqTI HMTy
+seqTypeInference :: HMTyEnv -> HMEx -> SeqTI HMTy
 seqTypeInference env = liftM hmTyOf . seqTypedExInference env
 
-seqTypedExInference :: HMTyEnv -> Ex -> SeqTI HMTypedEx
+seqTypedExInference :: HMTyEnv -> HMEx -> SeqTI HMTypedEx
 seqTypedExInference env e = do
   (sub, te) <- ti env e
   return $ apply sub te
@@ -121,16 +122,16 @@ varBind u t
   | S.member u (ftv t) = Left $ FreeTyVarBind u t
   | otherwise          = Right $ M.singleton u t
 
-ti :: HMTyEnv -> Ex -> SeqTI (HMTySub, HMTypedEx)
+ti :: HMTyEnv -> HMEx -> SeqTI (HMTySub, HMTypedEx)
 -- Variables
-ti env (EVar v) = case teLookup v env of
+ti env (HMVar v) = case teLookup v env of
     Nothing -> tiError $ UnboundVar v
     Just sigma -> do
        t <- instantiation sigma
-       return (nullSub, mkTyped t $ EVarF v)
+       return (nullSub, mkTyped t $ HMVarF v)
 
 -- Function application
-ti env (EApp e1 e2) = do
+ti env (HMApp e1 e2) = do
   tv <- newTV
   (sub1, te1) <- ti env e1
   (sub2, te2) <- ti (apply sub1 env) e2
@@ -138,31 +139,29 @@ ti env (EApp e1 e2) = do
   case sub3 of
        Left err -> tiError err
        Right sub3' -> return ( sub3' `compSub` sub2 `compSub` sub1
-                             , mkTyped (apply sub3' tv) $ EAppF te1 te2)
+                             , mkTyped (apply sub3' tv) $ HMAppF te1 te2)
 
 -- Abstraction
-ti env (EAbs x e) = do
+ti env (HMAbs x e) = do
   tv <- newTV
   let env' = teRemove env x
       env'' = teInsert x (HMPolyTy [] tv) env'
   (s1, te1) <- ti env'' e
-  return (s1, mkTyped (HMTyFun (apply s1 tv) (hmTyOf te1)) $ EAbsF x te1)
+  return (s1, mkTyped (HMTyFun (apply s1 tv) (hmTyOf te1)) $ HMAbsF x te1)
 
 -- Let
-ti env (ELet x e1 e2) = do
+ti env (HMLet x e1 e2) = do
   (s1, te1) <- ti env e1
   let env' = teRemove env x
       t' = generalization (apply s1 env) (hmTyOf te1)
       env'' = teInsert x t' env'
   (s2, te2) <- ti (apply s1 env'') e2
-  return (s2 `compSub` s1, mkTyped (hmTyOf te2) $ ELetF x te1 te2)
+  return (s2 `compSub` s1, mkTyped (hmTyOf te2) $ HMLetF x te1 te2)
 
 -- Literals
-ti _ (ELit lit) = return (nullSub, mkTyped (hmTyOf lit) $ ELitF lit)
+ti _ (HMLit lit) = return (nullSub, mkTyped (hmTyOf lit) $ HMLitF lit)
 
--- Primitives
-ti _ (EPrm x) = return (nullSub, mkTyped (hmTyOf x) $ EPrmF x)
 
-mkTyped :: HMTy -> ExF HMTypedEx -> HMTypedEx
+mkTyped :: HMTy -> HMExF HMTypedEx -> HMTypedEx
 mkTyped t e = HMTypedEx Ann {ann=t, unAnn=e}
 
