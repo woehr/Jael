@@ -3,9 +3,9 @@ module Test.Jael.Util where
 import qualified Data.Map as M
 import Jael.Grammar
 import Jael.Parser
-import Jael.Seq.CG_AST
+import Jael.Seq.AST
 import Jael.Seq.Env
-import Jael.Seq.HM_Types
+import Jael.Seq.Types
 import Jael.Seq.UserDefinedType
 
 shouldNotParse :: ParseFun a -> Text -> Assertion

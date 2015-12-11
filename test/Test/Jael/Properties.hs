@@ -2,7 +2,7 @@ module Test.Jael.Properties
 ( propTests
 ) where
 
-import           Jael.Seq.HM_Types
+import           Jael.Seq.Types
 import qualified Test.Framework as T
 
 propTests :: [T.Test]

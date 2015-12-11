@@ -2,7 +2,7 @@ module Test.Jael.Seq.AST
 ( astTests
 ) where
 
-import Jael.Seq.HM_Types
+import Jael.Seq.Types
 import Test.Framework as T
 
 astTests :: [T.Test]

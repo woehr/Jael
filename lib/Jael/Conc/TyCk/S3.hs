@@ -14,12 +14,12 @@ import Jael.Seq.Types
 
 type SessTyErrM = Either SessTyErr
 
-data SessTyErr = UnusedResources { unusedLin :: M.Map Channel Session
+data SessTyErr = UnusedResources { unusedLin :: M.Map Channel S2Session
                                  , unusedSeq :: M.Map Text HMTy
                                  }
                | UndefinedChan Channel
                | RedefinedName Text
-               | ProtocolMismatch Channel Session
+               | ProtocolMismatch Channel S2Session
                | TypeMismatch Channel S2Ty S2Ty
                | DuplicateSeqEnvItem [Text]
                | SeqErrs [S2TypeErr]
@@ -36,7 +36,7 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Channel Session
                | InsufficientProcArgs Text
                | ProcArgTypeMismatch (S.Set Text)
                | FordwardedChansNotDual Channel Channel
-               | AttemptedChannelIgnore Channel Session
+               | AttemptedChannelIgnore Channel S2Session
                | RecVarUnfoldInRecProc Channel
                -- The error when an inductive session is passed to a recursive
                -- process without the induction session definition in the
@@ -83,8 +83,8 @@ unfoldAlias k env@(ConcTyEnv{cteLin=linEnv, cteAlias=alsEnv}) =
    in maybe env (\e -> unfoldAlias k env{cteLin=M.insert k e linEnv}) kEnv'
 
 addIfNotRedefinition :: EnvValue -> ConcTyEnv -> SessTyErrM ConcTyEnv
-addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
-  let nameExists n = n `M.member` lEnv || n `M.member` bEnv
+addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=sNames}) =
+  let nameExists n = n `M.member` lEnv || n `S.member` sNames
   in case v of
        RxdLinear n s
          | nameExists n -> throwError $ RedefinedName n
@@ -101,10 +101,6 @@ addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
                       M.insert n2 (newLinEnv (dual s) (Just n1) False) lEnv
              }
 
-       Base n t
-         | nameExists n -> throwError $ RedefinedName n
-         | otherwise -> return $ env{cteBase=M.insert n (False, t) bEnv}
-
 -- This function modifies the session of c to v. It is called when a session is
 -- deconstructed by a get, put, case, or select. In addition to removing the
 -- fresh flag, this function ensures that the "recursive implementation" flag is
@@ -116,7 +112,7 @@ addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=bEnv}) =
 -- RIUnknown only if there is a dual. If the dual was removed from the
 -- environment through use, its dual (this channel) should have had its flag
 -- updated.
-updateSession :: Channel -> Session -> ConcTyEnv -> SessTyErrM ConcTyEnv
+updateSession :: Channel -> S2Session -> ConcTyEnv -> SessTyErrM ConcTyEnv
 updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
   case M.lookup c linEnv of
        Just le -> do
@@ -169,16 +165,16 @@ updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
 -- use of a recursive session without unfolding). See last paragraph of section
 -- three of "Corecursion and non-divergence in session typed processes" by
 -- Toninho et al.
-lookupChan :: Channel -> ConcTyEnv -> SessTyErrM Session
+lookupChan :: Channel -> ConcTyEnv -> SessTyErrM S2Session
 lookupChan = lookupChanHelper False
 
 -- Get the session associated with channel c
 -- Note that this function is for the purpose of making use of the channel,
 -- thus this returns corecursive sessions that have unfolded variables.
-lookupChanUnfold :: Channel -> ConcTyEnv -> SessTyErrM Session
+lookupChanUnfold :: Channel -> ConcTyEnv -> SessTyErrM S2Session
 lookupChanUnfold = lookupChanHelper True
 
-lookupChanHelper :: Bool -> Channel -> ConcTyEnv -> SessTyErrM Session
+lookupChanHelper :: Bool -> Channel -> ConcTyEnv -> SessTyErrM S2Session
 lookupChanHelper bUnfold c env =
   case M.lookup c (cteLin env) of
        Just (LinEnv{leSess=s, leConcCtx=True}) ->
@@ -201,7 +197,7 @@ lookupChanHelper bUnfold c env =
        _ -> throwError $ UndefinedChan c
 
 -- Get the session associated with channel c, only if it is a fresh channel
-lookupFreshChan :: Channel -> ConcTyEnv -> SessTyErrM Session
+lookupFreshChan :: Channel -> ConcTyEnv -> SessTyErrM S2Session
 lookupFreshChan c (ConcTyEnv{cteLin=linEnv, cteFresh=freshEnv}) =
   case (M.lookup c linEnv, c `S.member` freshEnv) of
        (Just (LinEnv{leSess=s}), True) -> return s
@@ -209,7 +205,7 @@ lookupFreshChan c (ConcTyEnv{cteLin=linEnv, cteFresh=freshEnv}) =
        (Just _, False) -> throwError $ NonFreshChan c
 
 -- Separate the arguments of a TopProc into linear sessions and base types
-separateArgs :: [(Text, TyOrSess S2Ty)] -> ([(Channel, Session)], [(Text, HMTy)])
+separateArgs :: [(Text, S2TyOrSess)] -> ([(Channel, S2Session)], [(Text, S2Ty)])
 separateArgs = foldr
   (\(n, x) (ss, ts) -> case x of
                             TorSTy t   -> (ss, (n,t):ts)
@@ -217,15 +213,10 @@ separateArgs = foldr
   ) ([],[])
 
 envErrors :: ConcTyEnv -> SessTyErrM ()
-envErrors (ConcTyEnv{cteLin=linEnv, cteBase=baseEnv}) =
+envErrors (ConcTyEnv{cteLin=linEnv}) =
   let uLin = M.filter (/= SEnd) (M.map leSess linEnv)
-      uSeq = M.map snd . M.filter (not . fst) $ baseEnv
-   in when ((not . null) uLin || (not . null) uSeq)
-           (throwError UnusedResources{unusedLin = uLin, unusedSeq = uSeq})
-
-markSeqUsed :: S.Set Text -> ConcTyEnv -> ConcTyEnv
-markSeqUsed vars env@(ConcTyEnv{cteBase=baseEnv}) =
-  env{cteBase=foldr (M.adjust (\(_,t)->(True,t))) baseEnv vars}
+   in unless (null uLin)
+             (throwError UnusedResources{unusedLin = uLin, unusedSeq = M.empty})
 
 -- Mark a linear channel as "used". This means the channel is removed from the
 -- environment if eligible. If it has a dual in the environment that needs to
@@ -268,7 +259,7 @@ consumeLinear mRecType c env@(ConcTyEnv{cteLin=linEnv}) =
 -- Take an old env and an updated env and return the used and unused parts of
 -- the updated one.
 splitEnvs :: ConcTyEnv -> ConcTyEnv -> (ConcTyEnv, ConcTyEnv)
-splitEnvs origEnv newEnv@(ConcTyEnv{cteLin=le, cteBase=be}) = do
+splitEnvs origEnv newEnv@(ConcTyEnv{cteLin=le}) =
   let (unused, used) =
         -- This partitioning works if a resource is deleted from newEnv (e.g.,
         -- session is sent over a channel) and if a resource is used (i.e., its
@@ -285,16 +276,14 @@ splitEnvs origEnv newEnv@(ConcTyEnv{cteLin=le, cteBase=be}) = do
                            ) le
   -- Linear resources have to be removed from the original
   -- env when used, where as base types don't have to be
-  let (origBase, resBase) =
-        M.partitionWithKey (\k _ -> k `M.member` cteBase origEnv) be
-   in ( newEnv{cteLin=unused, cteBase=origBase}
-      , newEnv{cteLin=used, cteBase=resBase}
+   in ( newEnv{cteLin=unused, cteBase=cteBase origEnv}
+      , newEnv{cteLin=used, cteBase=cteBase newEnv}
       )
 
-mkConcEnv :: [(Text, TyOrSess S2Ty)]
+mkConcEnv :: [(Text, S2TyOrSess)]
           -> HMTyEnv
-          -> M.Map Text Session
-          -> M.Map Text [(Text, TyOrSess S2Ty)]
+          -> M.Map Text S2Session
+          -> M.Map Text [(Text, S2TyOrSess)]
           -> ConcTyEnv
 mkConcEnv as sEnv sessNames namedProcs =
   -- Separate arguments into linear and base types
@@ -304,7 +293,7 @@ mkConcEnv as sEnv sessNames namedProcs =
       -- thing if the session after unfolding is SCoInd, SVar, or SDualVar
       env = emptyEnv
               { cteLin   = M.map (\s->newLinEnv s Nothing True) (M.fromList ls)
-              , cteBase  = M.fromList $ map (\(n,t)->(n,(False,t))) bs
+              , cteBase  = S.fromList $ map fst bs
               , cteSeq   = sEnv
               , cteAlias = sessNames
               , cteProcs = namedProcs
@@ -312,8 +301,8 @@ mkConcEnv as sEnv sessNames namedProcs =
    in foldr (unfoldAlias . fst) env ls
 
 tyCheckTopProc :: HMTyEnv
-               -> M.Map Text Session
-               -> M.Map Text [(Text, TyOrSess S2Ty)]
+               -> M.Map Text S2Session
+               -> M.Map Text [(Text, S2TyOrSess)]
                -> S2TopProc
                -> Maybe SessTyErr
 tyCheckTopProc sEnv sessNames namedProcs (TopProc as p) =
@@ -336,17 +325,16 @@ tyCkProc env (S2PGetChan c name p) = do
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
 
-tyCkProc env (S2PGetVal c name p) = do
+tyCkProc env@(ConcTyEnv{cteBase=sNames}) (S2PGetVal c name p) = do
   -- Get the session the channel c is suppose to implement
   sess <- lookupChanUnfold c env
   -- Check that the session implements a "get", update the session in the
   -- environment, and introduce the new name
   env' <- case sess of
-               SGetTy   v s -> do
-                  env'  <- addIfNotRedefinition (Base name v) env
+               SGetTy _ s -> do
                   -- c has to already be in the environment so an insert
                   -- replaces the old session with the updated one
-                  updateSession c s env'
+                  updateSession c s env{cteBase=S.insert name sNames}
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' p
 
@@ -406,7 +394,7 @@ tyCkProc env (S2PPutVal c (S2PEx{..}) pCont) = do
                SPutTy v sCont ->
                  let exprTy = s2TyOf peExpr
                  in if exprTy `isSubtypeOf` v
-                       then updateSession c sCont $ markSeqUsed (S.map fst peFree) env
+                       then updateSession c sCont env
                        else throwError $ TypeMismatch c v exprTy
                _ -> throwError $ ProtocolMismatch c sess
   tyCkProc env' pCont
@@ -567,7 +555,7 @@ tyCkProc env (S2PCoRec n is p) = do
                               (True, _) -> throwError $ NonPrimaryIndSessArg c
                               _ -> return . TorSSess $ s
                    Nothing -> throwError $ UndefinedChan c
-            Right (S2PEx{..}) -> liftM TorSTy $ s2TyOf peExpr
+            Right (S2PEx{..}) -> return $ TorSTy (s2TyOf peExpr)
     ) argVals
   let coRecSig = zip varNames argTypes
   -- Check for errors in the arguments passed to the corecursive process
@@ -626,7 +614,7 @@ updateEnvFromProcArgs =
     \acc ce ->
       case ce of
            Left c -> consumeLinear (Just RTUse) c acc
-           Right e -> return $ markSeqUsed (freeVars e) acc
+           Right _ -> return acc
     )
 
 updateEnvFromRecArgs :: ConcTyEnv -> [ChanEx S2PEx] -> SessTyErrM ConcTyEnv
@@ -635,7 +623,7 @@ updateEnvFromRecArgs =
     \acc ce ->
       case ce of
            Left c -> consumeLinear (Just RTImpl) c acc
-           Right e -> return $ markSeqUsed (freeVars e) acc
+           Right _ -> return acc
     )
 
 -- The current env, the env in which the recursive definition was made, the
@@ -643,7 +631,7 @@ updateEnvFromRecArgs =
 typeRecursionVar :: ConcTyEnv
                  -> Text
                  -> [ChanEx S2PEx]
-                 -> [(Text, TyOrSess S2Ty)]
+                 -> [(Text, S2TyOrSess)]
                  -> SessTyErrM ConcTyEnv
 typeRecursionVar env n as sig = do
   checkProcArgErrs env n as sig
@@ -663,7 +651,7 @@ typeNamedProc env n as = do
 checkProcArgErrs :: ConcTyEnv
                  -> Text
                  -> [ChanEx S2PEx]
-                 -> [(Text, TyOrSess S2Ty)]
+                 -> [(Text, S2TyOrSess)]
                  -> SessTyErrM ()
 checkProcArgErrs env n as sig = do
   when (length sig /= length as)

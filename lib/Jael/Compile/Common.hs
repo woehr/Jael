@@ -20,7 +20,8 @@ data CompileErr = ParseErr Text
                 | TypeDefErr [Text]
                 | TypeInfErr S2TypeErr
                 | AmbigName (M.Map Text (S.Set Text))
-                | ProcSeqErr (M.Map Text [S2ProcSeqErr])
+                | ProcSeqErr (M.Map Text [S2ProcErr])
+                | ProtocolValidationErr (M.Map Text SessDefErr)
   deriving (Eq, Show)
 
 type CompileErrM = Either CompileErr
@@ -32,14 +33,15 @@ data TopArea = TopArea { taAddr :: Integer
 data Stage1 = Stage1 { s1Exprs     :: M.Map Text (TopExpr S1Ex S1Ty)
                      , s1Udts      :: M.Map Text UserDefinedType
                      , s1Areas     :: M.Map Text TopArea
-                     , s1Protos    :: M.Map Text Session
-                     , s1Procs     :: M.Map Text (TopProc S1Proc S1Ty)
+                     , s1Protos    :: M.Map Text S1Session
+                     , s1Procs     :: M.Map Text S1TopProc
                      , s1ExprOrder :: [Text]
                      } deriving (Show)
 
 data Stage2 = Stage2 { s1Data      :: Stage1
                      , s2Exprs     :: M.Map Text (TopExpr S2TyEx S2Ty)
+                     , s2Protos    :: M.Map Text S2Session
                      , s2ProcExprs :: M.Map Text S2PEx
-                     , s2Procs     :: M.Map Text (TopProc S2Proc S2Ty)
+                     , s2Procs     :: M.Map Text S2TopProc
                      } deriving (Show)
 

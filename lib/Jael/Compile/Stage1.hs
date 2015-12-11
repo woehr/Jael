@@ -33,7 +33,7 @@ gToTopArea i (UIdent t) = TopArea { taAddr = parseAnyInt i, taType = pack t }
 splitTop :: GProg -> ( [(Text, TopExpr S1Ex S1Ty)]
                      , [(Text, UserDefinedType)]
                      , [(Text, TopArea)]
-                     , [(Text, Session)]
+                     , [(Text, S1Session)]
                      , [(Text, S1TopProc)]
                      )
 splitTop (GProg xs) = foldr (\x (a, b, c, d, e) ->
@@ -49,7 +49,7 @@ splitTop (GProg xs) = foldr (\x (a, b, c, d, e) ->
        (GTopDefGTypeDef (GTDefArea (UIdent n) addr ty))
          -> (a,b,(pack n, gToTopArea addr ty)                :c,d,e)
        (GTopDefGTypeDef (GTDefProto (UIdent n) y))
-         -> (a,b,c,(pack n, dual $ gToSession y)               :d,e)
+         -> (a,b,c,(pack n, gToSession y)                      :d,e)
        (GTopDefGProcDef (GProcDef (GProcName (UIdent n)) ys p))
          -> (a,b,c,d,(pack n, gToTopProc (ys, p))                :e)
   ) ([],[],[],[],[]) xs
@@ -74,7 +74,7 @@ shadowingDef ns ps =
 nameChecks :: ( [(Text, TopExpr S1Ex S1Ty)]
               , [(Text, UserDefinedType)]
               , [(Text, TopArea)]
-              , [(Text, Session)]
+              , [(Text, S1Session)]
               , [(Text, S1TopProc)]
               )
            -> CompileErrM ()
@@ -92,12 +92,10 @@ nameChecks (exprs, udts, areas, protocols, procs) = do
   shadowingDef topLevelNames procs
 
 defErrs :: [UserDefinedType]
-        -> [Session]
         -> [S1TopProc]
         -> CompileErrM ()
-defErrs udts ss ps =
+defErrs udts ps =
   let errs = mapMaybe (liftA (pack . show) . validateUDT) udts
-          ++ mapMaybe (liftA (pack . show) . validateSession) ss
           ++ mapMaybe (liftA (pack . show) . validateTopProc) ps
    in unless (null errs)
         $ throwError $ TypeDefErr errs
@@ -122,7 +120,7 @@ nameCycle depMap =
 -- Returns the order in which expressions and types should be processed
 dependencyAndUndefinedChecks :: M.Map Text (TopExpr S1Ex S1Ty)
                              -> M.Map Text UserDefinedType
-                             -> M.Map Text Session
+                             -> M.Map Text S1Session
                              -> M.Map Text S1TopProc
                              -> CompileErrM [Text]
 dependencyAndUndefinedChecks exprs udts protocols procs = do
@@ -175,7 +173,6 @@ stage1 p = do
 
   -- Check for errors in a definition
   defErrs (M.elems udts)
-          (M.elems protocols)
           (M.elems procs)
 
   exprOrder <- dependencyAndUndefinedChecks exprs udts protocols procs

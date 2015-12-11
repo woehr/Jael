@@ -5,7 +5,7 @@ module Test.Jael.CodeGen.Types
 ) where
 
 import           Jael.CodeGen.Convert
-import           Jael.Seq.CG_Types
+import           Jael.Seq.Types
 import           Jael.Seq.Literal
 import           LLVM.General.AST
 import           LLVM.General.AST.Constant
@@ -25,22 +25,22 @@ testGeneratedLLVM :: (GenLLVM a, Eq a,              Show a,
                   => [(a, LLVMOutput a)] -> Assertion
 testGeneratedLLVM x = assertEqual "" (map snd x) (map (toLLVM . fst) x)
 
-intTypeTest :: [(CGTy, Type)]
+intTypeTest :: [(S2Ty, Type)]
 intTypeTest =
-  [ (CGTySimple BTInt{btIntMin =  0, btIntMax = 0}, IntegerType{typeBits = 1})
-  , (CGTySimple BTInt{btIntMin =  0, btIntMax = 1}, IntegerType{typeBits = 2})
-  , (CGTySimple BTInt{btIntMin =  0, btIntMax = 2}, IntegerType{typeBits = 3})
-  , (CGTySimple BTInt{btIntMin =  0, btIntMax = 3}, IntegerType{typeBits = 3})
-  , (CGTySimple BTInt{btIntMin =  0, btIntMax = 4}, IntegerType{typeBits = 4})
-  , (CGTySimple BTInt{btIntMin =  0, btIntMax = 7}, IntegerType{typeBits = 4})
-  , (CGTySimple BTInt{btIntMin =  0, btIntMax = 8}, IntegerType{typeBits = 5})
-  , (CGTySimple BTInt{btIntMin = -1, btIntMax = 0}, IntegerType{typeBits = 1})
-  , (CGTySimple BTInt{btIntMin = -2, btIntMax = 0}, IntegerType{typeBits = 2})
-  , (CGTySimple BTInt{btIntMin = -3, btIntMax = 0}, IntegerType{typeBits = 3})
-  , (CGTySimple BTInt{btIntMin = -4, btIntMax = 0}, IntegerType{typeBits = 3})
-  , (CGTySimple BTInt{btIntMin = -5, btIntMax = 0}, IntegerType{typeBits = 4})
-  , (CGTySimple BTInt{btIntMin = -8, btIntMax = 0}, IntegerType{typeBits = 4})
-  , (CGTySimple BTInt{btIntMin = -9, btIntMax = 0}, IntegerType{typeBits = 5})
+  [ (S2TySimple BTInt{btIntMin =  0, btIntMax = 0}, IntegerType{typeBits = 1})
+  , (S2TySimple BTInt{btIntMin =  0, btIntMax = 1}, IntegerType{typeBits = 2})
+  , (S2TySimple BTInt{btIntMin =  0, btIntMax = 2}, IntegerType{typeBits = 3})
+  , (S2TySimple BTInt{btIntMin =  0, btIntMax = 3}, IntegerType{typeBits = 3})
+  , (S2TySimple BTInt{btIntMin =  0, btIntMax = 4}, IntegerType{typeBits = 4})
+  , (S2TySimple BTInt{btIntMin =  0, btIntMax = 7}, IntegerType{typeBits = 4})
+  , (S2TySimple BTInt{btIntMin =  0, btIntMax = 8}, IntegerType{typeBits = 5})
+  , (S2TySimple BTInt{btIntMin = -1, btIntMax = 0}, IntegerType{typeBits = 1})
+  , (S2TySimple BTInt{btIntMin = -2, btIntMax = 0}, IntegerType{typeBits = 2})
+  , (S2TySimple BTInt{btIntMin = -3, btIntMax = 0}, IntegerType{typeBits = 3})
+  , (S2TySimple BTInt{btIntMin = -4, btIntMax = 0}, IntegerType{typeBits = 3})
+  , (S2TySimple BTInt{btIntMin = -5, btIntMax = 0}, IntegerType{typeBits = 4})
+  , (S2TySimple BTInt{btIntMin = -8, btIntMax = 0}, IntegerType{typeBits = 4})
+  , (S2TySimple BTInt{btIntMin = -9, btIntMax = 0}, IntegerType{typeBits = 5})
   ]
 bitStringToBitLiteral :: String -> Literal
 bitStringToBitLiteral = LBit .

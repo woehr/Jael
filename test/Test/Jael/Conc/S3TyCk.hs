@@ -1,4 +1,4 @@
-module Test.Jael.Conc.TyCk
+module Test.Jael.Conc.S3TyCk
 ( concTyCkTests
 ) where
 
@@ -6,13 +6,13 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           Jael.Conc.Proc
 import           Jael.Conc.Session
-import           Jael.Conc.TyCk
+import           Jael.Conc.TyCk.S3
 import           Jael.Grammar
 import           Jael.Parser
-import           Jael.Seq.CG_AST (CGTypeErr(..))
+import           Jael.Seq.AST (CGTypeErr(..))
 import           Jael.Seq.Env
-import           Jael.Seq.HM_Types
-import           Jael.Seq.TI (SeqTIErr(..))
+import           Jael.Seq.Types
+import           Jael.Seq.TI.S2 (SeqTIErr(..))
 import qualified Test.Framework as T
 
 concTyCkTests :: [T.Test]

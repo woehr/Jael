@@ -5,6 +5,7 @@ module Jael.Compile.Stage2 where
 import qualified Data.Map as M
 import           Jael.Compile.Common
 import           Jael.Conc.Proc
+import           Jael.Conc.Session
 import           Jael.Conc.TyCk.S2
 import           Jael.Seq.AST
 import           Jael.Seq.Env
@@ -72,14 +73,19 @@ stage2 :: Stage1
 stage2 s1@(Stage1{..}) = do
   env <- processSeqTypes defaultEnv s1Udts
 
-  -- The TopExpr map is returned with CG types and expr replaced by HM ones
   (env', exprs) <- typeCheckSeq s1Exprs s1ExprOrder env
 
+  let (protoErrs, protos) = M.mapEither validateS1Session s1Protos
+  unless (null protoErrs) $ throwError (ProtocolValidationErr protoErrs)
+
+  -- TODO: Change name of checkSeqInProcs since it does more than just seq type
+  -- checking.
   (procs, procExprs) <- checkSeqInProcs env' s1Procs
 
   return Stage2
            { s1Data   = s1
            , s2Exprs  = exprs
+           , s2Protos = protos
            , s2ProcExprs = procExprs
            , s2Procs  = procs
            }

@@ -24,15 +24,18 @@ type Label = Text
 
 type ChanEx a = Either Channel a
 
-data TyOrSess a = TorSTy a
-                | TorSSess Session
-                deriving (Show)
+data TyOrSess t s = TorSTy t
+                  | TorSSess s
+                  deriving (Show)
 
-data TopProc a b = TopProc [(Text, TyOrSess b)] a
+type S1TyOrSess = TyOrSess S1Ty S1Session
+type S2TyOrSess = TyOrSess S2Ty S2Session
+
+data TopProc t s p = TopProc [(Text, TyOrSess t s)] p
   deriving (Show)
 
-type S1TopProc = TopProc S1Proc S1Ty
-type S2TopProc = TopProc S2Proc S2Ty
+type S1TopProc = TopProc S1Ty S1Session S1Proc
+type S2TopProc = TopProc S2Ty S2Session S2Proc
 
 -- The expression extracted from the process
 data S2PEx = S2PEx { peExpr :: S2TyEx
@@ -45,7 +48,7 @@ data S1Proc = S1PGetChan Channel   Channel S1Proc
             | S1PPutChan Channel   Channel S1Proc
             | S1PPutVal  Channel   S1Ex    S1Proc
             | S1PNewVal  Text      S1Ex    S1Proc
-            | S1PNewChan Text Text Session S1Proc
+            | S1PNewChan Text Text S1Session S1Proc
             | S1PPar     [S1Proc]
             | S1PCase    Channel [(Label, S1Proc)]
             | S1PSel     Channel   Label  S1Proc
@@ -61,7 +64,7 @@ data S1ProcF a = S1PGetChanF Channel   Channel a
                | S1PPutChanF Channel   Channel a
                | S1PPutValF  Channel   S1Ex    a
                | S1PNewValF  Text      S1Ex    a
-               | S1PNewChanF Text Text Session a
+               | S1PNewChanF Text Text S1Session a
                | S1PParF     [a]
                | S1PCaseF    Channel [(Label, a)]
                | S1PSelF     Channel   Label  a
@@ -111,7 +114,7 @@ data S2Proc = S2PGetChan Channel   Channel S2Proc
             | S2PPutChan Channel   Channel S2Proc
             | S2PPutVal  Channel   S2PEx   S2Proc
             | S2PNewVal  Text      S2PEx   S2Proc
-            | S2PNewChan Text Text Session S2Proc
+            | S2PNewChan Text Text S2Session S2Proc
             | S2PPar     [S2Proc]
             | S2PCase    Channel [(Label, S2Proc)]
             | S2PSel     Channel   Label  S2Proc
@@ -127,7 +130,7 @@ data S2ProcF a = S2PGetChanF Channel   Channel a
                | S2PPutChanF Channel   Channel a
                | S2PPutValF  Channel   S2PEx   a
                | S2PNewValF  Text      S2PEx   a
-               | S2PNewChanF Text Text Session a
+               | S2PNewChanF Text Text S2Session a
                | S2PParF     [a]
                | S2PCaseF    Channel [(Label, a)]
                | S2PSelF     Channel   Label  a
@@ -336,7 +339,7 @@ coRecNames = cata alg
 redefinedCoRecVar :: S.Set Text -> S1Proc -> S.Set Text
 redefinedCoRecVar ns p = ns `S.intersection` coRecNames p
 
-gToProcArg :: GProcArg -> (Text, TyOrSess S1Ty)
+gToProcArg :: GProcArg -> (Text, TyOrSess S1Ty S1Session)
 gToProcArg (GProcArgType (LIdent i) x) =
   (pack i, TorSTy $ gToType x)
 gToProcArg (GProcArgSess (LIdent i) x) =
