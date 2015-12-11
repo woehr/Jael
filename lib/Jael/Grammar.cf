@@ -37,7 +37,7 @@ GIntParam2Empty. GIntParamTwo ::= ;
 
 GTBit.       GType ::= "Bit"    GIntParamOne ;
 GTBool.      GType ::= "Bool" ;
-GTBuffer.    GType ::= "Buffer" GIntParamTwo ;
+GTBuffer.    GType ::= "Buffer" GIntParamOne ;
 GTInt.       GType ::= "Int"    GIntParamTwo ;
 GTUnit.      GType ::= "Void" ;
 GTTup.       GType ::= "(" GTTupArg "," [GTTupArg] ")";

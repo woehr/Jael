@@ -1,3 +1,5 @@
+{-# Language FlexibleInstances #-}
+
 module Jael.Seq.Types where
 
 import qualified Data.Functor.Foldable as F
@@ -242,7 +244,8 @@ gToType :: GType -> S1Ty
 gToType GTUnit = S1TySimple BTUnit
 gToType (GTBit constraint) = S1TySimple $ BTBit (gTypeParamOne constraint)
 gToType GTBool = S1TySimple BTBool
-gToType (GTBuffer constraint) = S1TySimple $ uncurry BTBuffer (gTypeParamTwo constraint)
+gToType (GTBuffer constraint) = S1TySimple $ BTBuffer (gTypeParamOne constraint)
+--gToType (GTBuffer constraint) = S1TySimple $ uncurry BTBuffer (gTypeParamTwo constraint)
 gToType (GTInt constraint) = S1TySimple $ uncurry BTInt (gTypeParamTwo constraint)
 gToType (GTNamed (UIdent n) GTNamedNoParam) = S1TyNamed (pack n) []
 gToType (GTNamed (UIdent n) (GTNamedParams xs)) =
