@@ -14,8 +14,6 @@ token BinInt ({"0b"} ["01"]+) ;
 
 rules GAnyInt ::= DecInt | HexInt | OctInt | BinInt ;
 
-GChoiceLabel. GChoiceLabel ::= LIdent ;
-
 -- Sequential Types
 
 GTNamedParam. GTNamedParam ::= GType ;
@@ -46,7 +44,7 @@ GTTVar.      GType ::= LIdent ;
 
 -- Session Types
 
-GSessChoice. GSessChoice ::= GChoiceLabel "=>" GSession1 ;
+GSessChoice. GSessChoice ::= LIdent "=>" GSession1 ;
 separator nonempty GSessChoice "," ;
 
 GSessTy.   GSessOrTy ::= GType ;
@@ -175,9 +173,9 @@ GProcGetIgn.  GProc1 ::= GChan  "->"     "_"         ";" GProc1 ;
 GProcPutExpr. GProc1 ::= GChan  "<-"     GExpr       ";" GProc1 ;
 GProcPutChan. GProc1 ::= GChan  "<-"     GChan       ";" GProc1 ;
 
-GProcSel.     GProc1 ::= GChan "select" GChoiceLabel ";" GProc1 ;
+GProcSel.     GProc1 ::= GChan "select"  LIdent      ";" GProc1 ;
 
-GConcChoice.  GConcChoice ::= GChoiceLabel "=>" GProc ;
+GConcChoice.  GConcChoice ::= LIdent "=>" GProc ;
 separator nonempty GConcChoice "," ;
 
 GProcCho.     GProc1 ::= GChan "case"

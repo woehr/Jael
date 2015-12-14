@@ -1,4 +1,5 @@
 {-# Language FlexibleInstances #-}
+{-# Language RecordWildCards #-}
 
 module Jael.Seq.Types where
 
@@ -252,4 +253,19 @@ gToType (GTNamed (UIdent n) (GTNamedParams xs)) =
   S1TyNamed (pack n) (map (\(GTNamedParam t) -> gToType t) xs)
 gToType (GTTVar (LIdent s)) = S1TyVar (pack s)
 gToType (GTTup x xs) = S1TyTup $ map (\(GTTupArg y) -> gToType y) (x:xs)
+
+s1TypeToS2Type :: S1Ty -> Maybe S2Ty
+s1TypeToS2Type =
+  let alg (S1TySimpleF BTBit{..})    = liftA  (S2TySimple . BTBit) btBits
+      alg (S1TySimpleF BTBuffer{..}) = liftA  (S2TySimple . BTBuffer) btBufferMin
+      alg (S1TySimpleF BTInt{..})    = liftA S2TySimple $ (liftA2 BTInt) btIntMin btIntMax
+      alg (S1TySimpleF BTUnit)       = Just $ S2TySimple BTUnit
+      alg (S1TySimpleF BTBool)       = Just $ S2TySimple BTUnit
+      alg (S1TyTupF xs)     = liftA S2TyTup (sequenceA xs)
+      alg (S1TyNamedF n xs) = liftA (S2TyNamed n) (sequenceA xs)
+      alg (S1TyVarF n)      = Just $ S2TyVar n
+   in F.cata alg
+
+gToS2Type :: GType -> Maybe S2Ty
+gToS2Type = s1TypeToS2Type . gToType
 

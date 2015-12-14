@@ -16,7 +16,9 @@ data ProcDefErr = ProcDefErr
   , pErrDupArgs :: S.Set Text
   , pErrCoRecVarCapture :: M.Map Text (S.Set Text)
   , pErrAmbiguousRecName :: S.Set Text
-  } deriving (Eq, Show)
+  }
+                | PDESessDefErr SessDefErr
+                  deriving (Eq, Show)
 
 type Channel = Text
 type Var  = Text
@@ -28,14 +30,11 @@ data TyOrSess t s = TorSTy t
                   | TorSSess s
                   deriving (Show)
 
-type S1TyOrSess = TyOrSess S1Ty S1Session
-type S2TyOrSess = TyOrSess S2Ty S2Session
-
 data TopProc t s p = TopProc [(Text, TyOrSess t s)] p
   deriving (Show)
 
-type S1TopProc = TopProc S1Ty S1Session S1Proc
-type S2TopProc = TopProc S2Ty S2Session S2Proc
+type S1TopProc = TopProc S1Ty Session S1Proc
+type S2TopProc = TopProc S2Ty Session S2Proc
 
 -- The expression extracted from the process
 data S2PEx = S2PEx { peExpr :: S2TyEx
@@ -47,7 +46,7 @@ data S1Proc = S1PGetChan Channel   Channel S1Proc
             | S1PPutChan Channel   Channel S1Proc
             | S1PPutVal  Channel   S1Ex    S1Proc
             | S1PNewVal  Text      S1Ex    S1Proc
-            | S1PNewChan Text Text S1Session S1Proc
+            | S1PNewChan Text Text Session S1Proc
             | S1PPar     [S1Proc]
             | S1PCase    Channel [(Label, S1Proc)]
             | S1PSel     Channel   Label  S1Proc
@@ -63,7 +62,7 @@ data S1ProcF a = S1PGetChanF Channel   Channel a
                | S1PPutChanF Channel   Channel a
                | S1PPutValF  Channel   S1Ex    a
                | S1PNewValF  Text      S1Ex    a
-               | S1PNewChanF Text Text S1Session a
+               | S1PNewChanF Text Text Session a
                | S1PParF     [a]
                | S1PCaseF    Channel [(Label, a)]
                | S1PSelF     Channel   Label  a
@@ -113,7 +112,7 @@ data S2Proc = S2PGetChan Channel   Channel S2Proc
             | S2PPutChan Channel   Channel S2Proc
             | S2PPutVal  Channel   S2PEx   S2Proc
             | S2PNewVal  Text      S2PEx   S2Proc
-            | S2PNewChan Text Text S2Session S2Proc
+            | S2PNewChan Text Text Session S2Proc
             | S2PPar     [S2Proc]
             | S2PCase    Channel [(Label, S2Proc)]
             | S2PSel     Channel   Label  S2Proc
@@ -129,7 +128,7 @@ data S2ProcF a = S2PGetChanF Channel   Channel a
                | S2PPutChanF Channel   Channel a
                | S2PPutValF  Channel   S2PEx   a
                | S2PNewValF  Text      S2PEx   a
-               | S2PNewChanF Text Text S2Session a
+               | S2PNewChanF Text Text Session a
                | S2PParF     [a]
                | S2PCaseF    Channel [(Label, a)]
                | S2PSelF     Channel   Label  a
@@ -178,7 +177,7 @@ gChanToText (GChan (LIdent x)) = pack x
 gChanToText (GChanScoped (LScopedIdent x)) = pack x
 
 gChoiceToProc :: [GConcChoice] -> [(Text, GProc)]
-gChoiceToProc = map (\(GConcChoice (GChoiceLabel (LIdent x)) p) -> (pack x, p))
+gChoiceToProc = map (\(GConcChoice (LIdent x) p) -> (pack x, p))
 
 gToInitList :: [GRecInitializer] -> [(Text, ChanEx S1Ex)]
 gToInitList = map (\i -> case i of
@@ -194,36 +193,56 @@ gProcParamToEx :: GProcParam -> ChanEx S1Ex
 gProcParamToEx (GProcParamChan c) = Left (gChanToText c)
 gProcParamToEx (GProcParamExpr x) = Right $ gToS1Ex x
 
-gToProc :: GProc -> S1Proc
+{-
+validateTopProc :: S1TopProc -> Maybe ProcDefErr
+validateTopProc (TopProc as p) =
+  let dupArgs = S.fromList (repeated $ map fst as) `S.union` recDupArgs p
+      free = procFreeVars p S.\\ S.fromList (map fst as)
+      varCapt = coRecCapturedVars p
+      ambigNames = ambigCoRecDef p
+   in if S.size dupArgs    /= 0 ||
+         S.size free       /= 0 ||
+         M.size varCapt    /= 0 ||
+         S.size ambigNames /= 0
+         then Just ProcDefErr
+                     { pErrDupArgs = dupArgs
+                     , pErrFreeVars = free
+                     , pErrCoRecVarCapture = M.map (S.\\ free) varCapt
+                     , pErrAmbiguousRecName = ambigNames
+                     }
+         else Nothing
+-}
+
+gToProc :: GProc -> Either ProcDefErr S1Proc
 gToProc = ana coalg
   where coalg (GProcNew (LIdent x) (LIdent y) s p
-              ) = S1PNewChanF (pack x) (pack y) (gToSession s) p
+              ) = either (throwError . PDESessDefErr) (\s -> return $ S1PNewChanF (pack x) (pack y) s p) (gToSession s)
         coalg (GProcLet (LIdent x) y p
-              ) = S1PNewValF (pack x) (gToS1Ex y) p
+              ) = return $ S1PNewValF (pack x) (gToS1Ex y) p
         coalg (GProcGetExpr c (LIdent y) p
-              ) = S1PGetValF (gChanToText c) (pack y) p
+              ) = return $ S1PGetValF (gChanToText c) (pack y) p
         coalg (GProcGetChan c (LIdent y) p
-              ) = S1PGetChanF (gChanToText c) (pack y) p
+              ) = return $ S1PGetChanF (gChanToText c) (pack y) p
         coalg (GProcGetIgn  c p
-              ) = S1PGetIgnF (gChanToText c) p
+              ) = return $ S1PGetIgnF (gChanToText c) p
         coalg (GProcPutExpr c ex p
-              ) = S1PPutValF (gChanToText c) (gToS1Ex ex) p
+              ) = return $ S1PPutValF (gChanToText c) (gToS1Ex ex) p
         coalg (GProcPutChan c1 c2 p
-              ) = S1PPutChanF (gChanToText c1) (gChanToText c2) p
-        coalg (GProcSel c (GChoiceLabel (LIdent y)) p
-              ) = S1PSelF (gChanToText c) (pack y) p
+              ) = return $ S1PPutChanF (gChanToText c1) (gChanToText c2) p
+        coalg (GProcSel c (LIdent y) p
+              ) = return $ S1PSelF (gChanToText c) (pack y) p
         coalg (GProcCho c ys
-              ) = S1PCaseF (gChanToText c) (gChoiceToProc ys)
+              ) = return $ S1PCaseF (gChanToText c) (gChoiceToProc ys)
         coalg (GProcRec (GProcName (UIdent x)) i p
-              ) = S1PCoRecF (pack x) (gToInitList i) p
+              ) = return $ S1PCoRecF (pack x) (gToInitList i) p
         coalg (GProcNamed (GProcName (UIdent x)) params
-              ) = S1PNamedF (pack x) (map gProcParamToEx params)
+              ) = return $ S1PNamedF (pack x) (map gProcParamToEx params)
         coalg (GProcInact
-              ) = S1PNilF
+              ) = return $ S1PNilF
         coalg (GProcFwd c1 c2
-              ) = S1PFwdF (gChanToText c1) (gChanToText c2)
+              ) = return $ S1PFwdF (gChanToText c1) (gChanToText c2)
         coalg (GProcPar e1 es
-              ) = S1PParF (gParElemToProc e1 : map gParElemToProc es)
+              ) = return $ S1PParF (gParElemToProc e1 : map gParElemToProc es)
 
 procDeps :: S1TopProc -> S.Set Text
 procDeps (TopProc _ p) = cata alg p
@@ -338,30 +357,12 @@ coRecNames = cata alg
 redefinedCoRecVar :: S.Set Text -> S1Proc -> S.Set Text
 redefinedCoRecVar ns p = ns `S.intersection` coRecNames p
 
-gToProcArg :: GProcArg -> (Text, TyOrSess S1Ty S1Session)
+gToProcArg :: GProcArg -> Either ProcDefErr (Text, TyOrSess S1Ty Session)
 gToProcArg (GProcArgType (LIdent i) x) =
-  (pack i, TorSTy $ gToType x)
+  return (pack i, TorSTy $ gToType x)
 gToProcArg (GProcArgSess (LIdent i) x) =
-  (pack i, TorSSess (gToSession x))
+  either (throwError . PDESessDefErr) (\s -> return (pack i, TorSSess s)) (gToSession x)
 
-gToTopProc :: ([GProcArg], GProc) -> S1TopProc
-gToTopProc (as, p) = TopProc (map gToProcArg as) (gToProc p)
-
-validateTopProc :: S1TopProc -> Maybe ProcDefErr
-validateTopProc (TopProc as p) =
-  let dupArgs = S.fromList (repeated $ map fst as) `S.union` recDupArgs p
-      free = procFreeVars p S.\\ S.fromList (map fst as)
-      varCapt = coRecCapturedVars p
-      ambigNames = ambigCoRecDef p
-   in if S.size dupArgs    /= 0 ||
-         S.size free       /= 0 ||
-         M.size varCapt    /= 0 ||
-         S.size ambigNames /= 0
-         then Just ProcDefErr
-                     { pErrDupArgs = dupArgs
-                     , pErrFreeVars = free
-                     , pErrCoRecVarCapture = M.map (S.\\ free) varCapt
-                     , pErrAmbiguousRecName = ambigNames
-                     }
-         else Nothing
+gToTopProc :: ([GProcArg], GProc) -> Either ProcDefErr S1TopProc
+gToTopProc (as, p) = liftA2 TopProc (sequence $ map gToProcArg as) (gToProc p)
 
