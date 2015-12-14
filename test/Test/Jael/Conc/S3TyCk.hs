@@ -6,13 +6,14 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           Jael.Conc.Proc
 import           Jael.Conc.Session
+import           Jael.Conc.TyCk.S2 (s1ProcToS2Proc)
 import           Jael.Conc.TyCk.S3
 import           Jael.Grammar
 import           Jael.Parser
-import           Jael.Seq.AST (CGTypeErr(..))
+import           Jael.Seq.AST
 import           Jael.Seq.Env
 import           Jael.Seq.Types
-import           Jael.Seq.TI.S2 (SeqTIErr(..))
+import           Jael.Seq.TI.S2 (S2TypeErr)
 import qualified Test.Framework as T
 
 concTyCkTests :: [T.Test]
@@ -78,12 +79,14 @@ concTyCkTests =
   ]
 
 -- A map of aliases that will be passed to the type checking function
-testAliases :: M.Map Text Session
+testAliases :: M.Map Text S2Session
 testAliases =
   M.map (
     \t -> case runParser pGSession t of
                Left err -> error (unpack err)
-               Right g  -> gToSession g
+               Right g -> case s1SessionToS2Session (gToSession g) of
+                               Just s -> s
+                               Nothing -> error "S1Session doesn't convert to S2Session."
   ) $ M.fromList
         [ ("GetInt", "?[Int]")
         , ("PutInt", "![Int]")
@@ -92,12 +95,17 @@ testAliases =
 
 -- A map of process names to their arguments that will be passed to the type
 -- checking function
-testProcs :: M.Map Text [(Text, TyOrSess)]
+testProcs :: M.Map Text [(Text, S2TyOrSess)]
 testProcs =
   M.map (map $
     \t -> case runParser pGProcArg t of
                Left err -> error (unpack err)
-               Right g -> gToProcArg g
+               Right g -> case gToProcArg g of
+                               (n, TorSSess s) -> (n, maybe (error "S1Session doesn't convert to S2Session.") TorSSess
+                                                            (s1SessionToS2Session s)
+                                                  )
+                               x -> x
+
   ) $ M.fromList
         [ ("DualArgProc", ["^arg1: ![Int]", "^arg2: ?[Int]"])
         , ("ProcArgTest", ["a1: Int", "a2: Bool", "^a3: ![Int]", "^a4: ![Bool]"])
@@ -108,6 +116,7 @@ testProcs =
 
 doTyCk :: Text -> Maybe SessTyErr
 doTyCk = tyCheckTopProc defaultEnv testAliases testProcs
+         . s1ProcToS2Proc defaultEnv
          . parseTopProc
          . pGTopDef
          . myLexer
@@ -125,7 +134,7 @@ checkTyCkErr (t, expected) =
        Just err -> assertEqual "" expected err
        Nothing -> assertFailure "Expected type check error"
 
-parseTopProc :: Err GTopDef -> TopProc
+parseTopProc :: Err GTopDef -> S1TopProc
 parseTopProc (Ok (GTopDefGProcDef (GProcDef _ as p))) = gToTopProc (as, p)
 parseTopProc x = error $ "Not a TopProc definition or invalid syntax:\n" ++ show x
 
@@ -137,7 +146,7 @@ emptyProc = pack [raw|
 unusedLinearArg :: (Text, SessTyErr)
 unusedLinearArg = (pack [raw|
   proc X(^x: ?[Int]){ }
-|], UnusedResources{ unusedLin=M.fromList [("x", SGetTy (TySimple TyInt) SEnd)]
+|], UnusedResources{ unusedLin=M.fromList [("x", SGetTy (S2TySimple undefined) SEnd)]
                    , unusedSeq=M.empty
                    }
   )
@@ -164,7 +173,7 @@ unusedSeqVars = (pack [raw|
   proc X(^x: ?[Int], y: Bool) {
     ^x -> z;
   }
-|], UnusedResources{ unusedSeq=M.fromList [("y", (TySimple TyBool)), ("z", (TySimple TyInt))]
+|], UnusedResources{ unusedSeq=M.fromList [("y", (S2TySimple BTBool)), ("z", (S2TySimple undefined))]
                    , unusedLin=M.empty
                    }
   )
@@ -184,7 +193,7 @@ channelGetUnusedLin = (pack [raw|
   proc X(^x: ?[<GetInt>]) {
     ^x -> ^y;
   }
-|], UnusedResources{ unusedLin=M.fromList [("y", SGetTy (TySimple TyInt) SEnd)]
+|], UnusedResources{ unusedLin=M.fromList [("y", SGetTy (S2TySimple undefined) SEnd)]
                    , unusedSeq=M.empty
                    }
   )
@@ -199,10 +208,10 @@ recDefUnfold = (pack [raw|
     ^x -> z;
   }
 |], UnusedResources{ unusedLin=M.fromList
-                      [ ("x", SCoInd "X" $ SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SVar "X")
-                      , ("y", SCoInd "X" $ SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SVar "X")
+                      [ ("x", SCoInd "X" $ SPutTy (S2TySimple undefined) $ SGetTy (S2TySimple undefined) $ SVar "X")
+                      , ("y", SCoInd "X" $ SPutTy (S2TySimple undefined) $ SGetTy (S2TySimple undefined) $ SVar "X")
                       ]
-                   , unusedSeq=M.fromList [("z", (TySimple TyInt))]
+                   , unusedSeq=M.fromList [("z", (S2TySimple undefined))]
                    }
   )
 
@@ -223,13 +232,13 @@ reusedRecVarInAlias = (pack [raw|
     ^y select a;
   }
 |], UnusedResources{ unusedLin=M.fromList
-                      [ ("x", SCoInd "X" $ SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SVar "X")
+                      [ ("x", SCoInd "X" $ SPutTy (S2TySimple undefined) $ SGetTy (S2TySimple undefined) $ SVar "X")
                       , ("y", SCoInd "X" $ SSelect [ ("a", SVar "X")
                                                    , ("b", SVar "AltTxRxInt")
                                                    ]
                         )
                       ]
-                   , unusedSeq=M.fromList [("z", (TySimple TyInt))]
+                   , unusedSeq=M.fromList [("z", (S2TySimple undefined))]
                    }
   )
 
@@ -570,15 +579,15 @@ caseTypeErrors = (pack [raw|
     | ^a <- 42; ^a <- 42;
     )
   }
-|], CaseProcErrs $ M.fromList [ ("a", ProtocolMismatch "d" $ SGetTy (TySimple TyInt) SEnd)
-                              , ("b", TypeMismatch "z" (TySimple TyBool))
+|], CaseProcErrs $ M.fromList [ ("a", ProtocolMismatch "d" $ SGetTy (S2TySimple undefined) SEnd)
+                              , ("b", TypeMismatch "z" (S2TySimple BTBool))
                               , ("c", UnusedResources
-                                        { unusedLin=M.fromList [("d", SGetTy (TySimple TyInt) SEnd)]
+                                        { unusedLin=M.fromList [("d", SGetTy (S2TySimple undefined) SEnd)]
                                         , unusedSeq=M.empty
                                         }
                                 )
                               , ("d", UnusedResources
-                                        { unusedLin=M.fromList [("b", SGetTy (TySimple TyInt) SEnd)]
+                                        { unusedLin=M.fromList [("b", SGetTy (S2TySimple undefined) SEnd)]
                                         , unusedSeq=M.empty
                                         }
                                 )
@@ -623,7 +632,7 @@ undefinedCoRecArgExpr = (pack [raw|
       ^a <- b;
     }
   }
-|], SeqErrs [InferenceErr (UnboundVar "x")]
+|], undefined
   )
 
 interferingCoRecArgs :: (Text, SessTyErr)
@@ -658,7 +667,7 @@ coRecVariableArgUndefExpr = (pack [raw|
       X(b)
     }
   }
-|], SeqErrs [InferenceErr (UnboundVar "b")]
+|], undefined
   )
 
 coRecVariableArgTypeMismatch :: (Text, SessTyErr)
@@ -697,7 +706,7 @@ coRecResidualEnv = (pack [raw|
     )
   }
 |], UnusedResources
-      { unusedLin=M.fromList [("a", SCoInd "X" $ SPutTy (TySimple TyInt) $ SVar "X")]
+      { unusedLin=M.fromList [("a", SCoInd "X" $ SPutTy (S2TySimple undefined) $ SVar "X")]
       , unusedSeq=M.empty
       }
   )

@@ -39,7 +39,6 @@ type S2TopProc = TopProc S2Ty S2Session S2Proc
 
 -- The expression extracted from the process
 data S2PEx = S2PEx { peExpr :: S2TyEx
-                   , peFree :: S.Set (Text, S2Ty)
                    } deriving (Eq, Show)
 
 data S1Proc = S1PGetChan Channel   Channel S1Proc

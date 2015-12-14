@@ -22,7 +22,7 @@ procTests =
   , testCase "ambiguious co-rec name" $ checkProcErr ambiguousRecName
   ]
 
-checkProc :: (Text, Proc) -> Assertion
+checkProc :: (Text, S1Proc) -> Assertion
 checkProc (t, expected) = either (assertFailure . show)
                                  (assertEqual "" expected . gToProc)
                                  (runParser pGProc t)
@@ -34,11 +34,11 @@ checkProcErr (t, expected) = either (assertFailure . show)
                                       . parseTopProc)
                                     (runParser pGTopDef t)
 
-parseTopProc :: GTopDef -> TopProc
+parseTopProc :: GTopDef -> S1TopProc
 parseTopProc (GTopDefGProcDef (GProcDef _ as p)) = gToTopProc (as, p)
 parseTopProc _ = error "Expected only process definitions."
 
-valid :: (Text, Proc)
+valid :: (Text, S1Proc)
 valid = (pack [raw|
   new (^xp, ^xn) : <SomeProto>;
   y = 5;
@@ -63,33 +63,33 @@ valid = (pack [raw|
                 )
               }
     }
-|], PNewChan "xp" "xn" (SVar "SomeProto")
-  $ PNewVal "y" (CGLit (LInt 5))
-  $ PGetVal "xp" "z"
-  $ PPutVal "xn" (CGVar "y")
-  $ PPutVal "xp" (CGLit $ LBool True)
-  $ PSel "xn" "label"
-  $ PCase "xp"
-      [ ("p1", PNil)
-      , ("p2", PPar
-                [ PNil
-                , PNamed "SomeProc" [Left "xp"]
-                , PNamed "SomeProc" []
-                , PNewChan "a" "b" (SDualVar "Proto2")
-                $ PPar
-                    [ PPutChan "z" "a" PNil
-                    , PGetVal "z" "b" PNil
+|], S1PNewChan "xp" "xn" (S1SVar "SomeProto")
+  $ S1PNewVal "y" (S1Lit $ LInt 5)
+  $ S1PGetVal "xp" "z"
+  $ S1PPutVal "xn" (S1Var "y")
+  $ S1PPutVal "xp" (S1Lit $ LBool True)
+  $ S1PSel "xn" "label"
+  $ S1PCase "xp"
+      [ ("p1", S1PNil)
+      , ("p2", S1PPar
+                [ S1PNil
+                , S1PNamed "SomeProc" [Left "xp"]
+                , S1PNamed "SomeProc" []
+                , S1PNewChan "a" "b" (S1SDualVar "Proto2")
+                $ S1PPar
+                    [ S1PPutChan "z" "a" S1PNil
+                    , S1PGetVal  "z" "b" S1PNil
                     ]
                 ]
         )
-      , ("p3", PCoRec "X" [ ("j", Right $ CGVar "x")
-                          , ("k", Right $ CGLit (LInt 1))
+      , ("p3", S1PCoRec "X" [ ("j", Right $ S1Var "x")
+                          , ("k", Right $ S1Lit (LInt 1))
                           ]
-               ( PPutVal "j" (CGVar "k")
-               $ PPar [ PNamed "X" [ Left "j"
-                                   , Right $ CGCallPrm PAdd [CGVar "k", CGLit (LInt 1)]
+               ( S1PPutVal "j" (S1Var "k")
+               $ S1PPar [ S1PNamed "X" [ Left "j"
+                                       , Right $ S1CallPrm PAdd [S1Var "k", S1Lit (LInt 1)]
                                    ]
-                      , PNil
+                      , S1PNil
                       ]
                )
         )

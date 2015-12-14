@@ -6,7 +6,6 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import           Jael.Compile
 import           Jael.Compile.Common
-import           Jael.Seq.AST
 import           Jael.Seq.TI.S2 (S2TypeErr(..))
 import qualified Test.Framework as T
 
