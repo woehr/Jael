@@ -82,27 +82,26 @@ combineLabelList f xs ys =
 
 -- Partial function. Returns the dual of a session. Will error if a recursion
 -- variable is dualed. This case should be caught when validating a session.
-{-
 dual :: Session -> Session
-dual s = let
-    vs = S.fromList . (\(x, _, _) -> x) . varUsage $ s
-    alg (SGetTyF   x (_, y)) = SPutTy   x y
-    alg (SPutTyF   x (_, y)) = SGetTy   x y
-    alg (SGetSessF (x, _) (_, y)) = SPutSess x y
-    alg (SPutSessF (x, _) (_, y)) = SGetSess x y
-    alg (SChoiceF  x)   = SSelect (map (second snd) x)
-    alg (SSelectF  x)   = SChoice (map (second snd) x)
-    alg (SVarF x)       = if x `S.member` vs
-                             then SVar x
-                             else SDualVar x
+dual = dual' S.empty
+
+dual' :: S.Set Text -> Session -> Session
+dual' vs (SGetTy   t c) = SPutTy   t (dual' vs c)
+dual' vs (SPutTy   t c) = SGetTy   t (dual' vs c)
+dual' vs (SGetSess s c) = SPutSess s (dual' vs c)
+dual' vs (SPutSess s c) = SGetSess s (dual' vs c)
+dual' vs (SChoice  cs)  = SSelect (map (second $ dual' vs) cs)
+dual' vs (SSelect  cs)  = SChoice (map (second $ dual' vs) cs)
+dual' vs (SCoInd v c)   = SCoInd v (dual' (S.insert v vs) c)
+dual' vs (SVar v)       = if v `S.member` vs
+                              then SVar v
+                              else SDualVar v
     -- A valid session should not have a "dualed" recursion variable
-    alg (SDualVarF x)   = if x `S.member` vs
+dual' vs (SDualVar v)   = if v `S.member` vs
                              then error "Compiler error. This should not happen\
                                         \ if the session was validated."
-                             else SVar x
-    alg x = F.embed x
-  in F.para alg s
--}
+                             else SVar v
+dual' _ (SEnd) = SEnd
 
 data SessGramState = SessGramState
                        { sgsRecVars      :: S.Set Text
@@ -184,18 +183,7 @@ replaceVarInSession (var, replacement) = F.cata alg
         alg s = F.embed s
 
 isDual :: Session -> Session -> Bool
-isDual (SCoInd n1 s1) (SCoInd n2 s2) = isDual (replaceVarInSession (n1, SEnd) s1)
-                                              (replaceVarInSession (n2, SEnd) s2)
-isDual (SGetTy t1 s1)   (SPutTy t2 s2)   = t1 == t2 && isDual s1 s2
-isDual (SPutTy t1 s1)   (SGetTy t2 s2)   = t1 == t2 && isDual s1 s2
-isDual (SGetSess t1 s1) (SPutSess t2 s2) = t1 == t2 && isDual s1 s2
-isDual (SPutSess t1 s1) (SGetSess t2 s2) = t1 == t2 && isDual s1 s2
-isDual (SChoice xs) (SSelect ys) = combineLabelList isDual xs ys
-isDual (SSelect xs) (SChoice ys) = combineLabelList isDual xs ys
-isDual (SVar n1) (SDualVar n2) = n1 == n2
-isDual (SDualVar n1) (SVar n2) = n1 == n2
-isDual (SEnd) (SEnd) = True
-isDual _ _ = False
+isDual s1 s2 = s1 `coIndEq` dual s2
 
 -- Checks whether two sessions are equal under induction variable renaming
 coIndEq :: Session -> Session -> Bool
@@ -226,4 +214,17 @@ isInductiveSession = F.cata alg
         alg (SChoiceF xs) = any snd xs
         alg (SSelectF xs) = any snd xs
         alg _ = False
+
+freeIndVars :: Session -> S.Set Text
+freeIndVars = F.cata alg
+  where alg (SCoIndF   n vs) = S.delete n vs
+        alg (SGetTyF   _ vs) = vs
+        alg (SPutTyF   _ vs) = vs
+        alg (SGetSessF _ vs) = vs
+        alg (SPutSessF _ vs) = vs
+        alg (SChoiceF    xs) = S.unions (map snd xs)
+        alg (SSelectF    xs) = S.unions (map snd xs)
+        alg (SVarF     v)    = S.singleton v
+        alg (SDualVarF v)    = S.singleton v
+        alg (SEndF)          = S.empty
 

@@ -14,12 +14,12 @@ import Jael.Seq.Types
 
 type SessTyErrM = Either SessTyErr
 
-data SessTyErr = UnusedResources { unusedLin :: M.Map Channel S2Session
+data SessTyErr = UnusedResources { unusedLin :: M.Map Channel Session
                                  , unusedSeq :: M.Map Text HMTy
                                  }
                | UndefinedChan Channel
                | RedefinedName Text
-               | ProtocolMismatch Channel S2Session
+               | ProtocolMismatch Channel Session
                | TypeMismatch Channel S2Ty S2Ty
                | DuplicateSeqEnvItem [Text]
                | SeqErrs [S2TypeErr]
@@ -36,7 +36,7 @@ data SessTyErr = UnusedResources { unusedLin :: M.Map Channel S2Session
                | InsufficientProcArgs Text
                | ProcArgTypeMismatch (S.Set Text)
                | FordwardedChansNotDual Channel Channel
-               | AttemptedChannelIgnore Channel S2Session
+               | AttemptedChannelIgnore Channel Session
                | RecVarUnfoldInRecProc Channel
                -- The error when an inductive session is passed to a recursive
                -- process without the induction session definition in the
@@ -112,7 +112,7 @@ addIfNotRedefinition v env@(ConcTyEnv {cteLin=lEnv, cteBase=sNames}) =
 -- RIUnknown only if there is a dual. If the dual was removed from the
 -- environment through use, its dual (this channel) should have had its flag
 -- updated.
-updateSession :: Channel -> S2Session -> ConcTyEnv -> SessTyErrM ConcTyEnv
+updateSession :: Channel -> Session -> ConcTyEnv -> SessTyErrM ConcTyEnv
 updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
   case M.lookup c linEnv of
        Just le -> do
@@ -165,16 +165,16 @@ updateSession c v env@(ConcTyEnv {cteLin=linEnv, cteFresh=freshEnv}) =
 -- use of a recursive session without unfolding). See last paragraph of section
 -- three of "Corecursion and non-divergence in session typed processes" by
 -- Toninho et al.
-lookupChan :: Channel -> ConcTyEnv -> SessTyErrM S2Session
+lookupChan :: Channel -> ConcTyEnv -> SessTyErrM Session
 lookupChan = lookupChanHelper False
 
 -- Get the session associated with channel c
 -- Note that this function is for the purpose of making use of the channel,
 -- thus this returns corecursive sessions that have unfolded variables.
-lookupChanUnfold :: Channel -> ConcTyEnv -> SessTyErrM S2Session
+lookupChanUnfold :: Channel -> ConcTyEnv -> SessTyErrM Session
 lookupChanUnfold = lookupChanHelper True
 
-lookupChanHelper :: Bool -> Channel -> ConcTyEnv -> SessTyErrM S2Session
+lookupChanHelper :: Bool -> Channel -> ConcTyEnv -> SessTyErrM Session
 lookupChanHelper bUnfold c env =
   case M.lookup c (cteLin env) of
        Just (LinEnv{leSess=s, leConcCtx=True}) ->
@@ -197,7 +197,7 @@ lookupChanHelper bUnfold c env =
        _ -> throwError $ UndefinedChan c
 
 -- Get the session associated with channel c, only if it is a fresh channel
-lookupFreshChan :: Channel -> ConcTyEnv -> SessTyErrM S2Session
+lookupFreshChan :: Channel -> ConcTyEnv -> SessTyErrM Session
 lookupFreshChan c (ConcTyEnv{cteLin=linEnv, cteFresh=freshEnv}) =
   case (M.lookup c linEnv, c `S.member` freshEnv) of
        (Just (LinEnv{leSess=s}), True) -> return s
@@ -205,7 +205,7 @@ lookupFreshChan c (ConcTyEnv{cteLin=linEnv, cteFresh=freshEnv}) =
        (Just _, False) -> throwError $ NonFreshChan c
 
 -- Separate the arguments of a TopProc into linear sessions and base types
-separateArgs :: [(Text, S2TyOrSess)] -> ([(Channel, S2Session)], [(Text, S2Ty)])
+separateArgs :: [(Text, S2TyOrSess)] -> ([(Channel, Session)], [(Text, S2Ty)])
 separateArgs = foldr
   (\(n, x) (ss, ts) -> case x of
                             TorSTy t   -> (ss, (n,t):ts)
@@ -282,7 +282,7 @@ splitEnvs origEnv newEnv@(ConcTyEnv{cteLin=le}) =
 
 mkConcEnv :: [(Text, S2TyOrSess)]
           -> HMTyEnv
-          -> M.Map Text S2Session
+          -> M.Map Text Session
           -> M.Map Text [(Text, S2TyOrSess)]
           -> ConcTyEnv
 mkConcEnv as sEnv sessNames namedProcs =
@@ -301,7 +301,7 @@ mkConcEnv as sEnv sessNames namedProcs =
    in foldr (unfoldAlias . fst) env ls
 
 tyCheckTopProc :: HMTyEnv
-               -> M.Map Text S2Session
+               -> M.Map Text Session
                -> M.Map Text [(Text, S2TyOrSess)]
                -> S2TopProc
                -> Maybe SessTyErr

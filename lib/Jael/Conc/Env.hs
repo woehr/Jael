@@ -6,14 +6,14 @@ import Jael.Conc.Proc
 import Jael.Conc.Session
 import Jael.Seq.Env
 
-data EnvValue = NewLinear Channel Channel S2Session
-              | RxdLinear Channel S2Session
+data EnvValue = NewLinear Channel Channel Session
+              | RxdLinear Channel Session
   deriving (Show)
 
 -- A type tracking whether a channel is currently used in a concurrent context
 type ConcCtx = Bool
 -- A map tracking alias and recursion variables for a channel's session
-type AliasMap = M.Map Text S2Session
+type AliasMap = M.Map Text Session
 -- A set of channels with which the channel can not be used sequentially
 type InterferenceSet = S.Set Channel
 
@@ -24,7 +24,7 @@ data RecImpl = RINonInd
              deriving (Eq, Show)
 
 data LinEnv = LinEnv
-  { leSess    :: S2Session
+  { leSess    :: Session
   , leDual    :: Maybe Channel
   , leConcCtx :: ConcCtx
   -- Does the channel implement recursive behaviour, that is, is it defined
@@ -35,7 +35,7 @@ data LinEnv = LinEnv
   , leIntSet  :: InterferenceSet
   } deriving (Show)
 
-newLinEnv :: S2Session -> Maybe Channel -> ConcCtx -> LinEnv
+newLinEnv :: Session -> Maybe Channel -> ConcCtx -> LinEnv
 newLinEnv s dualChan cc = LinEnv{ leSess    = s
                                 , leDual    = dualChan
                                 , leConcCtx = cc
@@ -63,7 +63,7 @@ data ConcTyEnv = ConcTyEnv
   -- Set of sequential names
   , cteBase  :: S.Set Text
   -- Top level names that have been given to sessions
-  , cteAlias :: M.Map Text S2Session
+  , cteAlias :: M.Map Text Session
   -- Names and argument types of top level processes
   -- I assume that all arguments to a process are independent, that is, two
   -- channels that are in each others interference sets can not be passed

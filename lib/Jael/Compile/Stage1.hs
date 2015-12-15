@@ -30,11 +30,11 @@ gToTopArea :: GAnyInt -> UIdent -> TopArea
 gToTopArea i (UIdent t) = TopArea { taAddr = parseAnyInt i, taType = pack t }
 
 -- splits the top level definition into its different types of components
-splitTop :: GProg -> ( [(Text, TopExpr S1Ex S1Ty)]
+splitTop :: GProg -> ( [(Text, S1TopExpr)]
                      , [(Text, UserDefinedType)]
                      , [(Text, TopArea)]
-                     , [(Text, S1Session)]
-                     , [(Text, S1TopProc)]
+                     , [(Text, Either SessDefErr Session)]
+                     , [(Text, Either ProcDefErr S1TopProc)]
                      )
 splitTop (GProg xs) = foldr (\x (a, b, c, d, e) ->
   case x of
@@ -71,32 +71,18 @@ shadowingDef ns ps =
    in unless (null redefMap)
         $ throwError $ AmbigName redefMap
 
-nameChecks :: ( [(Text, TopExpr S1Ex S1Ty)]
-              , [(Text, UserDefinedType)]
-              , [(Text, TopArea)]
-              , [(Text, S1Session)]
-              , [(Text, S1TopProc)]
-              )
-           -> CompileErrM ()
-nameChecks (exprs, udts, areas, protocols, procs) = do
-  let topLevelNames = map fst exprs     ++
-                      map fst udts     ++
-                      map fst areas     ++
-                      map fst protocols ++
-                      map fst procs
-
+nameChecks :: [Text] -> [(Text, S1TopProc)] -> CompileErrM ()
+nameChecks ns procs = do
   -- Find duplicate name definitions
-  dupDefs topLevelNames
+  dupDefs ns
 
   -- Checks for recursive process names that conflict
-  shadowingDef topLevelNames procs
+  shadowingDef ns procs
 
 defErrs :: [UserDefinedType]
-        -> [S1TopProc]
         -> CompileErrM ()
-defErrs udts ps =
+defErrs udts =
   let errs = mapMaybe (liftA (pack . show) . validateUDT) udts
-          ++ mapMaybe (liftA (pack . show) . validateTopProc) ps
    in unless (null errs)
         $ throwError $ TypeDefErr errs
 
@@ -120,7 +106,7 @@ nameCycle depMap =
 -- Returns the order in which expressions and types should be processed
 dependencyAndUndefinedChecks :: M.Map Text (TopExpr S1Ex S1Ty)
                              -> M.Map Text UserDefinedType
-                             -> M.Map Text S1Session
+                             -> M.Map Text Session
                              -> M.Map Text S1TopProc
                              -> CompileErrM [Text]
 dependencyAndUndefinedChecks exprs udts protocols procs = do
@@ -157,10 +143,17 @@ stage1 p = do
                Left e  -> throwError $ ParseErr e
                Right x -> return x
 
-  let components@(lExprs, lUDTs, lAreas, lProtocols, lProcs)
-        = splitTop prog
+  let (lExprs, lUDTs, lAreas, lEProtocols, lEProcs) = splitTop prog
 
-  nameChecks components
+  lProtocols <- either (throwError . undefined) return $ sequenceA (map undefined lEProtocols)
+  lProcs     <- either (throwError . undefined) return $ sequenceA (map undefined lEProcs)
+
+  nameChecks (map fst lExprs ++
+              map fst lUDTs  ++
+              map fst lAreas ++
+              map fst lEProtocols ++
+              map fst lEProcs)
+             lProcs
 
   -- No more chance of duplicate names, so now we use a map.
   let (exprs, udts, areas, protocols, procs) =
@@ -173,7 +166,6 @@ stage1 p = do
 
   -- Check for errors in a definition
   defErrs (M.elems udts)
-          (M.elems procs)
 
   exprOrder <- dependencyAndUndefinedChecks exprs udts protocols procs
   return Stage1

@@ -17,6 +17,9 @@ data TopExpr e t = TopGlob  { tgExpr  :: e }
                             }
                  deriving (Show)
 
+type S1TopExpr = TopExpr S1Ex S1Ty
+type S2TopExpr = TopExpr S2TyEx S2Ty
+
 instance (HMTypable e, HMTypable t) => HMTypable (TopExpr e t) where
   hmTyOf (TopGlob{..}) = hmTyOf tgExpr
   hmTyOf (TopFunc{..}) = typesToFun (map (hmTyOf . snd) tfArgs, hmTyOf tfRetTy)

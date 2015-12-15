@@ -40,11 +40,7 @@ typeAndExtractSeq env s1 =
       alg (S1PGetValF c n p)      = (liftM $ S2PGetVal c n) p
       alg (S1PGetIgnF c p)        = (liftM $ S2PGetIgn c) p
       alg (S1PPutChanF c1 c2 p)   = (liftM $ S2PPutChan c1 c2) p
-      alg (S1PNewChanF n1 n2 s p) = (liftM2 $ S2PNewChan n1 n2)
-                                      (either (\x->(modify (\st@(S2ProcState{tpssErrs=errs}) -> st{tpssErrs=S2PEInvalidSession x : errs})) >> return (error "Should never happen because the S2Proc should never be traversed since there were errors returned."))
-                                              (return)
-                                              (validateS1Session s))
-                                      p
+      alg (S1PNewChanF n1 n2 s p) = (liftM $ S2PNewChan n1 n2 s) p
       alg (S1PParF ps)            = (liftM S2PPar) (sequence ps)
       alg (S1PCaseF c ps)         = (liftM $ S2PCase c)
                                       (liftM (zip $ map fst ps)
