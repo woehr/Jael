@@ -1,5 +1,3 @@
-{-# Language RecordWildCards #-}
-
 module Jael.Conc.TyCk.S2 where
 
 import qualified Data.Functor.Foldable as F

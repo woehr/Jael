@@ -26,12 +26,16 @@ checkSessionErr (t, expected) =
   case runParser pGSession t of
        Left err -> assertFailure (show err)
        Right gDef ->
-         case validateSession (gToSession gDef) of
-              Just err -> assertEqual "" expected err
-              Nothing -> assertFailure "Expected session def error"
+         case gToSession gDef of
+              Left err -> assertEqual "" expected err
+              _ -> assertFailure "Expected session def error"
 
 checkSessionDual :: (Text, Session) -> Assertion
-checkSessionDual = checkParsedTree (liftM (dual . gToSession) . pGSession)
+checkSessionDual = checkParsedTree (liftM (dual . (\g -> case gToSession g of
+                                                              Left err -> error (show err)
+                                                              Right s -> s
+                                                  )
+                                          ) . pGSession)
 
 -- A session to be parsed and dualed, and the expected dual
 testDual :: (Text, Session)
@@ -47,17 +51,17 @@ testDual = (pack [raw|
            ]
    , e => rec X. ?[Bool] ![Int] <X>
    ]
-|], SGetTy (TySimple TyInt)
-  $ SPutSess (SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SEnd)
+|], SGetTy (S2TySimple (BTInt undefined undefined))
+  $ SPutSess (SPutTy (S2TySimple (BTInt undefined undefined)) $ SGetTy (S2TySimple (BTInt undefined undefined)) $ SEnd)
   $ SChoice [ ("a", SEnd)
-            , ("b", SGetTy (TySimple TyInt) SEnd)
-            , ("c", SPutSess (SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SEnd) SEnd)
+            , ("b", SGetTy (S2TySimple (BTInt undefined undefined)) SEnd)
+            , ("c", SPutSess (SPutTy (S2TySimple (BTInt undefined undefined)) $ SGetTy (S2TySimple (BTInt undefined undefined)) $ SEnd) SEnd)
             , ("d", SSelect [ ("a", SEnd)
-                            , ("b", SGetTy (TySimple TyInt) SEnd)
-                            , ("c", SPutSess (SPutTy (TySimple TyInt) $ SGetTy (TySimple TyInt) $ SEnd) SEnd)
+                            , ("b", SGetTy (S2TySimple (BTInt undefined undefined)) SEnd)
+                            , ("c", SPutSess (SPutTy (S2TySimple (BTInt undefined undefined)) $ SGetTy (S2TySimple (BTInt undefined undefined)) $ SEnd) SEnd)
                             ]
               )
-            , ("e", SCoInd "X" $ SPutTy (TySimple TyBool) $ SGetTy (TySimple TyInt) $ SVar "X")
+            , ("e", SCoInd "X" $ SPutTy (S2TySimple BTBool) $ SGetTy (S2TySimple (BTInt undefined undefined)) $ SVar "X")
             ]
   )
 
@@ -80,13 +84,7 @@ dupIndVar = (pack [raw|
                  , b=>
                  ]
           ]
-|], SessDefErr
-      { sessErrDupInd = S.fromList ["X"]
-      , sessErrDupLab = S.empty
-      , sessErrUnused = S.empty
-      , sessErrDualRec = S.empty
-      , sessErrNoBehaviour = S.empty
-      }
+|], SDEDupInd "X"
   )
 
 dupLabel :: (Text, SessDefErr)
@@ -99,13 +97,7 @@ dupLabel = (pack [raw|
                  ]
           , c=>
           ]
-|], SessDefErr
-      { sessErrDupInd = S.empty
-      , sessErrDupLab = S.fromList ["a","c"]
-      , sessErrUnused = S.empty
-      , sessErrDualRec = S.empty
-      , sessErrNoBehaviour = S.empty
-      }
+|], SDEDupLabels $ S.fromList ["a","c"]
   )
 
 unusedRecVar :: (Text, SessDefErr)
@@ -116,39 +108,20 @@ unusedRecVar = (pack [raw|
                  , b=>
                  ]
           ]
-|], SessDefErr
-      { sessErrDupInd = S.empty
-      , sessErrDupLab = S.empty
-      , sessErrUnused = S.fromList ["X", "Y"]
-      , sessErrDualRec = S.empty
-      , sessErrNoBehaviour = S.empty
-      }
+|], SDEUnused $ S.fromList ["X", "Y"]
   )
 
 dualRecVar :: (Text, SessDefErr)
 dualRecVar = (pack [raw|
   rec X. ?[Void] <dual X>
-|], SessDefErr
-      { sessErrDupInd = S.empty
-      , sessErrDupLab = S.empty
-      , sessErrUnused = S.empty
-      , sessErrDualRec = S.fromList ["X"]
-      , sessErrNoBehaviour = S.empty
-      }
+|], SDEDualRec "X"
   )
 
 noSessBehaviour :: (Text, SessDefErr)
 noSessBehaviour = (pack [raw|
   rec X. &[ a => rec Y. <Y>
-          , b => rec Z. <Z>
-          , c => <X>
+          , b => <X>
           ]
-|], SessDefErr
-      { sessErrDupInd = S.empty
-      , sessErrDupLab = S.empty
-      , sessErrUnused = S.empty
-      , sessErrDualRec = S.empty
-      , sessErrNoBehaviour = S.fromList ["Y", "Z"]
-      }
+|], SDETrivialRec "Y" "Y"
   )
 

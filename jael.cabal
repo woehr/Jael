@@ -46,6 +46,8 @@ library
                        Jael.Util
 
   default-extensions:  DeriveFunctor,
+                       RecordWildCards,
+                       TupleSections,
                        TypeFamilies,
                        OverloadedStrings
 
@@ -90,7 +92,9 @@ test-suite test-jael
   type:                exitcode-stdio-1.0
   main-is:             Test.hs
 
-  default-extensions:  OverloadedStrings,
+  default-extensions:  RecordWildCards,
+                       TupleSections,
+                       OverloadedStrings,
                        QuasiQuotes
 
   build-depends:       base-noprelude >=4.8,

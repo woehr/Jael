@@ -16,7 +16,7 @@ seqInfTests =
   , testCase "tuple expr syntax" $ checkInferredType exprTup
   ]
 
-checkInferredType :: (Text, Ty) -> Assertion
+checkInferredType :: (Text, HMTy) -> Assertion
 checkInferredType = checkInference testTypes
 
 testTypes :: Text
@@ -25,34 +25,34 @@ testTypes = pack [raw|
   enum   E { t0 Bool   , t1 Int   }
 |]
 
-exprPlus :: (Text, Ty)
+exprPlus :: (Text, HMTy)
 exprPlus = (pack [raw|
   1+~2+3
-|], (TySimple TyInt))
+|], HMTyInt)
 
-exprIntDiv :: (Text, Ty)
+exprIntDiv :: (Text, HMTy)
 exprIntDiv = (pack [raw|
   1/2
-|], TyNamed "IntDivRes" [])
+|], HMTyNamed "IntDivRes" [])
 
-exprConstrIntDivRes :: (Text, Ty)
+exprConstrIntDivRes :: (Text, HMTy)
 exprConstrIntDivRes = (pack [raw|
   intDivRes
-|], TyFun (TySimple TyInt) (TyFun (TySimple TyInt) (TyNamed "IntDivRes" [])))
+|], HMTyFun HMTyInt (HMTyFun HMTyInt (HMTyNamed "IntDivRes" [])))
 
-exprAccessor0 :: (Text, Ty)
+exprAccessor0 :: (Text, HMTy)
 exprAccessor0 = (pack [raw|
   s::f0(s(true, 0))
-|], (TySimple TyBool))
+|], HMTyBool)
 
-exprAccessor1 :: (Text, Ty)
+exprAccessor1 :: (Text, HMTy)
 exprAccessor1 = (pack [raw|
   s::f1(s(true, 4))
-|], (TySimple TyInt))
+|], HMTyInt)
 
-exprTup :: (Text, Ty)
+exprTup :: (Text, HMTy)
 exprTup = (pack [raw|
   (1,true)
-|], TyTup [(TySimple TyInt), (TySimple TyBool)]
+|], HMTyTup [HMTyInt, HMTyBool]
   )
 

@@ -1,5 +1,3 @@
-{-# Language RecordWildCards #-}
-
 module Jael.Conc.TyCk.S3 where
 
 import qualified Data.Map as M
@@ -15,7 +13,7 @@ import Jael.Seq.Types
 type SessTyErrM = Either SessTyErr
 
 data SessTyErr = UnusedResources { unusedLin :: M.Map Channel Session
-                                 , unusedSeq :: M.Map Text HMTy
+                                 , unusedSeq :: M.Map Text S2Ty
                                  }
                | UndefinedChan Channel
                | RedefinedName Text

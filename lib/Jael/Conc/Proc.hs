@@ -28,13 +28,13 @@ type ChanEx a = Either Channel a
 
 data TyOrSess t s = TorSTy t
                   | TorSSess s
-                  deriving (Show)
+                  deriving (Eq, Show)
 
 type S1TyOrSess = TyOrSess S1Ty Session
 type S2TyOrSess = TyOrSess S2Ty Session
 
 data TopProc t s p = TopProc [(Text, TyOrSess t s)] p
-  deriving (Show)
+  deriving (Eq, Show)
 
 type S1TopProc = TopProc S1Ty Session S1Proc
 type S2TopProc = TopProc S2Ty Session S2Proc
@@ -359,7 +359,7 @@ coRecNames = F.cata alg
 redefinedCoRecVar :: S.Set Text -> S1Proc -> S.Set Text
 redefinedCoRecVar ns p = ns `S.intersection` coRecNames p
 
-gToProcArg :: GProcArg -> Either ProcDefErr (Text, TyOrSess S1Ty Session)
+gToProcArg :: GProcArg -> Either ProcDefErr (Text, S1TyOrSess)
 gToProcArg (GProcArgType (LIdent i) x) =
   return (pack i, TorSTy $ gToType x)
 gToProcArg (GProcArgSess (LIdent i) x) =

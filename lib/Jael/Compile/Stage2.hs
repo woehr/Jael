@@ -1,5 +1,3 @@
-{-# Language RecordWildCards #-}
-
 module Jael.Compile.Stage2 where
 
 import qualified Data.Map as M

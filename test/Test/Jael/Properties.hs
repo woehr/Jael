@@ -13,29 +13,30 @@ propTests =
 instance Arbitrary Text where
   arbitrary = pack <$> arbitrary
 
-arbitraryLeaf :: Gen Ty
+arbitraryLeaf :: Gen HMTy
 arbitraryLeaf = oneof
-  [ TyVar <$> arbitrary
-  , pure (TySimple TyUnit)
-  , pure (TySimple TyInt)
-  , pure (TySimple TyBool)
-  , pure (TySimple TyBit)
+  [ HMTyVar <$> arbitrary
+  , pure HMTyUnit
+  , pure HMTyBool
+  , pure HMTyBit
+  , pure HMTyBuffer
+  , pure HMTyInt
   ]
 
-arbNotFun :: Gen Ty
+arbNotFun :: Gen HMTy
 arbNotFun = oneof $ arbitraryLeaf:
-              [ TyTup <$> listOf1 arbitraryLeaf
-              , TyNamed <$> arbitrary <*> listOf arbitraryLeaf
+              [ HMTyTup <$> listOf1 arbitraryLeaf
+              , HMTyNamed <$> arbitrary <*> listOf arbitraryLeaf
               ]
 
 -- Not truly arbitrary but close enough because we don't expect tups and named
 -- types to have TFun elements.
-arbFun :: Gen Ty
-arbFun = TyFun <$> arbNotFun <*> oneof (arbFun:[arbNotFun])
+arbFun :: Gen HMTy
+arbFun = HMTyFun <$> arbNotFun <*> oneof (arbFun:[arbNotFun])
 
-instance Arbitrary Ty where
+instance Arbitrary HMTy where
   arbitrary = oneof (arbFun:[arbNotFun])
 
-prop_funToTypes_inverse :: Ty -> Property
+prop_funToTypes_inverse :: HMTy -> Property
 prop_funToTypes_inverse x = typesToFun (funToTypes x) === x
 

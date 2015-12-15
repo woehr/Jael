@@ -9,13 +9,13 @@ import           Jael.Seq.UserDefinedType
 import qualified Test.Framework as T
 import           Test.Jael.Util
 
-validator :: GTypeDef -> Either UserDefinedTypeErr [(Text, PolyTy)]
+validator :: GTypeDef -> Either UserDefinedTypeErr [(Text, HMPolyTy)]
 validator (GTDefStruct (UIdent i) s) =
   let structDef = gStructToUDT s
    in maybe (Right . seqEnvItems $ (pack i, structDef)) Left (validateUDT structDef)
 validator _ = error "Parsed non-struct typedef"
 
-checkStruct :: (Text, [(Text, PolyTy)]) -> Assertion
+checkStruct :: (Text, [(Text, HMPolyTy)]) -> Assertion
 checkStruct =
   checkParsedTypes pGTypeDef ((either (Left . tshow) Right) . validator)
 
@@ -28,12 +28,12 @@ structTests =
   , testCase "Duplicate fields" $ checkErr structDupFields
   ]
 
-structValidSimple :: (Text, [(Text, PolyTy)])
+structValidSimple :: (Text, [(Text, HMPolyTy)])
 structValidSimple = (pack [raw|
   struct X { f0 : Int ,f1:Bool}
-|], [ ("x",     PolyTy [] $ TyFun (TySimple TyInt) (TyFun (TySimple TyBool) (TyNamed "X" [])))
-    , ("x::f0", PolyTy [] $ TyFun (TyNamed "X" []) (TySimple TyInt))
-    , ("x::f1", PolyTy [] $ TyFun (TyNamed "X" []) (TySimple TyBool))
+|], [ ("x",     HMPolyTy [] $ HMTyFun HMTyInt (HMTyFun HMTyBool (HMTyNamed "X" [])))
+    , ("x::f0", HMPolyTy [] $ HMTyFun (HMTyNamed "X" []) HMTyInt)
+    , ("x::f1", HMPolyTy [] $ HMTyFun (HMTyNamed "X" []) HMTyBool)
     ]
   )
 

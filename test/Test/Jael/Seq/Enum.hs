@@ -9,13 +9,13 @@ import           Jael.Seq.UserDefinedType
 import qualified Test.Framework as T
 import           Test.Jael.Util
 
-validator :: GTypeDef -> Either UserDefinedTypeErr [(Text, PolyTy)]
+validator :: GTypeDef -> Either UserDefinedTypeErr [(Text, HMPolyTy)]
 validator (GTDefEnum (UIdent i) e) =
   let enumDef = gEnumToUDT e
    in maybe (Right . seqEnvItems $ (pack i, enumDef)) Left (validateUDT enumDef)
 validator _ = error "Parsed non-enum typedef"
 
-checkEnum :: (Text, [(Text, PolyTy)]) -> Assertion
+checkEnum :: (Text, [(Text, HMPolyTy)]) -> Assertion
 checkEnum =
   checkParsedTypes pGTypeDef ((either (Left . tshow) Right) . validator)
 
@@ -28,11 +28,11 @@ enumTests =
   , testCase "Combination of all possible errors" $ checkErr enumAllErrs
   ]
 
-enumTypedTags :: (Text, [(Text, PolyTy)])
+enumTypedTags :: (Text, [(Text, HMPolyTy)])
 enumTypedTags = (pack [raw|
   enum X { f0 Int, f1 Bool }
-|], [ ("x::f0", PolyTy [] $ TyFun (TySimple TyInt)  (TyNamed "X" []))
-    , ("x::f1", PolyTy [] $ TyFun (TySimple TyBool) (TyNamed "X" []))
+|], [ ("x::f0", HMPolyTy [] $ HMTyFun HMTyInt  (HMTyNamed "X" []))
+    , ("x::f1", HMPolyTy [] $ HMTyFun HMTyBool (HMTyNamed "X" []))
     ]
   )
 

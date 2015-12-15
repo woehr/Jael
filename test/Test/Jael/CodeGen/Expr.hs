@@ -1,5 +1,3 @@
-{-# Language RecordWildCards #-}
-
 -- Tests for generating expression code. Tests that program fragments are
 -- converted as expected into un-optimized llvm ast fragments.
 

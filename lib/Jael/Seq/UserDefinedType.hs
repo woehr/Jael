@@ -1,5 +1,3 @@
-{-# Language RecordWildCards #-}
-
 module Jael.Seq.UserDefinedType where
 
 import qualified Data.Set as S

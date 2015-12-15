@@ -1,5 +1,3 @@
-{-# Language RecordWildCards #-}
-
 module Jael.CodeGen.Convert where
 
 import qualified Data.Functor.Foldable as F

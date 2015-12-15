@@ -8,29 +8,29 @@ import           Jael.Seq.Types
 import qualified Test.Framework as T
 import           Test.Jael.Util
 
-checkBuiltins :: [(Text, PolyTy)] -> Assertion
+checkBuiltins :: [(Text, HMPolyTy)] -> Assertion
 checkBuiltins expected =
-  let (TyEnv mDefault) = defaultEnv
+  let (HMTyEnv mDefault) = defaultEnv
       mExpected = M.fromList expected
-   in TyEnv mExpected `envEq` TyEnv (M.intersection mDefault mExpected)
+   in HMTyEnv mExpected `envEq` HMTyEnv (M.intersection mDefault mExpected)
 
 builtinTests :: [T.Test]
 builtinTests =
   [ testCase "IntDivRes" $ checkBuiltins sIntDivRes
   ]
 
-sIntDivRes :: [(Text, PolyTy)]
+sIntDivRes :: [(Text, HMPolyTy)]
 sIntDivRes = [ ( "intDivRes"
-               , PolyTy [] $ TyFun (TySimple TyInt)
-                                   (TyFun (TySimple TyInt)
-                                          (TyNamed "IntDivRes" [])
+               , HMPolyTy [] $ HMTyFun HMTyInt
+                                   (HMTyFun HMTyInt
+                                          (HMTyNamed "IntDivRes" [])
                                    )
                )
              , ( "intDivRes::quot"
-               , PolyTy [] $ TyFun (TyNamed "IntDivRes" []) (TySimple TyInt)
+               , HMPolyTy [] $ HMTyFun (HMTyNamed "IntDivRes" []) HMTyInt
                )
              , ( "intDivRes::rem"
-               , PolyTy [] $ TyFun (TyNamed "IntDivRes" []) (TySimple TyInt)
+               , HMPolyTy [] $ HMTyFun (HMTyNamed "IntDivRes" []) HMTyInt
                )
              ]
 

@@ -1,5 +1,5 @@
 module Test.Jael.Conc.S3TyCk
-( concTyCkTests
+( procS3TyCkTests
 ) where
 
 import qualified Data.Map as M
@@ -16,8 +16,8 @@ import           Jael.Seq.Types
 import           Jael.Seq.TI.S2 (S2TypeErr)
 import qualified Test.Framework as T
 
-concTyCkTests :: [T.Test]
-concTyCkTests =
+procS3TyCkTests :: [T.Test]
+procS3TyCkTests =
   [ testCase "empty proc" $ shouldTyCk emptyProc
   , testCase "unused linear argument" $ checkTyCkErr unusedLinearArg
   , testCase "session alias used" $ shouldTyCk sessionAlias
@@ -79,14 +79,14 @@ concTyCkTests =
   ]
 
 -- A map of aliases that will be passed to the type checking function
-testAliases :: M.Map Text S2Session
+testAliases :: M.Map Text Session
 testAliases =
   M.map (
     \t -> case runParser pGSession t of
                Left err -> error (unpack err)
-               Right g -> case s1SessionToS2Session (gToSession g) of
-                               Just s -> s
-                               Nothing -> error "S1Session doesn't convert to S2Session."
+               Right g -> case gToSession g of
+                               Left err -> error (show err)
+                               Right s -> s
   ) $ M.fromList
         [ ("GetInt", "?[Int]")
         , ("PutInt", "![Int]")
@@ -101,26 +101,29 @@ testProcs =
     \t -> case runParser pGProcArg t of
                Left err -> error (unpack err)
                Right g -> case gToProcArg g of
-                               (n, TorSSess s) -> (n, maybe (error "S1Session doesn't convert to S2Session.") TorSSess
-                                                            (s1SessionToS2Session s)
-                                                  )
-                               x -> x
-
-  ) $ M.fromList
+                               Left err -> error (show err)
+                               Right (n, TorSSess s) -> (n, TorSSess s)
+                               Right (n, TorSTy s1t) -> case s1TypeToS2Type s1t of
+                                                             Just s2t -> (n, TorSTy s2t)
+                                                             Nothing -> error "Incomplete type"
+    ) $ M.fromList
         [ ("DualArgProc", ["^arg1: ![Int]", "^arg2: ?[Int]"])
-        , ("ProcArgTest", ["a1: Int", "a2: Bool", "^a3: ![Int]", "^a4: ![Bool]"])
+        , ("ProcArgTest", ["a1: Int", "a2:Bool", "^a3: ![Int]", "^a4: ![Bool]"])
         , ("ProcsUseRecSessPos", ["^a: rec X. ![Int] <X>"])
         , ("ProcsUseRecSessNeg", ["^a: rec X. ?[Int] <X>"])
         , ("CoIndEqY", ["^a: rec Y. ![Int] <Y>"])
         ]
 
 doTyCk :: Text -> Maybe SessTyErr
-doTyCk = tyCheckTopProc defaultEnv testAliases testProcs
-         . s1ProcToS2Proc defaultEnv
-         . parseTopProc
-         . pGTopDef
-         . myLexer
-         . unpack
+doTyCk t = tyCheckTopProc defaultEnv testAliases testProcs
+             (case s1ProcToS2Proc defaultEnv
+                  . parseTopProc
+                  . pGTopDef
+                  . myLexer
+                  . unpack $ t of
+                  Left err -> error (show err)
+                  Right (tp, _) -> tp
+             )
 
 shouldTyCk :: Text -> Assertion
 shouldTyCk t =
@@ -135,7 +138,10 @@ checkTyCkErr (t, expected) =
        Nothing -> assertFailure "Expected type check error"
 
 parseTopProc :: Err GTopDef -> S1TopProc
-parseTopProc (Ok (GTopDefGProcDef (GProcDef _ as p))) = gToTopProc (as, p)
+parseTopProc (Ok (GTopDefGProcDef (GProcDef _ as p))) =
+  case gToTopProc (as, p) of
+       Left err -> error (show err)
+       Right x -> x
 parseTopProc x = error $ "Not a TopProc definition or invalid syntax:\n" ++ show x
 
 emptyProc :: Text
@@ -580,7 +586,7 @@ caseTypeErrors = (pack [raw|
     )
   }
 |], CaseProcErrs $ M.fromList [ ("a", ProtocolMismatch "d" $ SGetTy (S2TySimple undefined) SEnd)
-                              , ("b", TypeMismatch "z" (S2TySimple BTBool))
+                              , ("b", TypeMismatch "z" (S2TySimple undefined) (S2TySimple BTBool))
                               , ("c", UnusedResources
                                         { unusedLin=M.fromList [("d", SGetTy (S2TySimple undefined) SEnd)]
                                         , unusedSeq=M.empty

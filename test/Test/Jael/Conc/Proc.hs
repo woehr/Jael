@@ -24,17 +24,18 @@ procTests =
 
 checkProc :: (Text, S1Proc) -> Assertion
 checkProc (t, expected) = either (assertFailure . show)
-                                 (assertEqual "" expected . gToProc)
+                                 (assertEqual "" expected . (\g -> case gToProc g of
+                                                                        Left err -> error (show err)
+                                                                        Right x -> x)
+                                 )
                                  (runParser pGProc t)
 
 checkProcErr :: (Text, ProcDefErr) -> Assertion
 checkProcErr (t, expected) = either (assertFailure . show)
-                                    (assertEqual "" (Just expected)
-                                      . validateTopProc
-                                      . parseTopProc)
+                                    (assertEqual "" (Left expected) . parseTopProc)
                                     (runParser pGTopDef t)
 
-parseTopProc :: GTopDef -> S1TopProc
+parseTopProc :: GTopDef -> Either ProcDefErr S1TopProc
 parseTopProc (GTopDefGProcDef (GProcDef _ as p)) = gToTopProc (as, p)
 parseTopProc _ = error "Expected only process definitions."
 
@@ -63,7 +64,7 @@ valid = (pack [raw|
                 )
               }
     }
-|], S1PNewChan "xp" "xn" (S1SVar "SomeProto")
+|], S1PNewChan "xp" "xn" (SVar "SomeProto")
   $ S1PNewVal "y" (S1Lit $ LInt 5)
   $ S1PGetVal "xp" "z"
   $ S1PPutVal "xn" (S1Var "y")
@@ -75,7 +76,7 @@ valid = (pack [raw|
                 [ S1PNil
                 , S1PNamed "SomeProc" [Left "xp"]
                 , S1PNamed "SomeProc" []
-                , S1PNewChan "a" "b" (S1SDualVar "Proto2")
+                , S1PNewChan "a" "b" (SDualVar "Proto2")
                 $ S1PPar
                     [ S1PPutChan "z" "a" S1PNil
                     , S1PGetVal  "z" "b" S1PNil

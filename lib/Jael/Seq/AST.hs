@@ -1,5 +1,3 @@
-{-# Language RecordWildCards #-}
-
 module Jael.Seq.AST where
 
 import qualified Data.Functor.Foldable as F

@@ -1,5 +1,3 @@
-{-# Language RecordWildCards #-}
-
 module Jael.Conc.Session where
 
 import qualified Data.Functor.Foldable as F

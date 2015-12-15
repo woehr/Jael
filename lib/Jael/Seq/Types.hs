@@ -1,5 +1,4 @@
 {-# Language FlexibleInstances #-}
-{-# Language RecordWildCards #-}
 
 module Jael.Seq.Types where
 

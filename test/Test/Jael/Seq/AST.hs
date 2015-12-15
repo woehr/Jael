@@ -3,6 +3,7 @@ module Test.Jael.Seq.AST
 ) where
 
 import Jael.Seq.Types
+import Test.Jael.Util
 import Test.Framework as T
 
 astTests :: [T.Test]
@@ -15,40 +16,40 @@ astTests =
   , testCase "tyEquiv (6)" $ assertTyEquiv tyEq6
   ]
 
-assertTyEquiv :: (Ty, Ty) -> Assertion
+assertTyEquiv :: (HMTy, HMTy) -> Assertion
 assertTyEquiv ts@(t1, t2) =
   assertBool ("Expected:\n" ++ show t1 ++
               "\n     and:\n" ++ show t2 ++
               "\nto be equivalent."
              ) $ uncurry tyEquiv ts
 
-tyEq1 :: (Ty, Ty)
-tyEq1 = ( TySimple TyInt
-        , TySimple TyInt
+tyEq1 :: (HMTy, HMTy)
+tyEq1 = ( HMTyInt
+        , HMTyInt
         )
 
-tyEq2 :: (Ty, Ty)
-tyEq2 = ( TyVar "a"
-        , TyVar "a"
+tyEq2 :: (HMTy, HMTy)
+tyEq2 = ( HMTyVar "a"
+        , HMTyVar "a"
         )
 
-tyEq3 :: (Ty, Ty)
-tyEq3 = ( TyVar "a"
-        , TyVar "b"
+tyEq3 :: (HMTy, HMTy)
+tyEq3 = ( HMTyVar "a"
+        , HMTyVar "b"
         )
 
-tyEq4 :: (Ty, Ty)
-tyEq4 = ( TyFun (TyVar "a") (TyVar "b")
-        , TyFun (TyVar "c") (TyVar "d")
+tyEq4 :: (HMTy, HMTy)
+tyEq4 = ( HMTyFun (HMTyVar "a") (HMTyVar "b")
+        , HMTyFun (HMTyVar "c") (HMTyVar "d")
         )
 
-tyEq5 :: (Ty, Ty)
-tyEq5 = ( TyFun (TyVar "a") (TyVar "b")
-        , TyFun (TyVar "b") (TyVar "c")
+tyEq5 :: (HMTy, HMTy)
+tyEq5 = ( HMTyFun (HMTyVar "a") (HMTyVar "b")
+        , HMTyFun (HMTyVar "b") (HMTyVar "c")
         )
 
-tyEq6 :: (Ty, Ty)
-tyEq6 = ( TyFun (TyVar "a") (TyVar "a")
-        , TyFun (TyVar "b") (TyVar "b")
+tyEq6 :: (HMTy, HMTy)
+tyEq6 = ( HMTyFun (HMTyVar "a") (HMTyVar "a")
+        , HMTyFun (HMTyVar "b") (HMTyVar "b")
         )
 

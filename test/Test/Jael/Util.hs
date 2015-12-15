@@ -1,12 +1,14 @@
 module Test.Jael.Util where
 
 import qualified Data.Map as M
-import Jael.Grammar
-import Jael.Parser
-import Jael.Seq.AST
-import Jael.Seq.Env
-import Jael.Seq.Types
-import Jael.Seq.UserDefinedType
+import           Jael.Grammar
+import           Jael.Parser
+import           Jael.Seq.AST
+import           Jael.Seq.Env
+import           Jael.Seq.TI.HM
+import           Jael.Seq.TI.S2
+import           Jael.Seq.Types
+import           Jael.Seq.UserDefinedType
 
 shouldNotParse :: ParseFun a -> Text -> Assertion
 shouldNotParse p t = either (\_ -> return ())
@@ -32,8 +34,8 @@ checkTDefErr p validator (def, expected) =
 
 checkParsedTypes :: Show b
                  => ParseFun a
-                 -> (a -> Either b [(Text, PolyTy)])
-                 -> (Text, [(Text, PolyTy)])
+                 -> (a -> Either b [(Text, HMPolyTy)])
+                 -> (Text, [(Text, HMPolyTy)])
                  -> Assertion
 checkParsedTypes p validator (def, expected) =
   either (assertFailure . unpack) id $ do
@@ -41,7 +43,7 @@ checkParsedTypes p validator (def, expected) =
     tys <- either (Left . tshow) Right $ validator gDef
     Right $ expected `envListEq` tys
 
-checkInference :: Text -> (Text, Ty) -> Assertion
+checkInference :: Text -> (Text, HMTy) -> Assertion
 checkInference testTypes (tx, expected) =
   either (assertFailure . unpack) id $ do
     (GProg prog) <- runParser pGProg testTypes
@@ -65,51 +67,51 @@ checkInference testTypes (tx, expected) =
              (addToEnv defaultEnv funs)
     ex <- runParser pGExpr tx
     ty <- either (Left . tshow)
-                 (Right . tyOf)
-                 (typeInf env $ gToCGEx ex)
+                 (Right . hmTyOf)
+                 (typeInf env $ gToS1Ex ex)
     return $ assertBool ("Expected : " ++ show expected ++
                          "\nbut got  :" ++ show ty)
                         (expected `tyEquiv` ty)
 
-envListEq :: [(Text, PolyTy)] -> [(Text, PolyTy)] -> Assertion
+envListEq :: [(Text, HMPolyTy)] -> [(Text, HMPolyTy)] -> Assertion
 envListEq expected actual =
-  let mExpected = TyEnv $ M.fromList expected
-      mActual = TyEnv $ M.fromList actual
+  let mExpected = HMTyEnv $ M.fromList expected
+      mActual = HMTyEnv $ M.fromList actual
    in mExpected `envEq` mActual
 
-envEq :: TyEnv -> TyEnv -> Assertion
-envEq (TyEnv expected) (TyEnv actual) =
+envEq :: HMTyEnv -> HMTyEnv -> Assertion
+envEq (HMTyEnv expected) (HMTyEnv actual) =
    let inter = M.intersectionWith polyEquiv expected actual
    in assertBool ("Expected :" ++ show expected ++
                   "\nbut got : " ++ show actual
                  )
                  (M.size expected == M.size inter && and inter)
 
--- Two PolyTy are equivalent when their structure is the same and there exists a
+-- Two HMPolyTy are equivalent when their structure is the same and there exists a
 -- one-to-one mapping of the type variables of both types to each other.
 -- a -> b -> b is equivalent to b -> c -> c because the substituion a->b; b->c
 -- makes the first into the second and b->a; c->b makes the second.
-tyEquiv :: Ty -> Ty -> Bool
+tyEquiv :: HMTy -> HMTy -> Bool
 tyEquiv t u =
     case mkSub M.empty t u of
          Nothing -> False
          Just s  -> apply s t == u
-    where mkSub :: TySub -> Ty -> Ty -> Maybe TySub
-          mkSub sub (TyVar a) b@(TyVar bname) =
+    where mkSub :: HMTySub -> HMTy -> HMTy -> Maybe HMTySub
+          mkSub sub (HMTyVar a) b@(HMTyVar bname) =
             case M.lookup a sub of
-                 Just (TyVar b'name) -> if bname == b'name
+                 Just (HMTyVar b'name) -> if bname == b'name
                                           then Just sub
                                           else Nothing
                  _ -> Just (M.insert a b sub)
-          mkSub sub (TyNamed n as) (TyNamed m bs) =
+          mkSub sub (HMTyNamed n as) (HMTyNamed m bs) =
             if n == m && length as == length bs
                then foldM (\acc (a, b) -> mkSub acc a b) sub (zip as bs)
                else Nothing
-          mkSub sub (TyTup as) (TyTup bs) =
+          mkSub sub (HMTyTup as) (HMTyTup bs) =
             if length as == length bs
                then foldM (\acc (a, b) -> mkSub acc a b) sub (zip as bs)
                else Nothing
-          mkSub sub (TyFun a a') (TyFun b b') =
+          mkSub sub (HMTyFun a a') (HMTyFun b b') =
             case mkSub sub a b of
                  Just sub' -> mkSub sub' a' b'
                  Nothing -> Nothing
@@ -117,6 +119,6 @@ tyEquiv t u =
                              then Just sub
                              else Nothing
 
-polyEquiv :: PolyTy -> PolyTy -> Bool
-polyEquiv (PolyTy _ t) (PolyTy _ u) = t `tyEquiv` u
+polyEquiv :: HMPolyTy -> HMPolyTy -> Bool
+polyEquiv (HMPolyTy _ t) (HMPolyTy _ u) = t `tyEquiv` u
 
