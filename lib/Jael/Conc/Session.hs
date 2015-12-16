@@ -102,8 +102,8 @@ dual' vs (SDualVar v)   = if v `S.member` vs
 dual' _ (SEnd) = SEnd
 
 data SessGramState = SessGramState
-                       { sgsRecVars      :: S.Set Text
-                       , sgsSessVars     :: S.Set Text
+                       { sgsRecVars  :: S.Set Text
+                       , sgsSessVars :: S.Set Text
                        , sgsDualVars :: S.Set Text
                        } deriving (Show)
 
@@ -135,6 +135,41 @@ addDualVar v = do
   when (v `S.member` recVars) $ throwError (SDEDualRec v)
   modify (\s@(SessGramState{..}) -> s{sgsDualVars=S.insert v sgsDualVars})
 
+-- Converts a list of labeled GSession's to Sessions making sure to apply the
+-- same initial state to each.
+convertLabeledSessions :: [(Text, GSession)] -> SessGramM [(Text, Session)]
+convertLabeledSessions ss = do
+  let rep = S.fromList . repeated . map fst $ ss
+  unless (null rep) $ throwError (SDEDupLabels rep)
+  initialState <- get
+  res <- mapM (\(n, g) -> do s <- gToSession' g
+                             -- Check that any co-inductive sessions have their
+                             -- recursion variables used. We need to do this
+                             -- because we can't propagate recursion variable
+                             -- names in the returned state since other branches
+                             -- of choice/select session are allowed to use the
+                             -- same name.
+                             used <- gets sgsSessVars
+                             defd <- gets sgsRecVars
+                             let unused = defd S.\\ used
+                             unless (null unused) $ throwError (SDEUnused unused)
+                             updatedState <- get
+                             put initialState
+                             return ((n, s), updatedState)
+              ) ss
+  -- We must remove "locally defined" used variables before merging sets since
+  -- a used variable in one branch doesn't mean a different variable with the
+  -- same name is used in another branch.
+  mapM_ (\(_, updatedSt) ->
+          modify (\s@(SessGramState{sgsDualVars=ds, sgsSessVars=vs, sgsRecVars=rs}) ->
+                   s{ sgsDualVars=ds `S.union` sgsDualVars updatedSt
+                    -- add used session variables that were not bound by a recursion def'n
+                    , sgsSessVars=vs `S.union` (sgsSessVars updatedSt S.\\ (sgsRecVars updatedSt S.\\ rs))
+                    }
+                 )
+        ) res
+  return $ map fst res
+
 gToSession' :: GSession -> SessGramM Session
 gToSession' (GSessEnd) = return SEnd
 
@@ -143,7 +178,7 @@ gToSession' (GSessVarDual (UIdent v)) = addDualVar (pack v) >> return (SDualVar 
 
 gToSession' (GSessRec (UIdent x) (GSessVar     (UIdent y))) = throwError $ SDETrivialRec (pack x) (pack y)
 gToSession' (GSessRec (UIdent x) (GSessVarDual (UIdent y))) = throwError $ SDETrivialRec (pack x) (pack y)
-gToSession' (GSessRec (UIdent v) c)    = addRecVar (pack v) >> gToSession' c
+gToSession' (GSessRec (UIdent v) c)                         = addRecVar (pack v) >> gToSession' c
 
 gToSession' (GSessGet (GSessTy   t) c) =
   let s1t = gToType t
@@ -164,14 +199,12 @@ gToSession' (GSessPut (GSessTy   t) c) =
 gToSession' (GSessPut (GSessSess s) c) = either throwError (\s' -> liftM (SPutSess s') (gToSession' c)) (gToSession s)
 
 gToSession' (GSessSel ss) = do
-  let rep = S.fromList . repeated $ map (\(GSessChoice (LIdent n) _) -> pack n) ss
-  unless (null rep) $ throwError (SDEDupLabels rep)
-  undefined
+  let labeledGSess = map (\(GSessChoice (LIdent n) g) -> (pack n, g)) ss
+  liftM SSelect $ convertLabeledSessions labeledGSess
 
 gToSession' (GSessCho ss) = do
-  let rep = S.fromList . repeated $ map (\(GSessChoice (LIdent n) _) -> pack n) ss
-  unless (null rep) $ throwError (SDEDupLabels rep)
-  undefined
+  let labeledGSess = map (\(GSessChoice (LIdent n) g) -> (pack n, g)) ss
+  liftM SChoice $ convertLabeledSessions labeledGSess
 
 replaceVarInSession  :: (Text, Session) -> Session -> Session
 replaceVarInSession (var, replacement) = F.cata alg

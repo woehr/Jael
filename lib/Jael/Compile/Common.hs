@@ -20,6 +20,7 @@ data CompileErr = ParseErr Text
                 | AmbigName (M.Map Text (S.Set Text))
                 | ProcSeqErr (M.Map Text [S2ProcErr])
                 | ProtocolValidationErr (M.Map Text SessDefErr)
+                | ProcessValidationErr (M.Map Text ProcDefErr)
   deriving (Eq, Show)
 
 type CompileErrM = Either CompileErr

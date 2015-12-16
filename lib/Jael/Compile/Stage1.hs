@@ -143,8 +143,11 @@ stage1 p = do
 
   let (lExprs, lUDTs, lAreas, lEProtocols, lEProcs) = splitTop prog
 
-  lProtocols <- either (throwError . undefined) return $ sequenceA (map undefined lEProtocols)
-  lProcs     <- either (throwError . undefined) return $ sequenceA (map undefined lEProcs)
+  let (protoErrs, lProtocols) = partitionEithers $ map (\(x,y)->either (Left . (x,)) (Right . (x,)) y) lEProtocols
+  unless (null protoErrs) $ throwError . ProtocolValidationErr . M.fromList $ protoErrs
+
+  let (procErrs, lProcs) = partitionEithers $ map (\(x,y)->either (Left . (x,)) (Right . (x,)) y) lEProcs
+  unless (null procErrs) $ throwError . ProcessValidationErr . M.fromList $ procErrs
 
   nameChecks (map fst lExprs ++
               map fst lUDTs  ++
