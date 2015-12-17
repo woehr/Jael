@@ -151,7 +151,7 @@ convertLabeledSessions ss = do
                              -- same name.
                              used <- gets sgsSessVars
                              defd <- gets sgsRecVars
-                             let unused = defd S.\\ used
+                             let unused = (defd S.\\ sgsRecVars initialState) S.\\ used
                              unless (null unused) $ throwError (SDEUnused unused)
                              updatedState <- get
                              put initialState
@@ -160,14 +160,14 @@ convertLabeledSessions ss = do
   -- We must remove "locally defined" used variables before merging sets since
   -- a used variable in one branch doesn't mean a different variable with the
   -- same name is used in another branch.
-  mapM_ (\(_, updatedSt) ->
-          modify (\s@(SessGramState{sgsDualVars=ds, sgsSessVars=vs, sgsRecVars=rs}) ->
-                   s{ sgsDualVars=ds `S.union` sgsDualVars updatedSt
+  mapM_ (\(SessGramState{sgsDualVars=upDvs, sgsSessVars=upSvs, sgsRecVars=upRvs}) ->
+          modify (\s@(SessGramState{sgsDualVars=ds, sgsSessVars=vs}) ->
+                   s{ sgsDualVars=ds `S.union` upDvs
                     -- add used session variables that were not bound by a recursion def'n
-                    , sgsSessVars=vs `S.union` (sgsSessVars updatedSt S.\\ (sgsRecVars updatedSt S.\\ rs))
+                    , sgsSessVars=vs `S.union` (upSvs S.\\ (upRvs S.\\ sgsRecVars initialState))
                     }
                  )
-        ) res
+        ) (map snd res)
   return $ map fst res
 
 gToSession' :: GSession -> SessGramM Session
@@ -178,7 +178,7 @@ gToSession' (GSessVarDual (UIdent v)) = addDualVar (pack v) >> return (SDualVar 
 
 gToSession' (GSessRec (UIdent x) (GSessVar     (UIdent y))) = throwError $ SDETrivialRec (pack x) (pack y)
 gToSession' (GSessRec (UIdent x) (GSessVarDual (UIdent y))) = throwError $ SDETrivialRec (pack x) (pack y)
-gToSession' (GSessRec (UIdent v) c)                         = addRecVar (pack v) >> gToSession' c
+gToSession' (GSessRec (UIdent v) c) = addRecVar (pack v) >> liftM (SCoInd (pack v)) (gToSession' c)
 
 gToSession' (GSessGet (GSessTy   t) c) =
   let s1t = gToType t

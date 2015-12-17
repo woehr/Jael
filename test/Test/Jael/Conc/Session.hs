@@ -40,28 +40,28 @@ checkSessionDual = checkParsedTree (liftM (dual . (\g -> case gToSession g of
 -- A session to be parsed and dualed, and the expected dual
 testDual :: (Text, Session)
 testDual = (pack [raw|
-  ![Int]
-  ?[ ![Int] ?[Int] ]
+  ![Int<0,1>]
+  ?[ ![Bool] ?[Bool] ]
   +[ a =>
-   , b => ![Int]
-   , c => ?[ ![Int] ?[Int] ]
+   , b => ![Bool]
+   , c => ?[ ![Bool] ?[Bool] ]
    , d => &[ a =>
-           , b => ![Int]
-           , c => ?[ ![Int] ?[Int] ]
+           , b => ![Bool]
+           , c => ?[ ![Bool] ?[Bool] ]
            ]
-   , e => rec X. ?[Bool] ![Int] <X>
+   , e => rec X. ?[Bool] ![Int<~1,0>] <X>
    ]
-|], SGetTy (S2TySimple (BTInt undefined undefined))
-  $ SPutSess (SPutTy (S2TySimple (BTInt undefined undefined)) $ SGetTy (S2TySimple (BTInt undefined undefined)) $ SEnd)
+|], SGetTy (S2TySimple (BTInt 0 1))
+  $ SPutSess (SPutTy (S2TySimple BTBool) $ SGetTy (S2TySimple BTBool) $ SEnd)
   $ SChoice [ ("a", SEnd)
-            , ("b", SGetTy (S2TySimple (BTInt undefined undefined)) SEnd)
-            , ("c", SPutSess (SPutTy (S2TySimple (BTInt undefined undefined)) $ SGetTy (S2TySimple (BTInt undefined undefined)) $ SEnd) SEnd)
+            , ("b", SGetTy (S2TySimple BTBool) SEnd)
+            , ("c", SPutSess (SPutTy (S2TySimple BTBool) $ SGetTy (S2TySimple BTBool) SEnd) SEnd)
             , ("d", SSelect [ ("a", SEnd)
-                            , ("b", SGetTy (S2TySimple (BTInt undefined undefined)) SEnd)
-                            , ("c", SPutSess (SPutTy (S2TySimple (BTInt undefined undefined)) $ SGetTy (S2TySimple (BTInt undefined undefined)) $ SEnd) SEnd)
+                            , ("b", SGetTy (S2TySimple BTBool) SEnd)
+                            , ("c", SPutSess (SPutTy (S2TySimple BTBool) $ SGetTy (S2TySimple BTBool) SEnd) SEnd)
                             ]
               )
-            , ("e", SCoInd "X" $ SPutTy (S2TySimple BTBool) $ SGetTy (S2TySimple (BTInt undefined undefined)) $ SVar "X")
+            , ("e", SCoInd "X" $ SPutTy (S2TySimple BTBool) $ SGetTy (S2TySimple (BTInt (-1) 0)) $ SVar "X")
             ]
   )
 
@@ -79,7 +79,7 @@ testDualVars = (pack [raw|
 dupIndVar :: (Text, SessDefErr)
 dupIndVar = (pack [raw|
   rec X. &[ a=> rec X. ![Void] <X>
-          , b=> ?[Int]
+          , b=> ?[Bool]
           , c=> +[ a=>
                  , b=>
                  ]
@@ -90,25 +90,25 @@ dupIndVar = (pack [raw|
 dupLabel :: (Text, SessDefErr)
 dupLabel = (pack [raw|
   rec X. &[ a=> <X>
-          , b=> ?[Int]
+          , b=> ?[Bool]
           , c=> +[ a=>
                  , a=>
                  , b=>
                  ]
           , c=>
+          , d=>,d=>
           ]
-|], SDEDupLabels $ S.fromList ["a","c"]
+|], SDEDupLabels $ S.fromList ["c", "d"]
+  -- Checking errors out after the first error so only c, and d are reported as duplicates
   )
 
+-- Make sure that even though Y is used in one case it isn't in the other.
 unusedRecVar :: (Text, SessDefErr)
 unusedRecVar = (pack [raw|
-  rec X. &[ a=> rec Y. <Z>
-          , b=> ?[Int]
-          , c=> +[ a=>
-                 , b=>
-                 ]
+  rec X. &[ a=> rec Y. ![Bool] <Y>
+          , b=> rec Y. ?[Bool] <Z>
           ]
-|], SDEUnused $ S.fromList ["X", "Y"]
+|], SDEUnused $ S.fromList ["Y"]
   )
 
 dualRecVar :: (Text, SessDefErr)
