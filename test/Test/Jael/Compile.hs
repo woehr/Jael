@@ -23,6 +23,7 @@ compileTests =
   , testCase "undefined session" $ assertCompErr undefSession
   , testCase "ambiguous co-rec name" $ assertCompErr ambigName
   , testCase "function arity mismatch" $ assertCompErr fnArityMismatch
+  , testCase "free names in process" $ assertCompErr procFreeVars
   ]
 
 assertCompErr :: (Text, CompileErr) -> Assertion
@@ -116,5 +117,20 @@ fnArityMismatch = (pack [raw|
   }
   y = x(42, 43, 44);
 |], TypeInfErr $ ArityMismatch $ M.fromList [("x", (1, 3))]
+  )
+
+procFreeVars :: (Text, CompileErr)
+procFreeVars = (pack [raw|
+  e = 10;
+
+  proc X(x:Int) {
+    ^a <- x;
+    ( Y(b)
+    | ^y case { p1 => c = d + e;
+              , p2 => ^z select p3;
+              }
+    )
+  }
+|], UndefName $ S.fromList ["a", "b", "y", "c", "d", "z"]
   )
 

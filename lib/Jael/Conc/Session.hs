@@ -182,8 +182,7 @@ gToSession' (GSessRec (UIdent v) c) = addRecVar (pack v) >> liftM (SCoInd (pack 
 
 gToSession' (GSessGet (GSessTy   t) c) =
   let s1t = gToType t
-      s2t = s1TypeToS2Type s1t
-   in case s2t of
+   in case s1TypeToS2Type s1t of
            Just t' -> liftM (SGetTy t') (gToSession' c)
            Nothing -> throwError (SDEIncompleteType s1t)
 
@@ -191,8 +190,7 @@ gToSession' (GSessGet (GSessSess s) c) = either throwError (\s' -> liftM (SGetSe
 
 gToSession' (GSessPut (GSessTy   t) c) =
   let s1t = gToType t
-      s2t = s1TypeToS2Type s1t
-   in case s2t of
+   in case s1TypeToS2Type s1t of
            Just t' -> liftM (SPutTy t') (gToSession' c)
            Nothing -> throwError (SDEIncompleteType s1t)
 

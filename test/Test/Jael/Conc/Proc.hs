@@ -16,9 +16,8 @@ import qualified Test.Framework as T
 procTests :: [T.Test]
 procTests =
   [ testCase "proc valid" $ checkProc valid
-  , testCase "free vars" $ checkProcErr testProcFreeVars
-  , testCase "dup args" $ checkProcErr dupArgs
-  , testCase "co-rec capture" $ checkProcErr coRecCapt
+  , testCase "dup args in rec proc" $ checkProcErr dupArgs
+  , testCase "dup args in top proc" $ checkProcErr dupArgs2
   , testCase "ambiguious co-rec name" $ checkProcErr ambiguousRecName
   ]
 
@@ -97,57 +96,20 @@ valid = (pack [raw|
       ]
   )
 
-testProcFreeVars :: (Text, ProcDefErr)
-testProcFreeVars = (pack [raw|
-  proc X(x:Int) {
-    ^a <- x;
-    ( Y(b)
-    | ^y case { p1 => c = d + e;
-              , p2 => ^z select p3;
-              }
-    | ^f -> x;
-    )
-  }
-|], ProcDefErr
-      { pErrFreeVars = S.fromList ["a", "b", "d", "e", "f", "y", "z"]
-      , pErrDupArgs = S.empty
-      , pErrCoRecVarCapture = M.empty
-      , pErrAmbiguousRecName = S.empty
-      }
-  )
-
 dupArgs :: (Text, ProcDefErr)
 dupArgs = (pack [raw|
   proc X(x:Int, x:Bool) {
     rec Y(y=void, y=void) {}
   }
-|], ProcDefErr
-      { pErrFreeVars = S.empty
-      , pErrDupArgs = S.fromList ["x", "y"]
-      , pErrCoRecVarCapture = M.empty
-      , pErrAmbiguousRecName = S.empty
-      }
+|], PDEDupArgs $ S.fromList ["y"]
   )
 
-coRecCapt :: (Text, ProcDefErr)
-coRecCapt = (pack [raw|
-  proc X(x:Int, y:Bool, z:Foo) {
-    rec Y(x=x, z=z) {
-      ^y <- a + x; // a is undefined so it shouldn't show up in the capture error
-      rec Z(x=x) {
-        bar = x + y + z;
-      }
-    }
+dupArgs2 :: (Text, ProcDefErr)
+dupArgs2 = (pack [raw|
+  proc X(x:Int, x:Bool) {
+    rec Y(y=void, z=void) {}
   }
-|], ProcDefErr
-      { pErrFreeVars = S.fromList ["a"]
-      , pErrDupArgs = S.empty
-      , pErrCoRecVarCapture = M.fromList
-          [ ("Y", S.fromList ["y"])
-          , ("Z", S.fromList ["y", "z"])
-          ]
-      , pErrAmbiguousRecName = S.empty
-      }
+|], PDEDupArgs $ S.fromList ["x"]
   )
 
 -- Y is ambiguous, Z is not. X is as well, but we need to consider all top level
@@ -167,7 +129,6 @@ ambiguousRecName = (pack [raw|
   }
 |], ProcDefErr
       { pErrFreeVars = S.empty
-      , pErrDupArgs = S.empty
       , pErrCoRecVarCapture = M.empty
       , pErrAmbiguousRecName = S.fromList ["Y"]
       }

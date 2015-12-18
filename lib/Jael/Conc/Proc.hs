@@ -13,11 +13,11 @@ import Jael.Util
 
 data ProcDefErr = ProcDefErr
   { pErrFreeVars :: S.Set Text
-  , pErrDupArgs :: S.Set Text
   , pErrCoRecVarCapture :: M.Map Text (S.Set Text)
   , pErrAmbiguousRecName :: S.Set Text
   }
                 | PDESessDefErr SessDefErr
+                | PDEDupArgs (S.Set Text)
                   deriving (Eq, Show)
 
 type Channel = Text
@@ -197,23 +197,7 @@ gProcParamToEx (GProcParamChan c) = Left (gChanToText c)
 gProcParamToEx (GProcParamExpr x) = Right $ gToS1Ex x
 
 {-
-validateTopProc :: S1TopProc -> Maybe ProcDefErr
-validateTopProc (TopProc as p) =
-  let dupArgs = S.fromList (repeated $ map fst as) `S.union` recDupArgs p
-      free = procFreeVars p S.\\ S.fromList (map fst as)
-      varCapt = coRecCapturedVars p
-      ambigNames = ambigCoRecDef p
-   in if S.size dupArgs    /= 0 ||
-         S.size free       /= 0 ||
-         M.size varCapt    /= 0 ||
-         S.size ambigNames /= 0
-         then Just ProcDefErr
-                     { pErrDupArgs = dupArgs
-                     , pErrFreeVars = free
-                     , pErrCoRecVarCapture = M.map (S.\\ free) varCapt
-                     , pErrAmbiguousRecName = ambigNames
-                     }
-         else Nothing
+ambigNames
 -}
 
 gToProc :: GProc -> Either ProcDefErr S1Proc
@@ -366,5 +350,10 @@ gToProcArg (GProcArgSess (LIdent i) x) =
   either (throwError . PDESessDefErr) (\s -> return (pack i, TorSSess s)) (gToSession x)
 
 gToTopProc :: ([GProcArg], GProc) -> Either ProcDefErr S1TopProc
-gToTopProc (as, p) = liftA2 TopProc (sequence $ map gToProcArg as) (gToProc p)
+gToTopProc (as, p) = do
+  as' <- sequence $ map gToProcArg as
+  p' <- gToProc p
+  let dups = repeated . map fst $ as'
+  unless (null dups) $ throwError (PDEDupArgs $ S.fromList dups)
+  return $ TopProc as' p'
 
