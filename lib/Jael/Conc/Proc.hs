@@ -3,7 +3,6 @@
 module Jael.Conc.Proc where
 
 import qualified Data.Functor.Foldable as F
-import qualified Data.Map as M
 import qualified Data.Set as S
 import Jael.Grammar
 import Jael.Conc.Session
@@ -11,17 +10,13 @@ import Jael.Seq.AST
 import Jael.Seq.Types
 import Jael.Util
 
-data ProcDefErr = ProcDefErr
-  { pErrFreeVars :: S.Set Text
-  , pErrCoRecVarCapture :: M.Map Text (S.Set Text)
-  , pErrAmbiguousRecName :: S.Set Text
-  }
+data ProcDefErr = PDEDupRecVar Text
                 | PDESessDefErr SessDefErr
                 | PDEDupArgs (S.Set Text)
                   deriving (Eq, Show)
 
 type Channel = Text
-type Var  = Text
+type Var = Text
 type Label = Text
 
 type ChanEx a = Either Channel a
@@ -175,6 +170,18 @@ instance F.Unfoldable S2Proc where
   embed (S2PNamedF x y)       = S2PNamed x y
   embed (S2PNilF)             = S2PNil
 
+data ProcGramState = ProcGramState
+                   { pgsRecDefs :: S.Set Text
+                   } deriving (Show)
+
+type ProcGramM = ExceptT ProcDefErr (State ProcGramState)
+
+gToProc :: GProc -> Either ProcDefErr S1Proc
+gToProc g =
+  let (retVal, _) = runState (runExceptT (gToProc' g))
+                             ProcGramState{pgsRecDefs = S.empty}
+   in retVal
+
 gChanToText :: GChan -> Text
 gChanToText (GChan (LIdent x)) = pack x
 gChanToText (GChanScoped (LScopedIdent x)) = pack x
@@ -182,53 +189,70 @@ gChanToText (GChanScoped (LScopedIdent x)) = pack x
 gChoiceToProc :: [GConcChoice] -> Either ProcDefErr [(Text, S1Proc)]
 gChoiceToProc = sequenceA . map (\(GConcChoice (LIdent x) p) -> liftA ((,) (pack x)) (gToProc p))
 
-gToInitList :: [GRecInitializer] -> [(Text, ChanEx S1Ex)]
-gToInitList = map (\i -> case i of
-    (GRecInitializerChan (LIdent x) c) ->
-      (pack x, Left $ gChanToText c)
-    (GRecInitializerExpr (LIdent x) y) -> (pack x, Right $ gToS1Ex y)
-  )
-
-gParElemToProc :: GParElem -> Either ProcDefErr S1Proc
-gParElemToProc (GParElem p) = gToProc p
+gToInitList :: [GRecInitializer] -> ProcGramM [(Text, ChanEx S1Ex)]
+gToInitList as =
+  let as' = map (\i -> case i of
+        (GRecInitializerChan (LIdent x) c) ->
+          (pack x, Left $ gChanToText c)
+        (GRecInitializerExpr (LIdent x) y) -> (pack x, Right $ gToS1Ex y)
+        ) as
+      dups = repeated $ map fst as'
+   in do
+      unless (null dups) $ throwError (PDEDupArgs $ S.fromList dups)
+      return as'
 
 gProcParamToEx :: GProcParam -> ChanEx S1Ex
 gProcParamToEx (GProcParamChan c) = Left (gChanToText c)
 gProcParamToEx (GProcParamExpr x) = Right $ gToS1Ex x
 
-{-
-ambigNames
--}
+gToProc' :: GProc -> ProcGramM S1Proc
+gToProc' (GProcNew (LIdent x) (LIdent y) s p) =
+  case gToSession s of
+       Left err -> throwError $ PDESessDefErr err
+       Right s' -> liftM (S1PNewChan (pack x) (pack y) s') $ gToProc' p
 
-gToProc :: GProc -> Either ProcDefErr S1Proc
-gToProc (GProcNew (LIdent x) (LIdent y) s p) =
-  either (throwError . PDESessDefErr) (\s' -> liftA (S1PNewChan (pack x) (pack y) s') $ gToProc p) (gToSession s)
-gToProc (GProcLet (LIdent x) y p) =
-  liftA (S1PNewVal (pack x) (gToS1Ex y)) (gToProc p)
-gToProc (GProcGetExpr c (LIdent y) p) =
-  liftA (S1PGetVal (gChanToText c) (pack y)) (gToProc p)
-gToProc (GProcGetChan c (LIdent y) p) =
-  liftA (S1PGetChan (gChanToText c) (pack y)) (gToProc p)
-gToProc (GProcGetIgn  c p) =
-  liftA (S1PGetIgn (gChanToText c)) (gToProc p)
-gToProc (GProcPutExpr c ex p) =
-  liftA (S1PPutVal (gChanToText c) (gToS1Ex ex)) (gToProc p)
-gToProc (GProcPutChan c1 c2 p) =
-  liftA (S1PPutChan (gChanToText c1) (gChanToText c2)) (gToProc p)
-gToProc (GProcSel c (LIdent y) p) =
-  liftA (S1PSel (gChanToText c) (pack y)) (gToProc p)
-gToProc (GProcCho c ys) =
-  liftA (S1PCase (gChanToText c)) (gChoiceToProc ys)
-gToProc (GProcRec (GProcName (UIdent x)) i p) =
-  liftA (S1PCoRec (pack x) (gToInitList i)) (gToProc p)
-gToProc (GProcNamed (GProcName (UIdent x)) params) =
-  return $ S1PNamed (pack x) (map gProcParamToEx params)
-gToProc (GProcInact) =
-  return $ S1PNil
-gToProc (GProcFwd c1 c2) =
-  return $ S1PFwd (gChanToText c1) (gChanToText c2)
-gToProc (GProcPar e1 es) =
-  liftA S1PPar $ sequenceA (gParElemToProc e1 : map gParElemToProc es)
+gToProc' (GProcLet (LIdent x) y p) = liftA (S1PNewVal (pack x) (gToS1Ex y)) (gToProc' p)
+gToProc' (GProcGetExpr c (LIdent y) p) = liftA (S1PGetVal (gChanToText c) (pack y)) (gToProc' p)
+gToProc' (GProcGetChan c (LIdent y) p) = liftA (S1PGetChan (gChanToText c) (pack y)) (gToProc' p)
+gToProc' (GProcGetIgn  c p) = liftA (S1PGetIgn (gChanToText c)) (gToProc' p)
+gToProc' (GProcPutExpr c ex p) = liftA (S1PPutVal (gChanToText c) (gToS1Ex ex)) (gToProc' p)
+gToProc' (GProcPutChan c1 c2 p) = liftA (S1PPutChan (gChanToText c1) (gChanToText c2)) (gToProc' p)
+gToProc' (GProcSel c (LIdent y) p) = liftA (S1PSel (gChanToText c) (pack y)) (gToProc' p)
+gToProc' (GProcRec (GProcName (UIdent x)) i p) = do
+  let x' = pack x
+  recs <- gets pgsRecDefs
+  when (x' `S.member` recs) $ throwError (PDEDupRecVar x')
+  modify (\s -> s{pgsRecDefs=S.insert x' recs})
+  liftA2 (S1PCoRec x') (gToInitList i) (gToProc' p)
+
+gToProc' (GProcNamed (GProcName (UIdent x)) params) = return $ S1PNamed (pack x) (map gProcParamToEx params)
+gToProc' (GProcInact) = return $ S1PNil
+gToProc' (GProcFwd c1 c2) = return $ S1PFwd (gChanToText c1) (gChanToText c2)
+
+gToProc' (GProcCho c ys)  = liftM (S1PCase $ gChanToText c) $ mapM
+                              (\(GConcChoice (LIdent l) p) -> do
+                                origSt <- get
+                                liftM (pack l,) (gToProc' p) <* modify (const origSt)
+                              ) ys
+gToProc' (GProcPar e1 es) = liftM S1PPar $ mapM
+                              (\(GParElem e) -> do
+                                origSt <- get
+                                gToProc' e <* modify (const origSt)
+                              ) (e1 : es)
+
+gToProcArg :: GProcArg -> Either ProcDefErr (Text, S1TyOrSess)
+gToProcArg (GProcArgType (LIdent i) x) =
+  return (pack i, TorSTy $ gToType x)
+gToProcArg (GProcArgSess (LIdent i) x) =
+  either (throwError . PDESessDefErr) (\s -> return (pack i, TorSSess s)) (gToSession x)
+
+gToTopProc :: ([GProcArg], GProc) -> Either ProcDefErr S1TopProc
+gToTopProc (as, p) = do
+  as' <- sequence $ map gToProcArg as
+  p' <- gToProc p
+  let dups = repeated . map fst $ as'
+  unless (null dups) $ throwError (PDEDupArgs $ S.fromList dups)
+  return $ TopProc as' p'
 
 procDeps :: S1TopProc -> S.Set Text
 procDeps (TopProc _ p) = F.cata alg p
@@ -244,83 +268,6 @@ procDeps (TopProc _ p) = F.cata alg p
         alg (S1PSelF     _ _ x) = x
         alg (S1PCaseF _ xs) = S.unions (map snd xs)
         alg (S1PParF    xs) = S.unions xs
-        alg _ = S.empty
-
--- TODO: Maybe create a type class for things that can have free variables to
--- avoid having a new function name like this.
-cexFreeVars :: ChanEx S1Ex -> S.Set Text
-cexFreeVars (Left c)   = S.singleton c
-cexFreeVars (Right ex) = freeVars ex
-
-procFreeVars :: S1Proc -> S.Set Text
-procFreeVars = F.cata alg
-  where alg (S1PNamedF _ as) = S.unions $ map cexFreeVars as
-        alg (S1PCoRecF _ as p) = S.unions (map (cexFreeVars . snd) as)
-                                `S.union` (p S.\\ S.fromList (map fst as))
-        alg (S1PNewChanF v v' _ p) = v `S.delete` (v' `S.delete` p)
-        alg (S1PNewValF  v e  p) = v `S.delete` (p `S.union` freeVars e)
-        alg (S1PGetChanF  c v p) = c `S.insert` (v `S.insert` p)
-        alg (S1PGetValF  c e p) = c `S.insert` (e `S.insert` p)
-        alg (S1PGetIgnF  c p) = c `S.insert` p
-        alg (S1PPutChanF  c v p) = c `S.insert` (v `S.insert` p)
-        alg (S1PPutValF  c e p) = c `S.insert` (freeVars e `S.union` p)
-        alg (S1PSelF  c _ p) = c `S.insert` p
-        alg (S1PCaseF c  xs) = c `S.insert` S.unions (map snd xs)
-        alg (S1PParF xs) = S.unions xs
-        alg (S1PFwdF x y) = S.fromList [x, y]
-        alg _ = S.empty
-
-coRecCapturedVars :: S1Proc -> M.Map Text (S.Set Text)
-coRecCapturedVars = F.para alg
-  where alg :: F.Base S1Proc (S1Proc, M.Map Text (S.Set Text))
-            -> M.Map Text (S.Set Text)
-        alg (S1PCoRecF n as (p, m)) =
-          let free = procFreeVars p S.\\ S.fromList (map fst as)
-           in if S.size free /= 0
-                 then M.insert n free m
-                 else m
-        alg (S1PParF    xs) = M.unions $ map snd xs
-        alg (S1PCaseF _ xs) = M.unions $ map (snd . snd) xs
-        alg (S1PNewChanF _ _ _ (_, x)) = x
-        alg (S1PNewValF    _ _ (_, x)) = x
-        alg (S1PGetChanF   _ _ (_, x)) = x
-        alg (S1PGetValF    _ _ (_, x)) = x
-        alg (S1PGetIgnF      _ (_, x)) = x
-        alg (S1PPutChanF   _ _ (_, x)) = x
-        alg (S1PPutValF    _ _ (_, x)) = x
-        alg (S1PSelF       _ _ (_, x)) = x
-        alg _ = M.empty
-
-recDupArgs :: S1Proc -> S.Set Text
-recDupArgs = F.cata alg
-  where alg (S1PCoRecF _ as x) = (S.fromList . repeated $ map fst as) `S.union` x
-        alg (S1PParF     xs) = S.unions xs
-        alg (S1PCaseF _  xs) = S.unions $ map snd xs
-        alg (S1PNewChanF _ _ _ x) = x
-        alg (S1PNewValF    _ _ x) = x
-        alg (S1PGetChanF   _ _ x) = x
-        alg (S1PGetValF    _ _ x) = x
-        alg (S1PGetIgnF      _ x) = x
-        alg (S1PPutChanF   _ _ x) = x
-        alg (S1PPutValF    _ _ x) = x
-        alg (S1PSelF       _ _ x) = x
-        alg _ = S.empty
-
-ambigCoRecDef :: S1Proc -> S.Set Text
-ambigCoRecDef = F.para alg
-  where alg (S1PCoRecF n _ (p, x)) = if n `S.member` coRecNames p
-                                      then n `S.insert` x
-                                      else x
-        alg (S1PParF     xs) = S.unions $ map snd xs
-        alg (S1PCaseF _  xs) = S.unions $ map (snd . snd) xs
-        alg (S1PNewChanF _ _ _ (_, x)) = x
-        alg (S1PNewValF    _ _ (_, x)) = x
-        alg (S1PGetChanF   _ _ (_, x)) = x
-        alg (S1PGetValF    _ _ (_, x)) = x
-        alg (S1PGetIgnF      _ (_, x)) = x
-        alg (S1PPutChanF   _ _ (_, x)) = x
-        alg (S1PPutValF    _ _ (_, x)) = x
-        alg (S1PSelF       _ _ (_, x)) = x
         alg _ = S.empty
 
 coRecNames :: S1Proc -> S.Set Text
@@ -342,18 +289,4 @@ coRecNames = F.cata alg
 -- in the first set and the set of co-recursive variable names
 redefinedCoRecVar :: S.Set Text -> S1Proc -> S.Set Text
 redefinedCoRecVar ns p = ns `S.intersection` coRecNames p
-
-gToProcArg :: GProcArg -> Either ProcDefErr (Text, S1TyOrSess)
-gToProcArg (GProcArgType (LIdent i) x) =
-  return (pack i, TorSTy $ gToType x)
-gToProcArg (GProcArgSess (LIdent i) x) =
-  either (throwError . PDESessDefErr) (\s -> return (pack i, TorSSess s)) (gToSession x)
-
-gToTopProc :: ([GProcArg], GProc) -> Either ProcDefErr S1TopProc
-gToTopProc (as, p) = do
-  as' <- sequence $ map gToProcArg as
-  p' <- gToProc p
-  let dups = repeated . map fst $ as'
-  unless (null dups) $ throwError (PDEDupArgs $ S.fromList dups)
-  return $ TopProc as' p'
 

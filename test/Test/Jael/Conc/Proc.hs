@@ -2,7 +2,7 @@ module Test.Jael.Conc.Proc
 ( procTests
 ) where
 
-import qualified Data.Map as M
+import           Data.Either (isRight)
 import qualified Data.Set as S
 import           Jael.Grammar
 import           Jael.Parser
@@ -16,27 +16,35 @@ import qualified Test.Framework as T
 procTests :: [T.Test]
 procTests =
   [ testCase "proc valid" $ checkProc valid
-  , testCase "dup args in rec proc" $ checkProcErr dupArgs
-  , testCase "dup args in top proc" $ checkProcErr dupArgs2
-  , testCase "ambiguious co-rec name" $ checkProcErr ambiguousRecName
+  , testCase "dup args in rec proc" $ checkTopProcErr dupArgs
+  , testCase "dup args in top proc" $ checkTopProcErr dupArgs2
+  , testCase "ambiguious co-rec name" $ checkTopProcErr ambiguousRecName
+  , testCase "non-ambiguous rec name in par/choice" $ checkNoErr ambiguousRecName2
   ]
 
 checkProc :: (Text, S1Proc) -> Assertion
-checkProc (t, expected) = either (assertFailure . show)
-                                 (assertEqual "" expected . (\g -> case gToProc g of
-                                                                        Left err -> error (show err)
-                                                                        Right x -> x)
-                                 )
-                                 (runParser pGProc t)
+checkProc (t, expected) = case parseProc t of
+                               Left err -> error (show err)
+                               Right p -> assertEqual "" expected p
 
-checkProcErr :: (Text, ProcDefErr) -> Assertion
-checkProcErr (t, expected) = either (assertFailure . show)
-                                    (assertEqual "" (Left expected) . parseTopProc)
-                                    (runParser pGTopDef t)
+checkNoErr :: Text -> Assertion
+checkNoErr t = assertBool "" (isRight $ parseTopProc t)
 
-parseTopProc :: GTopDef -> Either ProcDefErr S1TopProc
-parseTopProc (GTopDefGProcDef (GProcDef _ as p)) = gToTopProc (as, p)
-parseTopProc _ = error "Expected only process definitions."
+checkTopProcErr :: (Text, ProcDefErr) -> Assertion
+checkTopProcErr (t, expected) = case parseTopProc t of
+                                     Left err -> assertEqual "" expected err
+                                     Right _ -> error "expected error"
+
+parseProc :: Text -> Either ProcDefErr S1Proc
+parseProc t = case runParser pGProc t of
+                   Left err -> error (show err)
+                   Right g -> gToProc g
+
+parseTopProc :: Text -> Either ProcDefErr S1TopProc
+parseTopProc t = case runParser pGTopDef t of
+                      Right (GTopDefGProcDef (GProcDef _ as p)) -> gToTopProc (as, p)
+                      Left err -> error (show err)
+                      _ -> error "Expected only process definitions."
 
 valid :: (Text, S1Proc)
 valid = (pack [raw|
@@ -127,10 +135,23 @@ ambiguousRecName = (pack [raw|
       }
     }
   }
-|], ProcDefErr
-      { pErrFreeVars = S.empty
-      , pErrCoRecVarCapture = M.empty
-      , pErrAmbiguousRecName = S.fromList ["Y"]
-      }
+|], PDEDupRecVar "Y"
   )
+
+ambiguousRecName2 :: Text
+ambiguousRecName2 = pack [raw|
+  proc X(x:Int, y:Bool, z:Foo) {
+    rec X(x=x, z=z) {
+      ( rec Y(x=x) {}
+      | rec Y(x=x) {
+          ^x case
+          { c1 => rec Z(x=x){}
+          , c2 => rec Z(x=x){}
+          , c3 => rec Z(x=x){}
+          }
+        }
+      )
+    }
+  }
+|]
 
