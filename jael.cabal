@@ -57,6 +57,7 @@ library
 
   build-depends:       array,
                        containers,
+                       liquid-fixpoint,
                        llvm-general,
                        llvm-general-pure,
                        recursion-schemes,
