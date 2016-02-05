@@ -46,6 +46,7 @@ library
                        Jael.Util
 
   default-extensions:  DeriveFunctor,
+                       GADTs,
                        RecordWildCards,
                        TupleSections,
                        TypeFamilies,
