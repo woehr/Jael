@@ -37,8 +37,10 @@ bnfc _ lbi = PreProcessor
           scope  = scope' ++ "." ++ takeFileName (dropExtension outRelativeFile)
       bracket (setCurrentDirectory outBaseDir) (\_ -> setCurrentDirectory back) $ \_ -> do
         rawSystemProgram verbosity bnfcProg
-          [ "-haskell"
-          , "-alex3"
+          [ "--haskell"
+          , "--alex3"
+          , "--ghc"
+          , "--functor"
           , "-d"
           , "-p", scope'
           , back </> inBaseDir </> inRelativeFile

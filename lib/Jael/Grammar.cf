@@ -1,7 +1,3 @@
--- Note: All grammar labels and productions are prefixed with "G" in order to
--- differentiate them from types in the target language that may have the same
--- name
-
 -- Tokens
 
 token UIdent (upper (letter | digit | '_')*) ;
@@ -12,232 +8,221 @@ token HexInt ({"0x"} ["0123456789abcdefABCDEF"]+) ;
 token OctInt ({"0o"} ["01234567"]+) ;
 token BinInt ({"0b"} ["01"]+) ;
 
-rules GAnyInt ::= DecInt | HexInt | OctInt | BinInt ;
+rules AnyInt ::= DecInt | HexInt | OctInt | BinInt ;
 
 -- Sequential Types
 
-GTNamedParam. GTNamedParam ::= GType ;
-separator GTNamedParam "," ;
+TNamedParam_. TNamedParam ::= Type ;
+separator TNamedParam "," ;
 
-GTNamedNoParam. GTNamedParams ::= ;
-GTNamedParams.  GTNamedParams ::= "(" [GTNamedParam] ")" ;
+TNamedNoParam. TNamedParams ::= ;
+TNamedParams_. TNamedParams ::= "(" [TNamedParam] ")" ;
 
-GTTupArg.    GTTupArg ::= GType ;
-separator    nonempty GTTupArg "," ;
+TupArg_.    TupArg ::= Type ;
+separator   nonempty TupArg "," ;
 
-GIntParam1.      GIntParamOne ::= "<" GAnyInt ">" ;
-GIntParam1Empty. GIntParamOne ::= ;
-
-GIntParam2.      GIntParamTwo ::= "<" GAnyInt "," GAnyInt ">" ;
-GIntParam2Lower. GIntParamTwo ::= "<" GAnyInt "," ">" ;
-GIntParam2Upper. GIntParamTwo ::= "<" "," GAnyInt ">" ;
-GIntParam2Empty. GIntParamTwo ::= ;
-
-GTBit.       GType ::= "Bit"    GIntParamOne ;
-GTBool.      GType ::= "Bool" ;
-GTBuffer.    GType ::= "Buffer" GIntParamOne ;
-GTInt.       GType ::= "Int"    GIntParamTwo ;
-GTUnit.      GType ::= "Void" ;
-GTTup.       GType ::= "(" GTTupArg "," [GTTupArg] ")";
-GTNamed.     GType ::= UIdent GTNamedParams ;
-GTTVar.      GType ::= LIdent ;
+TBit.       Type ::= "Bit" ;
+TBool.      Type ::= "Bool" ;
+TBuffer.    Type ::= "Buffer" ;
+TInt.       Type ::= "Int"    ;
+TUnit.      Type ::= "Void" ;
+TTup.       Type ::= "(" TupArg "," [TupArg] ")";
+TNamed.     Type ::= UIdent TNamedParams ;
+TTVar.      Type ::= LIdent ;
 
 -- Session Types
 
-GSessChoice. GSessChoice ::= LIdent "=>" GSession1 ;
-separator nonempty GSessChoice "," ;
+SessChoice_. SessChoice ::= LIdent "=>" Session1 ;
+separator nonempty SessChoice "," ;
 
-GSessTy.   GSessOrTy ::= GType ;
-GSessSess. GSessOrTy ::= GSession1 ;
+SessTy.   SessOrTy ::= Type ;
+SessSess. SessOrTy ::= Session1 ;
 
-GSessRec. GSession1 ::= "rec" UIdent "." GSession2 ;
+SessRec.  Session1 ::= "rec" UIdent "." Session2 ;
 
-GSessGet. GSession2 ::= "?" "[" GSessOrTy "]" GSession1 ;
-GSessPut. GSession2 ::= "!" "[" GSessOrTy "]" GSession1 ;
-GSessSel. GSession2 ::= "+" "[" [GSessChoice] "]" ;
-GSessCho. GSession2 ::= "&" "[" [GSessChoice] "]" ;
+SessGet.  Session2 ::= "?" "[" SessOrTy "]" Session1 ;
+SessPut.  Session2 ::= "!" "[" SessOrTy "]" Session1 ;
+SessSel.  Session2 ::= "+" "[" [SessChoice] "]" ;
+SessCho.  Session2 ::= "&" "[" [SessChoice] "]" ;
 
-GSessEnd. GSession3 ::= ;
--- recursion variable surrounded in <> to distinguish it from GTNamed in
--- GSessGet and GSessPut
-GSessVar.     GSession3 ::= "<" UIdent ">" ;
-GSessVarDual. GSession3 ::= "<" "dual" UIdent ">" ;
+SessEnd. Session3 ::= ;
+-- recursion variable surrounded in <> to distinguish it from TNamed in
+-- SessGet and SessPut
+SessVar.     Session3 ::= "<" UIdent ">" ;
+SessVarDual. Session3 ::= "<" "dual" UIdent ">" ;
 
-coercions GSession 3 ;
+coercions Session 3 ;
 
 -- Enums
 
-GTEnumElem. GTEnumElem ::= LIdent GType ;
-separator nonempty GTEnumElem "," ;
+TEnumElem_. TEnumElem ::= LIdent Type ;
+separator nonempty TEnumElem "," ;
 
-GTEnumDef.  GTEnumDef   ::= "{" [GTEnumElem] "}" ;
+TEnumDef_.  TEnumDef   ::= "{" [TEnumElem] "}" ;
 
 -- Structs
 
 ---- Annotations
-GTStructAnnPad.   GTStructAnn ::= "pad" GAnyInt ;
-GTStructAnnAlign. GTStructAnn ::= "align" GAnyInt ;
-separator nonempty GTStructAnn "," ;
+TStructAnnPad.   TStructAnn ::= "pad"   AnyInt ;
+TStructAnnAlign. TStructAnn ::= "align" AnyInt ;
+separator nonempty TStructAnn "," ;
 
 ---- A single element list collecting several annotations
-GTStructAnnCol. GTStructAnnCol ::= "[" [GTStructAnn] "]" ;
+TStructAnnCol_. TStructAnnCol ::= "[" [TStructAnn] "]" ;
 
-GTStructElement.    GTStructElement ::=                LIdent ":" GType ;
-GTStructElementAnn. GTStructElement ::= GTStructAnnCol LIdent ":" GType ;
-separator nonempty GTStructElement "," ;
+TStructElement_.   TStructElement ::=                LIdent ":" Type ;
+TStructElementAnn. TStructElement ::= TStructAnnCol LIdent ":" Type ;
+separator nonempty TStructElement "," ;
 
-GTStructDef. GTStructDef ::= "{" [GTStructElement] "}" ;
+TStructDef_. TStructDef ::= "{" [TStructElement] "}" ;
 
 -- Expressions
 
-GELetIdent.  GELetIdent ::= LIdent "=" GExpr ;
-terminator   GELetIdent ";" ;
+ELetIdent_.  ELetIdent ::= LIdent "=" Expr ;
+terminator   ELetIdent ";" ;
 
-GELetExpr.   GELetExpr ::= [GELetIdent] GExpr ;
+ELetExpr_.   ELetExpr ::= [ELetIdent] Expr ;
 
-GEAppArg.    GEAppArg ::= GExpr ;
-separator    nonempty GEAppArg "," ;
+EAppArg_.     EAppArg ::= Expr ;
+separator    nonempty EAppArg "," ;
 
-GETupArg.    GETupArg ::= GExpr ;
-separator    nonempty GETupArg "," ;
+ETupArg_.    ETupArg ::= Expr ;
+separator    nonempty ETupArg "," ;
 
 ----- Begin operators -----
 
 -- Haskell precedence 2
-GELogOr.     GExpr3 ::= GExpr4 "||" GExpr3 ;
+ELogOr.     Expr3 ::= Expr4 "||" Expr3 ;
 
 -- Haskell precedence 3
-GELogAnd.    GExpr4 ::= GExpr5 "&&" GExpr4 ;
+ELogAnd.    Expr4 ::= Expr5 "&&" Expr4 ;
 
 -- Haskell precedence 4
-GEEq.        GExpr5 ::= GExpr6 "==" GExpr6 ;
-GENotEq.     GExpr5 ::= GExpr6 "!=" GExpr6 ;
-GEGtEq.      GExpr5 ::= GExpr6 ">=" GExpr6 ;
-GELtEq.      GExpr5 ::= GExpr6 "<=" GExpr6 ;
-GEGt.        GExpr5 ::= GExpr6 ">"  GExpr6 ;
-GELt.        GExpr5 ::= GExpr6 "<"  GExpr6 ;
+EEq.        Expr5 ::= Expr6 "==" Expr6 ;
+ENotEq.     Expr5 ::= Expr6 "!=" Expr6 ;
+EGtEq.      Expr5 ::= Expr6 ">=" Expr6 ;
+ELtEq.      Expr5 ::= Expr6 "<=" Expr6 ;
+EGt.        Expr5 ::= Expr6 ">"  Expr6 ;
+ELt.        Expr5 ::= Expr6 "<"  Expr6 ;
 -- elem, notElem
 
 -- Haskell precedence 5
 -- cons, append
 
 -- Haskell precedence 6
-GEPlus.      GExpr7 ::= GExpr7 "+" GExpr8 ;
-GEMinus.     GExpr7 ::= GExpr7 "-" GExpr8 ;
+EPlus.      Expr7 ::= Expr7 "+" Expr8 ;
+EMinus.     Expr7 ::= Expr7 "-" Expr8 ;
 
 -- Haskell precedence 7
-GETimes.     GExpr8 ::= GExpr8 "*" GExpr9 ;
-GEDiv.       GExpr8 ::= GExpr8 "/" GExpr9 ;
-GEMod.       GExpr8 ::= GExpr8 "%" GExpr9 ;
+ETimes.     Expr8 ::= Expr8 "*" Expr9 ;
+EDiv.       Expr8 ::= Expr8 "/" Expr9 ;
+EMod.       Expr8 ::= Expr8 "%" Expr9 ;
 -- rem, quot, div
 
 -- Haskell precedence 8
 -- Power operators
-GEBitCat.    GExpr9  ::= GExpr10 "#" GExpr9 ;
+EBitCat.    Expr9  ::= Expr10 "#" Expr9 ;
 
 -- Haskell precedence 9
 
-GELogNot.    GExpr12 ::= "!" GExpr12 ;
+ELogNot.    Expr12 ::= "!" Expr12 ;
 
 ----- End operators -----
 
-GEIf.        GExpr13 ::= "if" GExpr "{" GELetExpr "}" "else" "{" GELetExpr "}" ;
+EIf.        Expr13 ::= "if" Expr "{" ELetExpr "}" "else" "{" ELetExpr "}" ;
 
-GETrue.      GExpr16 ::= "true" ;
-GEFalse.     GExpr16 ::= "false" ;
-GEInt.       GExpr16 ::= DecInt ;
-GEVar.       GExpr16 ::= LIdent ;
-GEApp.       GExpr16 ::= LIdent       "(" [GEAppArg] ")" ;
-GEAppScoped. GExpr16 ::= LScopedIdent "(" [GEAppArg] ")" ;
-GEUnit.      GExpr16 ::= "void" ;
-GETup.       GExpr16 ::= "(" GETupArg "," [GETupArg] ")" ;
+ETrue.      Expr16 ::= "true" ;
+EFalse.     Expr16 ::= "false" ;
+EInt.       Expr16 ::= DecInt ;
+EVar.       Expr16 ::= LIdent ;
+EApp.       Expr16 ::= LIdent       "(" [EAppArg] ")" ;
+EAppScoped. Expr16 ::= LScopedIdent "(" [EAppArg] ")" ;
+EUnit.      Expr16 ::= "void" ;
+ETup.       Expr16 ::= "(" ETupArg "," [ETupArg] ")" ;
 
-coercions    GExpr 16 ;
+coercions    Expr 16 ;
 
 -- Process grammar
 
-GProcName. GProcName ::= UIdent ;
-
 -- Builtin channels can have "::" in their name
-GChan.        GChan ::= "^" LIdent ;
-GChanScoped.  GChan ::= "^" LScopedIdent ;
+ChanNotScoped. Chan ::= "^" LIdent ;
+ChanScoped.    Chan ::= "^" LScopedIdent ;
 
-GProcNew.     GProc1 ::= "new" "(" "^" LIdent "," "^" LIdent ")"
-  ":" GSession   ";" GProc1 ;
+ProcNew.     Proc1 ::= "new" "(" "^" LIdent "," "^" LIdent ")"
+  ":" Session   ";" Proc1 ;
 
-GProcLet.     GProc1 ::= LIdent "="      GExpr       ";" GProc1 ;
-GProcGetExpr. GProc1 ::= GChan  "->"     LIdent      ";" GProc1 ;
-GProcGetChan. GProc1 ::= GChan  "->" "^" LIdent      ";" GProc1 ;
-GProcGetIgn.  GProc1 ::= GChan  "->"     "_"         ";" GProc1 ;
+ProcLet.     Proc1 ::= LIdent "="     Expr      ";" Proc1 ;
+ProcGetExpr. Proc1 ::= Chan  "->"     LIdent    ";" Proc1 ;
+ProcGetChan. Proc1 ::= Chan  "->" "^" LIdent    ";" Proc1 ;
+ProcGetIgn.  Proc1 ::= Chan  "->"     "_"       ";" Proc1 ;
 
-GProcPutExpr. GProc1 ::= GChan  "<-"     GExpr       ";" GProc1 ;
-GProcPutChan. GProc1 ::= GChan  "<-"     GChan       ";" GProc1 ;
+ProcPutExpr. Proc1 ::= Chan  "<-"     Expr      ";" Proc1 ;
+ProcPutChan. Proc1 ::= Chan  "<-"     Chan      ";" Proc1 ;
 
-GProcSel.     GProc1 ::= GChan "select"  LIdent      ";" GProc1 ;
+ProcSel.     Proc1 ::= Chan "select"  LIdent    ";" Proc1 ;
 
-GConcChoice.  GConcChoice ::= LIdent "=>" GProc ;
-separator nonempty GConcChoice "," ;
+ConcChoice_. ConcChoice ::= LIdent "=>" Proc ;
+separator nonempty ConcChoice "," ;
 
-GProcCho.     GProc1 ::= GChan "case"
+ProcCho.     Proc1 ::= Chan "case"
   "{"
-    [ GConcChoice ]
+    [ ConcChoice ]
   "}" ;
 
-GRecInitializerExpr. GRecInitializer ::=     LIdent "=" GExpr ;
-GRecInitializerChan. GRecInitializer ::= "^" LIdent "=" GChan ;
-separator nonempty GRecInitializer "," ;
+RecInitializerExpr. RecInitializer ::=     LIdent "=" Expr ;
+RecInitializerChan. RecInitializer ::= "^" LIdent "=" Chan ;
+separator nonempty RecInitializer "," ;
 
-GProcRec.   GProc1 ::= "rec" GProcName "(" [GRecInitializer] ")"
-  "{" GProc "}" ;
+ProcRec.   Proc1 ::= "rec" UIdent "(" [RecInitializer] ")"
+  "{" Proc "}" ;
 
-GProcParamExpr. GProcParam ::= GExpr ;
-GProcParamChan. GProcParam ::= GChan ;
-separator GProcParam "," ;
+ProcParamExpr. ProcParam ::= Expr ;
+ProcParamChan. ProcParam ::= Chan ;
+separator ProcParam "," ;
 
-GProcNamed. GProc1 ::= GProcName "(" [GProcParam] ")" ;
-GProcFwd.   GProc1 ::= GChan "<->" GChan ;
-GProcInact. GProc1 ::= ;
+ProcNamed. Proc1 ::= UIdent "(" [ProcParam] ")" ;
+ProcFwd.   Proc1 ::= Chan "<->" Chan ;
+ProcInact. Proc1 ::= ;
 
-GParElem. GParElem ::= GProc1 ;
-separator nonempty GParElem "|" ;
+ParElem_.  ParElem ::= Proc1 ;
+separator nonempty ParElem "|" ;
 
-GProcPar.   GProc2 ::= "(" GParElem "|" [GParElem] ")" ;
+ProcPar.  Proc2 ::= "(" ParElem "|" [ParElem] ")" ;
 
-coercions GProc 2 ;
+coercions Proc 2 ;
 
 -- Top level grammar
 
-GTDefStruct. GTypeDef ::= "struct"   UIdent GTStructDef ;
-GTDefEnum.   GTypeDef ::= "enum"     UIdent GTEnumDef ;
-GTDefProto.  GTypeDef ::= "protocol" UIdent ":" GSession ";" ;
-GTDefArea.   GTypeDef ::= "area"     UIdent "@" GAnyInt ":" UIdent ";" ;
+TDefStruct. TypeDef ::= "struct"   UIdent TStructDef ;
+TDefEnum.   TypeDef ::= "enum"     UIdent TEnumDef ;
+TDefProto.  TypeDef ::= "protocol" UIdent ":" Session ";" ;
+TDefArea.   TypeDef ::= "area"     UIdent "@" AnyInt ":" UIdent ";" ;
 
-GFuncName. GFuncName ::= LIdent ;
-GFuncArg.  GFuncArg  ::= LIdent ":" GType ;
-separator nonempty GFuncArg "," ;
+FuncArg_.  FuncArg  ::= LIdent ":" Type ;
+separator nonempty FuncArg "," ;
 
-GProcArgSess.  GProcArg ::= "^" LIdent ":" GSession ;
-GProcArgType.  GProcArg ::=     LIdent ":" GType ;
-separator GProcArg "," ;
+ProcArgSess.  ProcArg ::= "^" LIdent ":" Session ;
+ProcArgType.  ProcArg ::=     LIdent ":" Type ;
+separator ProcArg "," ;
 
-GGlobal.  GGlobal  ::= LIdent "=" GExpr ";" ;
-GFunc.    GFunc    ::= "func" GFuncName "(" [GFuncArg] ")" ":" GType
+Global_.  Global  ::= LIdent "=" Expr ";" ;
+Func_.    Func    ::= "func" LIdent "(" [FuncArg] ")" ":" Type
   "{"
-    GExpr
+    Expr
   "}" ;
 
-GProcDef. GProcDef ::= "proc" GProcName "(" [GProcArg] ")"
+ProcDef_. ProcDef ::= "proc" UIdent "(" [ProcArg] ")"
   "{"
-    GProc
+    Proc
   "}" ;
 
-rules GTopDef ::= GTypeDef | GGlobal | GFunc | GProcDef ;
-terminator  GTopDef "" ;
+rules TopDef ::= TypeDef | Global | Func | ProcDef ;
+terminator  TopDef "" ;
 
-GProg.      GProg ::= [GTopDef] ;
+Prog_.      Prog ::= [TopDef] ;
 
 comment "//" ;
 
 -- Only export nessecary parsers.
-entrypoints GProg, GTopDef, GTypeDef, GType, GSession, GExpr, GProc, GProcArg ;
+entrypoints Prog, TopDef, TypeDef, Type, Session, Expr, Proc, ProcArg ;
 
