@@ -2,6 +2,37 @@
 }:
 let
 
+  cabal-to-nix = cabal-dir:
+    nixpkgs.stdenv.mkDerivation {
+      name = "cabal-expr";
+      src = cabal-dir;
+      builder = builtins.toFile "builder.sh" ''
+        source $stdenv/setup
+        mkdir -p $out
+        cabal2nix $src > $out/default.nix
+        cabal2nix $src --shell > $out/shell.nix
+      '';
+      buildInputs = [nixpkgs.cabal2nix];
+    };
+
+  jael-exprs = cabal-to-nix ./jael;
+
+  jael-grammar-src = nixpkgs.stdenv.mkDerivation {
+    name = "jael-grammar-src";
+    src = ./jael-grammar;
+    builder = builtins.toFile "builder.sh" ''
+      source $stdenv/setup
+      mkdir -p $out/lib/Jael/Grammar
+      cp -r $src/* $out
+      bnfc --haskell-gadt --alex3 --ghc --functor -d -p Jael -o $out/lib $src/lib/Jael/Grammar.cf
+      happy -gcai $out/lib/Jael/Grammar/Par.y
+      alex  -g    $out/lib/Jael/Grammar/Lex.x
+    '';
+    buildInputs = with nixpkgs.haskellPackages; [alex BNFC happy];
+  };
+
+  jael-grammar-exprs = cabal-to-nix "${jael-grammar-src}" ;
+
   pkgs = nixpkgs.overridePackages (pSelf: pSuper: {
     haskellPackages = pSuper.haskellPackages.override {
       overrides = hSelf: hSuper:
@@ -12,61 +43,33 @@ let
       };
       in
       { liquid-fixpoint = pSuper.lib.overrideDerivation
-        (hSelf.callPackage
-          (import "${liquid-fixpoint-git}/default.nix" {
-            fetchgitLocal = abort "should not be used";
-          })
-          {}
-        )
-        (old: { src = liquid-fixpoint-git; doCheck = false; });
+          (hSelf.callPackage
+            (import "${liquid-fixpoint-git}/default.nix" {
+              fetchgitLocal = abort "should not be used";
+            })
+            {}
+          )
+          (old: { src = liquid-fixpoint-git; doCheck = false; });
+
+        jael = pSuper.haskell.lib.overrideCabal
+          (hSelf.callPackage "${jael-exprs}/default.nix" {})
+          (drv: {
+            # Setup fails to find some _o_split files
+            # when run with nix's haskell builder.
+            # Need to investigate more
+            enableSplitObjs = false;
+            doHaddock = false;
+          });
+
+        jael-grammar = hSelf.callPackage "${jael-grammar-exprs}/default.nix" {};
       };
     };
   });
 
-  jael-exprs = pkgs.stdenv.mkDerivation {
-    name = "jael-nix-expr";
-    src = ./jael.cabal;
-    builder = builtins.toFile "builder.sh" ''
-      source $stdenv/setup
-      mkdir -p $out
-      cp $src jael.cabal
-      cabal2nix . > $out/default.nix
-      cabal2nix . --shell > $out/shell.nix
-    '';
-    buildInputs = [pkgs.cabal2nix];
-  };
-
-  shell-inputs = [];
-
-  # Override function common to default and shell derivations
-  overrideJael = extra-inputs: drv: (pkgs.lib.overrideDerivation drv (old: {
-    # src is incorrectly set to the location of jael-exprs
-    src = ./.;
-    # additional inputs for processing grammar and hacking in a shell
-    buildInputs = old.buildInputs
-               ++ extra-inputs
-               ++ (with pkgs.haskellPackages; [alex BNFC happy]);
-  }));
-
-  # The derivations from the generated expressions
-  jael-drv-default =
-    pkgs.haskell.lib.overrideCabal
-      (pkgs.haskellPackages.callPackage "${jael-exprs}/default.nix" {})
-      (drv: {
-        # Setup fails to find some _o_split files
-        # when run with nix's haskell builder.
-        # Need to investigate more
-        enableSplitObjs = false;
-        doHaddock = false;
-      });
-  jael-drv-shell = import "${jael-exprs}/shell.nix"
-    { nixpkgs = pkgs;
-    };
-
 in {
-  inherit pkgs;
-  # Override generated derivations to fix src directory and add inputs
-  jael = overrideJael [] jael-drv-default;
-  jael-shell = overrideJael shell-inputs jael-drv-shell;
+  inherit jael-exprs jael-grammar-src jael-grammar-exprs;
+  inherit (pkgs.haskellPackages) jael jael-grammar;
+  jael-shell = import "${jael-exprs}/shell.nix" { nixpkgs=pkgs; };
+  jael-grammar-shell = import "${jael-grammar-exprs}/shell.nix" { nixpkgs=pkgs; };
 }
 

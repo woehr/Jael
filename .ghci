@@ -1,9 +1,8 @@
 :set -XDeriveFunctor
-:set -XNoImplicitPrelude
+:set -XGADTs
 :set -XOverloadedStrings
 :set -XRecordWildCards
 :set -XTupleSections
 :set -XTypeFamilies
-:set -isrc:lib:test:dist/build
-:load ./lib/Prelude.hs
+:set -ilib:dist/build
 

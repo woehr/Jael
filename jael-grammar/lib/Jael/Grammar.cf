@@ -1,38 +1,41 @@
 -- Tokens
 
-token UIdent (upper (letter | digit | '_')*) ;
-token LIdent (lower (letter | digit | '_')*) ;
-token LScopedIdent (lower (letter | digit | '_' | {"::"})*) ;
-token DecInt ('0' | ('~'? ["123456789"] digit*)) ;
-token HexInt ({"0x"} ["0123456789abcdefABCDEF"]+) ;
-token OctInt ({"0o"} ["01234567"]+) ;
-token BinInt ({"0b"} ["01"]+) ;
+position token UIdent (upper (letter | digit | '_')*) ;
+position token LIdent (lower (letter | digit | '_')*) ;
+position token LScopedIdent (lower (letter | digit | '_' | {"::"})*) ;
+position token DecInt ('0' | ('~'? ["123456789"] digit*)) ;
+position token HexInt ({"0x"} ["0123456789abcdefABCDEF"]+) ;
+position token OctInt ({"0o"} ["01234567"]+) ;
+position token BinInt ({"0b"} ["01"]+) ;
 
 rules AnyInt ::= DecInt | HexInt | OctInt | BinInt ;
 
 -- Sequential Types
 
-TNamedParam_. TNamedParam ::= Type ;
-separator TNamedParam "," ;
+rules CommaSepType ::= Type ;
+separator nonempty CommaSepType "," ;
 
-TNamedNoParam. TNamedParams ::= ;
-TNamedParams_. TNamedParams ::= "(" [TNamedParam] ")" ;
+TNamedParamsEmpty. TNamedParams ::= ;
+TNamedParamsList.  TNamedParams ::= "(" [CommaSepType] ")" ;
 
-TupArg_.    TupArg ::= Type ;
-separator   nonempty TupArg "," ;
+TBit.       BType ::= "BitField" ;
+TBool.      BType ::= "Bool" ;
+TInt.       BType ::= "Int"    ;
+TUnit.      BType ::= "Void" ;
+TTup.       BType ::= "(" Type "," [CommaSepType] ")";
+TNamed.     BType ::= UIdent TNamedParams ;
+TTVar.      BType ::= LIdent ;
 
-TBit.       Type ::= "Bit" ;
-TBool.      Type ::= "Bool" ;
-TBuffer.    Type ::= "Buffer" ;
-TInt.       Type ::= "Int"    ;
-TUnit.      Type ::= "Void" ;
-TTup.       Type ::= "(" TupArg "," [TupArg] ")";
-TNamed.     Type ::= UIdent TNamedParams ;
-TTVar.      Type ::= LIdent ;
+-- (logically) qualified type
+rules Qualifier ::= "<" | ">" ;
+
+rules QType ::= LIdent ":" BType "|" Qualifier ;
+
+rules Type ::= BType | QType ;
 
 -- Session Types
 
-SessChoice_. SessChoice ::= LIdent "=>" Session1 ;
+rules SessChoice ::= LIdent "=>" Session1 ;
 separator nonempty SessChoice "," ;
 
 SessTy.   SessOrTy ::= Type ;
@@ -53,41 +56,15 @@ SessVarDual. Session3 ::= "<" "dual" UIdent ">" ;
 
 coercions Session 3 ;
 
--- Enums
-
-TEnumElem_. TEnumElem ::= LIdent Type ;
-separator nonempty TEnumElem "," ;
-
-TEnumDef_.  TEnumDef   ::= "{" [TEnumElem] "}" ;
-
--- Structs
-
----- Annotations
-TStructAnnPad.   TStructAnn ::= "pad"   AnyInt ;
-TStructAnnAlign. TStructAnn ::= "align" AnyInt ;
-separator nonempty TStructAnn "," ;
-
----- A single element list collecting several annotations
-TStructAnnCol_. TStructAnnCol ::= "[" [TStructAnn] "]" ;
-
-TStructElement_.   TStructElement ::=                LIdent ":" Type ;
-TStructElementAnn. TStructElement ::= TStructAnnCol LIdent ":" Type ;
-separator nonempty TStructElement "," ;
-
-TStructDef_. TStructDef ::= "{" [TStructElement] "}" ;
-
 -- Expressions
 
-ELetIdent_.  ELetIdent ::= LIdent "=" Expr ;
-terminator   ELetIdent ";" ;
+rules ELetElem ::= LIdent "=" Expr ;
+terminator   ELetElem ";" ;
 
-ELetExpr_.   ELetExpr ::= [ELetIdent] Expr ;
+rules ELetExpr ::= [ELetElem] Expr ;
 
-EAppArg_.     EAppArg ::= Expr ;
-separator    nonempty EAppArg "," ;
-
-ETupArg_.    ETupArg ::= Expr ;
-separator    nonempty ETupArg "," ;
+rules CommaSepExpr ::= Expr ;
+separator nonempty CommaSepExpr "," ;
 
 ----- Begin operators -----
 
@@ -135,10 +112,10 @@ ETrue.      Expr16 ::= "true" ;
 EFalse.     Expr16 ::= "false" ;
 EInt.       Expr16 ::= DecInt ;
 EVar.       Expr16 ::= LIdent ;
-EApp.       Expr16 ::= LIdent       "(" [EAppArg] ")" ;
-EAppScoped. Expr16 ::= LScopedIdent "(" [EAppArg] ")" ;
+EApp.       Expr16 ::= LIdent       "(" [CommaSepExpr] ")" ;
+EAppScoped. Expr16 ::= LScopedIdent "(" [CommaSepExpr] ")" ;
 EUnit.      Expr16 ::= "void" ;
-ETup.       Expr16 ::= "(" ETupArg "," [ETupArg] ")" ;
+ETup.       Expr16 ::= "(" CommaSepExpr "," [CommaSepExpr] ")" ;
 
 coercions    Expr 16 ;
 
@@ -161,7 +138,7 @@ ProcPutChan. Proc1 ::= Chan  "<-"     Chan      ";" Proc1 ;
 
 ProcSel.     Proc1 ::= Chan "select"  LIdent    ";" Proc1 ;
 
-ConcChoice_. ConcChoice ::= LIdent "=>" Proc ;
+rules ConcChoice ::= LIdent "=>" Proc ;
 separator nonempty ConcChoice "," ;
 
 ProcCho.     Proc1 ::= Chan "case"
@@ -184,34 +161,31 @@ ProcNamed. Proc1 ::= UIdent "(" [ProcParam] ")" ;
 ProcFwd.   Proc1 ::= Chan "<->" Chan ;
 ProcInact. Proc1 ::= ;
 
-ParElem_.  ParElem ::= Proc1 ;
+rules ParElem ::= Proc1 ;
 separator nonempty ParElem "|" ;
-
 ProcPar.  Proc2 ::= "(" ParElem "|" [ParElem] ")" ;
 
 coercions Proc 2 ;
 
 -- Top level grammar
 
-TDefStruct. TypeDef ::= "struct"   UIdent TStructDef ;
-TDefEnum.   TypeDef ::= "enum"     UIdent TEnumDef ;
 TDefProto.  TypeDef ::= "protocol" UIdent ":" Session ";" ;
 TDefArea.   TypeDef ::= "area"     UIdent "@" AnyInt ":" UIdent ";" ;
 
-FuncArg_.  FuncArg  ::= LIdent ":" Type ;
+rules       FuncArg  ::= LIdent ":" Type ;
 separator nonempty FuncArg "," ;
 
 ProcArgSess.  ProcArg ::= "^" LIdent ":" Session ;
 ProcArgType.  ProcArg ::=     LIdent ":" Type ;
 separator ProcArg "," ;
 
-Global_.  Global  ::= LIdent "=" Expr ";" ;
-Func_.    Func    ::= "func" LIdent "(" [FuncArg] ")" ":" Type
+rules  Global  ::= LIdent "=" Expr ";" ;
+rules  Func    ::= "func" LIdent "(" [FuncArg] ")" ":" Type
   "{"
     Expr
   "}" ;
 
-ProcDef_. ProcDef ::= "proc" UIdent "(" [ProcArg] ")"
+rules ProcDef ::= "proc" UIdent "(" [ProcArg] ")"
   "{"
     Proc
   "}" ;
@@ -219,7 +193,7 @@ ProcDef_. ProcDef ::= "proc" UIdent "(" [ProcArg] ")"
 rules TopDef ::= TypeDef | Global | Func | ProcDef ;
 terminator  TopDef "" ;
 
-Prog_.      Prog ::= [TopDef] ;
+rules Prog ::= [TopDef] ;
 
 comment "//" ;
 
