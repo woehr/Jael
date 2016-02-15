@@ -1,8 +1,9 @@
 module Jael.Compile where
 
+import qualified Data.Text as T
 import Jael.Parser
 
-data CompileErr = ParseErr Text
+data CompileErr = ParseErr T.Text
 --                | DupDef [Text]
 --                | FuncArgDupDef Text
 --                | UndefName (S.Set Text)
@@ -19,7 +20,7 @@ type CompileErrM = Either CompileErr
 
 -- Split the compilation process into somewhat arbitrary stages to facilitate
 -- easier testing.
-compile :: Text -> CompileErrM Text
+compile :: T.Text -> CompileErrM T.Text
 compile inp = do
-  gProg <- either (throwError . ParseErr) id (parseProgram inp)
-  return "Unimplemented"
+  gProg <- either (throwError . ParseErr) return (parseProgram inp)
+  return (T.pack . show $ gProg)

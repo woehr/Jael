@@ -26,12 +26,52 @@ TTup.       BType ::= "(" Type "," [CommaSepType] ")";
 TNamed.     BType ::= UIdent TNamedParams ;
 TTVar.      BType ::= LIdent ;
 
--- (logically) qualified type
-rules Qualifier ::= "<" | ">" ;
+-- liquid types
+-- See https://ucsd-progsys.github.io/liquidhaskell-tutorial/02-logic.html
+-- and the definition of Expr at
+-- https://github.com/ucsd-progsys/liquid-fixpoint/blob/master/src/Language/Fixpoint/Types/Refinements.hs
 
-rules QType ::= LIdent ":" BType "|" Qualifier ;
+QPredIff. QPred1 ::= QPred2 "<=>" QPred2 ;
 
-rules Type ::= BType | QType ;
+QPredImp. QPred2 ::= QPred3 "==>" QPred3 ;
+
+QPredOr.  QPred3 ::= QPred4 "||" QPred4 ;
+
+QPredAnd. QPred4 ::= QPred5 "&&" QPred5 ;
+
+QPredNot. QPred5 ::= "!" QPred6 ;
+
+QPredTrue.  QPred6 ::= "true" ;
+QPredFalse. QPred6 ::= "false" ;
+QPredAtom.  QPred6 ::= QExpr QRel QExpr ;
+
+coercions QPred 6 ;
+
+QRelEq. QRel ::= "==" ;
+QRelNe. QRel ::= "!=" ;
+QRelGe. QRel ::= ">=" ;
+QRelLe. QRel ::= "<=" ;
+QRelGt. QRel ::= ">" ;
+QRelLt. QRel ::= "<" ;
+
+QExprAdd. QExpr1 ::= QExpr1 "+" QExpr2 ;
+QExprSub. QExpr1 ::= QExpr1 "-" QExpr2 ;
+
+QExprMul. QExpr2 ::= AnyInt "*" QExpr3 ;
+
+QExprInt. QExpr3 ::= AnyInt ;
+QExprVar. QExpr3 ::= LIdent ;
+QExprApp. QExpr3 ::= LIdent "(" [CommaSepQExpr] ")" ;
+
+coercions QExpr 3 ;
+
+rules CommaSepQExpr ::= QExpr ;
+separator nonempty CommaSepQExpr "," ;
+
+rules QType ::= LIdent ":" BType "|" QPred ;
+
+TypeB. Type ::= BType ;
+TypeQ. Type ::= QType ;
 
 -- Session Types
 
@@ -163,6 +203,7 @@ ProcInact. Proc1 ::= ;
 
 rules ParElem ::= Proc1 ;
 separator nonempty ParElem "|" ;
+
 ProcPar.  Proc2 ::= "(" ParElem "|" [ParElem] ")" ;
 
 coercions Proc 2 ;
@@ -172,7 +213,9 @@ coercions Proc 2 ;
 TDefProto.  TypeDef ::= "protocol" UIdent ":" Session ";" ;
 TDefArea.   TypeDef ::= "area"     UIdent "@" AnyInt ":" UIdent ";" ;
 
-rules       FuncArg  ::= LIdent ":" Type ;
+FuncArgBType. FuncArg ::= LIdent ":" BType ;
+FuncArgQType. FuncArg ::= QType ;
+
 separator nonempty FuncArg "," ;
 
 ProcArgSess.  ProcArg ::= "^" LIdent ":" Session ;
@@ -180,15 +223,12 @@ ProcArgType.  ProcArg ::=     LIdent ":" Type ;
 separator ProcArg "," ;
 
 rules  Global  ::= LIdent "=" Expr ";" ;
-rules  Func    ::= "func" LIdent "(" [FuncArg] ")" ":" Type
-  "{"
-    Expr
-  "}" ;
 
-rules ProcDef ::= "proc" UIdent "(" [ProcArg] ")"
-  "{"
-    Proc
-  "}" ;
+-- func myFunction(x: a, y: Something, z: Int | z >= 0) -> Int { ... }
+-- func myFunction(x: a, y: Something, z: Int | z >= 0) -> w : Int | w <= 0 { ... }
+rules  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" Expr "}" ;
+
+rules ProcDef ::= "proc" UIdent "(" [ProcArg] ")" "{" Proc "}" ;
 
 rules TopDef ::= TypeDef | Global | Func | ProcDef ;
 terminator  TopDef "" ;

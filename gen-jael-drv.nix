@@ -61,7 +61,12 @@ let
             doHaddock = false;
           });
 
-        jael-grammar = hSelf.callPackage "${jael-grammar-exprs}/default.nix" {};
+        jael-grammar = pSelf.lib.overrideDerivation
+          (pSuper.haskell.lib.overrideCabal
+            (hSelf.callPackage "${jael-grammar-exprs}/default.nix" {})
+            (drv: { doHaddock = false; })
+          )
+          (old: { buildInputs = old.buildInputs ++ (with hSelf; [alex happy]); });
       };
     };
   });

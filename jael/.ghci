@@ -4,5 +4,5 @@
 :set -XRecordWildCards
 :set -XTupleSections
 :set -XTypeFamilies
-:set -ilib:dist/build
+:set -ilib
 

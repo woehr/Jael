@@ -27,7 +27,8 @@ library
                        Jael.Grammar.ErrM
 
   build-depends:       base >=4.8 && <5,
-                       array
+                       array,
+                       mtl
 
   hs-source-dirs:      lib
   default-language:    Haskell2010
