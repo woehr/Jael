@@ -2,7 +2,7 @@ module Prelude
 ( module X
 ) where
 
-import BasePrelude as X hiding (Chan, shift)
+import BasePrelude as X hiding (Chan, TVar, shift)
 --import ClassyPrelude as X
 import MTLPrelude as X hiding (shift)
 -- Things needed by bnfc generated code

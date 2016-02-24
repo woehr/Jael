@@ -1,8 +1,9 @@
 :set -XDeriveFunctor
 :set -XGADTs
-:set -XOverloadedStrings
 :set -XRecordWildCards
+:set -XTemplateHaskell
 :set -XTupleSections
 :set -XTypeFamilies
+:set -XOverloadedStrings
 :set -ilib
 

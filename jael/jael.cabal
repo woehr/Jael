@@ -29,19 +29,18 @@ library
                        Jael.Conc.TyCk.S2
                        Jael.Conc.TyCk.S3
                        Jael.Parser
-                       Jael.Seq.AST
+                       Jael.Expr
+                       Jael.Type
                        Jael.Seq.Env
-                       Jael.Seq.Literal
-                       Jael.Seq.Prm
                        Jael.Seq.TI.S2
                        Jael.Seq.TI.HM
-                       Jael.Seq.Types
                        Jael.Seq.UserDefinedType
                        Jael.Util
 
   default-extensions:  DeriveFunctor,
                        GADTs,
                        RecordWildCards,
+                       TemplateHaskell,
                        TupleSections,
                        TypeFamilies,
                        OverloadedStrings
@@ -56,6 +55,7 @@ library
                        liquid-fixpoint,
                        llvm-general,
                        llvm-general-pure,
+                       placeholders,
                        recursion-schemes,
                        semigroups,
                        text

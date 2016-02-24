@@ -19,7 +19,6 @@ library
 
   exposed-modules:     Jael.Grammar
                        Jael.Grammar.Abs
-                       Jael.Grammar.ComposOp
                        Jael.Grammar.Lex
                        Jael.Grammar.Par
                        Jael.Grammar.Skel

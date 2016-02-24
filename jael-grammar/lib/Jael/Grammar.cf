@@ -24,7 +24,6 @@ TInt.       BType ::= "Int"    ;
 TUnit.      BType ::= "Void" ;
 TTup.       BType ::= "(" Type "," [CommaSepType] ")";
 TNamed.     BType ::= UIdent TNamedParams ;
-TTVar.      BType ::= LIdent ;
 
 -- liquid types
 -- See https://ucsd-progsys.github.io/liquidhaskell-tutorial/02-logic.html
@@ -72,6 +71,7 @@ rules QType ::= LIdent ":" BType "|" QPred ;
 
 TypeB. Type ::= BType ;
 TypeQ. Type ::= QType ;
+TypeV. Type ::= LIdent ;
 
 -- Session Types
 
@@ -214,6 +214,7 @@ TDefProto.  TypeDef ::= "protocol" UIdent ":" Session ";" ;
 TDefArea.   TypeDef ::= "area"     UIdent "@" AnyInt ":" UIdent ";" ;
 
 FuncArgBType. FuncArg ::= LIdent ":" BType ;
+FuncArgVType. FuncArg ::= LIdent ":" LIdent ;
 FuncArgQType. FuncArg ::= QType ;
 
 separator nonempty FuncArg "," ;

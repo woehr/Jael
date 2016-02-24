@@ -24,7 +24,7 @@ let
       source $stdenv/setup
       mkdir -p $out/lib/Jael/Grammar
       cp -r $src/* $out
-      bnfc --haskell-gadt --alex3 --ghc --functor -d -p Jael -o $out/lib $src/lib/Jael/Grammar.cf
+      bnfc --haskell --alex3 --ghc -d -p Jael -o $out/lib $src/lib/Jael/Grammar.cf
       happy -gcai $out/lib/Jael/Grammar/Par.y
       alex  -g    $out/lib/Jael/Grammar/Lex.x
     '';
