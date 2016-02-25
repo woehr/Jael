@@ -1,6 +1,5 @@
 module Jael.Util where
 
-import Data.Char (digitToInt)
 import qualified Data.List.NonEmpty as NE
 import qualified Data.Array as A
 import qualified Data.Graph as G

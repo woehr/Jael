@@ -90,3 +90,8 @@ instance F.Foldable (TypedExpr t) where
 
 instance F.Unfoldable (TypedExpr t) where
   embed (TypedExprF Ann {ann=t, unAnn=e}) = TypedExpr Ann {ann=t, unAnn=e}
+
+type MaybeTypedExpr = TypedExpr (Maybe Type)
+
+mkUntypedExpr :: ExprF MaybeTypedExpr -> MaybeTypedExpr
+mkUntypedExpr e = TypedExpr $ Ann Nothing e

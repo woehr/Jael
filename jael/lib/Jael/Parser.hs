@@ -1,22 +1,46 @@
+{-|
+This module does not parse per se (much), but transforms automatically generated
+structures from the lbnf grammar definition into internal program structures.
+-}
 module Jael.Parser where
 
+import qualified Data.Map as M
 import qualified Data.Text as T
 import           Development.Placeholders
 import qualified Language.Fixpoint.Types as L
 import           Numeric (readInt, readDec, readHex, readOct)
 import qualified Jael.Grammar as G
 import           Jael.Expr
+import           Jael.Prog
 import           Jael.Type
+import           Jael.Util
 
 type ParseFun a = [G.Token] -> G.Err a
 
-parseProgram :: T.Text -> Either T.Text G.Prog
-parseProgram = runParser G.pProg
+-- This could use a better name as it's not really a parser error but an
+-- error in the program structure.
+data ParserErr = PE_DuplicateDefinition T.Text
+               deriving (Eq, Show)
+
+insertCheckDups :: Ord a => M.Map a b -> a -> b -> Either a (M.Map a b)
+insertCheckDups m k v = case M.lookup k m of
+                             Just _ -> Left k
+                             Nothing -> Right $ M.insert k v m
 
 runParser :: ParseFun a -> T.Text -> Either T.Text a
 runParser p t = case p . G.myLexer . T.unpack $ t of
                      G.Bad err  -> Left (T.pack err)
                      G.Ok  tree -> Right tree
+
+parseTopDef :: ParsedProg -> G.TopDef -> Either ParserErr ParsedProg
+parseTopDef p@Prog{..} (G.TopDefGlobal (G.Global1 (G.LIdent (_, n)) e)) =
+  case insertCheckDups pExprs (T.pack n) (parseExpr e) of
+       Left x -> Left (PE_DuplicateDefinition x)
+       Right m -> Right p{pExprs=m}
+parseTopDef _ _ = $notImplemented
+
+parseProgram :: G.Prog -> Either ParserErr ParsedProg
+parseProgram (G.Prog1 defs) = foldM parseTopDef emptyProg defs
 
 parseIntErrorMsg :: String
 parseIntErrorMsg = "Lexer should not produce integer strings that parse\
@@ -56,14 +80,14 @@ parseBinInt :: G.BinInt -> Integer
 parseBinInt (G.BinInt ((_, 'b':xs))) = intDoParse readBin xs
 parseBinInt _ = error parseIntErrorMsg
 
-parseELetElem :: G.ELetElem -> (T.Text, Expr)
+parseELetElem :: G.ELetElem -> (T.Text, MaybeTypedExpr)
 parseELetElem (G.ELetElem1 (G.LIdent (_, n)) e) = (T.pack n, parseExpr e)
 
-parseELetExpr :: G.ELetExpr -> Expr
+parseELetExpr :: G.ELetExpr -> MaybeTypedExpr
 parseELetExpr (G.ELetExpr1 [] e) = parseExpr e
 parseELetExpr (G.ELetExpr1 ls e) =
 --  let folder (n, x) acc = ELet n x acc
-  foldr (uncurry ELet) (parseExpr e) (map parseELetElem ls)
+  foldr (\(n, e1) e2 -> mkUntypedExpr (ELetF n e1 e2)) (parseExpr e) (map parseELetElem ls)
 
 parseBType :: G.BType -> BaseType
 parseBType G.TUnit = BTUnit
@@ -82,12 +106,12 @@ parseType (G.TypeB b) = TBase (parseBType b)
 parseType (G.TypeQ q) = parseQType q
 parseType (G.TypeV (G.LIdent (_, n))) = TVar (T.pack n)
 
-parseExpr :: G.Expr -> Expr
-parseExpr (G.EInt i) = ECon (CInt $ parseDecInt i)
-parseExpr (G.ETrue)  = ECon (CBool True)
-parseExpr (G.EFalse) = ECon (CBool False)
-parseExpr (G.EUnit)  = ECon CUnit
-parseExpr (G.EVar (G.LIdent (_, i))) = EVar (T.pack i)
+parseExpr :: G.Expr -> MaybeTypedExpr
+parseExpr (G.EInt i) = mkUntypedExpr $ EConF (CInt $ parseDecInt i)
+parseExpr (G.ETrue)  = mkUntypedExpr $ EConF (CBool True)
+parseExpr (G.EFalse) = mkUntypedExpr $ EConF (CBool False)
+parseExpr (G.EUnit)  = mkUntypedExpr $ EConF CUnit
+parseExpr (G.EVar (G.LIdent (_, i))) = mkUntypedExpr $ EVarF (T.pack i)
 parseExpr _ = $(todo "Finish implementing function")
 
 --gToS1Ex (GELogOr     e1 e2) = binPrm  POr e1 e2
