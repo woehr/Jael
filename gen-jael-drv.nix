@@ -38,8 +38,10 @@ let
       overrides = hSelf: hSuper:
       let liquid-fixpoint-git = pSuper.fetchgit {
         url    = "https://github.com/ucsd-progsys/liquid-fixpoint";
-        rev    = "d90c7de1d07507e3fb2f93788cfbca8b7e233e4f";
-        sha256 = "11kplsfdlf06ynghgjvn062pac562bmi7nc6fq6pqxhnvqxjljnw";
+#        rev    = "d90c7de1d07507e3fb2f93788cfbca8b7e233e4f";
+#        sha256 = "11kplsfdlf06ynghgjvn062pac562bmi7nc6fq6pqxhnvqxjljnw";
+        rev = "b9042d62cfdcce01e6a9f57449ee865f790d09ef";
+        sha256 = "15ibvrm5hdln8p53vyrwwslw57hvfwp4ci0z4y3zkfw8ak7jy8ry";
       };
       in
       { liquid-fixpoint = pSuper.lib.overrideDerivation

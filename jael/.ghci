@@ -1,3 +1,8 @@
+:set -Wall
+:set -fwarn-incomplete-uni-patterns
+:set -fwarn-incomplete-record-updates
+:set -fwarn-monomorphism-restriction
+:set -fwarn-identities
 :set -XDeriveFunctor
 :set -XGADTs
 :set -XRecordWildCards

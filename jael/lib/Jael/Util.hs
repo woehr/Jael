@@ -1,6 +1,5 @@
 module Jael.Util where
 
-import qualified Data.List.NonEmpty as NE
 import qualified Data.Array as A
 import qualified Data.Graph as G
 import qualified Data.Map as M
@@ -30,12 +29,12 @@ insertCollectDups m xs = let (dups, m') = foldr collectDup ([], m) xs
                          then Right m'
                          else Left dups
 
--- NonEmpty version of https://hackage.haskell.org/package/Unique
+-- https://hackage.haskell.org/package/Unique
 repeated :: Ord a => [a] -> [a]
-repeated = map NE.head . filterByLength (>1)
+repeated = map head . filterByLength (>1)
 
-filterByLength :: Ord a => (Int -> Bool) -> [a] -> [NE.NonEmpty a]
-filterByLength p = filter (p . length) . NE.group . sort
+filterByLength :: Ord a => (Int -> Bool) -> [a] -> [[a]]
+filterByLength p = filter (p . length) . group . sort
 
 -- Find undefined variables for a given dependencies map
 hasUndefined :: M.Map T.Text (S.Set T.Text) -> Maybe (S.Set T.Text)

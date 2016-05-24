@@ -3,12 +3,14 @@ module Jael.Prog where
 import qualified Data.Map as M
 import qualified Data.Text as T
 import           Jael.Expr
-import           Jael.Type
+import           Jael.Session
+--import           Jael.Type
 
-data Prog e = Prog { pExprs :: M.Map T.Text e
-                   } deriving (Eq, Show)
+data Prog e s = Prog { pExprs :: M.Map T.Text e
+                     , pSessAliases :: M.Map T.Text s
+                     } deriving (Eq, Show)
 
-type ParsedProg = Prog (TypedExpr (Maybe Type))
+type ParsedProg = Prog MaybeTypedExpr Session
 
-emptyProg :: Prog a
-emptyProg = Prog M.empty
+emptyProg :: Prog a b
+emptyProg = Prog M.empty M.empty

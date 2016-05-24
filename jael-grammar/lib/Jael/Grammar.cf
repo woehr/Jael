@@ -18,21 +18,20 @@ separator nonempty CommaSepType "," ;
 TNamedParamsEmpty. TNamedParams ::= ;
 TNamedParamsList.  TNamedParams ::= "(" [CommaSepType] ")" ;
 
-TBit.       BType ::= "BitField" ;
+TBit.       BType ::= "Bits" ;
 TBool.      BType ::= "Bool" ;
 TInt.       BType ::= "Int"    ;
 TUnit.      BType ::= "Void" ;
-TTup.       BType ::= "(" Type "," [CommaSepType] ")";
-TNamed.     BType ::= UIdent TNamedParams ;
+TBuffer.    BType ::= "Buffer" "(" Type ")" ;
 
 -- liquid types
 -- See https://ucsd-progsys.github.io/liquidhaskell-tutorial/02-logic.html
 -- and the definition of Expr at
 -- https://github.com/ucsd-progsys/liquid-fixpoint/blob/master/src/Language/Fixpoint/Types/Refinements.hs
 
-QPredIff. QPred1 ::= QPred2 "<=>" QPred2 ;
+QPredIff. QPred1 ::= QPred2 "<->" QPred2 ;
 
-QPredImp. QPred2 ::= QPred3 "==>" QPred3 ;
+QPredImp. QPred2 ::= QPred3 "->" QPred3 ;
 
 QPredOr.  QPred3 ::= QPred4 "||" QPred4 ;
 
@@ -67,11 +66,15 @@ coercions QExpr 3 ;
 rules CommaSepQExpr ::= QExpr ;
 separator nonempty CommaSepQExpr "," ;
 
-rules QType ::= LIdent ":" BType "|" QPred ;
+QTypeVVTy.     QType ::= "{" LIdent ":" BType "|" QPred "}" ;
+QTypeNoVVTy.   QType ::= "{"            BType "|" QPred "}" ;
+QTypeNoVVNoTy. QType ::= "{" "_"              "|" QPred "}" ;
 
-TypeB. Type ::= BType ;
-TypeQ. Type ::= QType ;
-TypeV. Type ::= LIdent ;
+TypeBase.  Type ::= BType ;
+TypeQual.  Type ::= QType ;
+TypeVar.   Type ::= LIdent ;
+TypeTup.   Type ::= "(" CommaSepType "," [CommaSepType] ")" ;
+TypeNamed. Type ::= UIdent TNamedParams ;
 
 -- Session Types
 
@@ -98,10 +101,10 @@ coercions Session 3 ;
 
 -- Expressions
 
-rules ELetElem ::= LIdent "=" Expr ;
-terminator   ELetElem ";" ;
+rules LetElem ::= LIdent "=" Expr ;
+terminator   LetElem ";" ;
 
-rules ELetExpr ::= [ELetElem] Expr ;
+rules LetExpr ::= [LetElem] Expr ;
 
 rules CommaSepExpr ::= Expr ;
 separator nonempty CommaSepExpr "," ;
@@ -146,7 +149,7 @@ ELogNot.    Expr12 ::= "!" Expr12 ;
 
 ----- End operators -----
 
-EIf.        Expr13 ::= "if" Expr "{" ELetExpr "}" "else" "{" ELetExpr "}" ;
+EIf.        Expr13 ::= "if" Expr "{" LetExpr "}" "else" "{" LetExpr "}" ;
 
 ETrue.      Expr16 ::= "true" ;
 EFalse.     Expr16 ::= "false" ;
@@ -157,7 +160,9 @@ EAppScoped. Expr16 ::= LScopedIdent "(" [CommaSepExpr] ")" ;
 EUnit.      Expr16 ::= "void" ;
 ETup.       Expr16 ::= "(" CommaSepExpr "," [CommaSepExpr] ")" ;
 
-coercions    Expr 16 ;
+EAnn.       Expr17 ::= Expr16 ":" Type ;
+
+coercions    Expr 17 ;
 
 -- Process grammar
 
@@ -211,23 +216,20 @@ coercions Proc 2 ;
 -- Top level grammar
 
 TDefProto.  TypeDef ::= "protocol" UIdent ":" Session ";" ;
-TDefArea.   TypeDef ::= "area"     UIdent "@" AnyInt ":" UIdent ";" ;
+-- TDefArea.   TypeDef ::= "area"     UIdent "@" AnyInt ":" UIdent ";" ;
 
-FuncArgBType. FuncArg ::= LIdent ":" BType ;
-FuncArgVType. FuncArg ::= LIdent ":" LIdent ;
-FuncArgQType. FuncArg ::= QType ;
-
+rules FuncArg ::= LIdent ":" Type ;
 separator nonempty FuncArg "," ;
 
-ProcArgSess.  ProcArg ::= "^" LIdent ":" Session ;
-ProcArgType.  ProcArg ::=     LIdent ":" Type ;
+ProcArgSess. ProcArg ::= "^" LIdent ":" Session ;
+ProcArgType. ProcArg ::=     LIdent ":" Type ;
 separator ProcArg "," ;
 
 rules  Global  ::= LIdent "=" Expr ";" ;
 
--- func myFunction(x: a, y: Something, z: Int | z >= 0) -> Int { ... }
--- func myFunction(x: a, y: Something, z: Int | z >= 0) -> w : Int | w <= 0 { ... }
-rules  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" Expr "}" ;
+-- func myFunction(x: a, y: Something, z:{v: Int | v >= 0}) -> Int { ... }
+-- func myFunction(x: a, y: Something, z:{Int | z >= 0}) -> {w : Int | w <= 0} { ... }
+rules Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" Expr "}" ;
 
 rules ProcDef ::= "proc" UIdent "(" [ProcArg] ")" "{" Proc "}" ;
 
@@ -238,6 +240,6 @@ rules Prog ::= [TopDef] ;
 
 comment "//" ;
 
--- Only export nessecary parsers.
-entrypoints Prog, TopDef, TypeDef, Type, Session, Expr, Proc, ProcArg ;
+-- Only export necessary parsers.
+entrypoints Prog ;
 
