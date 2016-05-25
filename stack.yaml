@@ -1,0 +1,29 @@
+resolver: lts-5.18
+
+nix:
+  enable: false
+  packages: 
+   - git
+   # Build deps
+   - haskellPackages.BNFC
+   - haskellPackages.alex
+   - haskellPackages.happy
+   - llvm_35
+
+packages:
+- location: jael
+- location: jael-grammar
+- location:
+    git: git@github.com:ucsd-progsys/liquid-fixpoint.git
+    commit: b9042d62cfdcce01e6a9f57449ee865f790d09ef
+  extra-dep: true
+
+extra-deps:
+# Jael deps
+- llvm-general-3.5.1.2
+- llvm-general-pure-3.5.1.0
+# Pulled in by liquid-fixpoint
+- dotgen-0.4.2
+- fgl-visualize-0.1.0.1
+- intern-0.9.1.4
+- located-base-0.1.1.0
