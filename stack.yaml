@@ -11,15 +11,12 @@ nix:
 packages:
 - location: ./jael/
 - location: ./jael-grammar/
-- location:
-    git: https://github.com/ucsd-progsys/liquid-fixpoint.git
-    commit: b9042d62cfdcce01e6a9f57449ee865f790d09ef
-  extra-dep: true
 
 extra-deps:
 # Jael-grammar setup dependency
 - BNFC-2.8.1
 # Jael deps
+- liquid-fixpoint-0.5.0.1
 - llvm-general-3.5.1.2
 - llvm-general-pure-3.5.1.0
 # Pulled in by liquid-fixpoint
