@@ -1,24 +1,24 @@
-resolver: lts-5.17
+resolver: lts-5.9
 
 nix:
   enable: false
-  packages: 
+  packages:
+   # To fetch liquid-fixpoint dependency
    - git
    # Build deps
-   - haskellPackages.BNFC
-   - haskellPackages.alex
-   - haskellPackages.happy
    - llvm_35
 
 packages:
-- location: jael
-- location: jael-grammar
+- location: ./jael/
+- location: ./jael-grammar/
 - location:
-    git: git@github.com:ucsd-progsys/liquid-fixpoint.git
+    git: https://github.com/ucsd-progsys/liquid-fixpoint.git
     commit: b9042d62cfdcce01e6a9f57449ee865f790d09ef
   extra-dep: true
 
 extra-deps:
+# Jael-grammar setup dependency
+- BNFC-2.8.1
 # Jael deps
 - llvm-general-3.5.1.2
 - llvm-general-pure-3.5.1.0
