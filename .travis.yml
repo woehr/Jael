@@ -22,5 +22,5 @@ install:
  - true
 
 script:
- - stack --nix test
+  - stack --nix -j 1 test
 
