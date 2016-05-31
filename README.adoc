@@ -1,0 +1,7 @@
+= Jael
+
+image::https://travis-ci.org/woehr/Jael.svg?branch=master[Build Status, link="https://travis-ci.org/woehr/Jael"]
+
+link:doc/guide.adoc[Getting started with Jael]
+
+link:doc/build.adoc[Build the compiler]
