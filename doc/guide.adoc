@@ -1,6 +1,8 @@
 = The Jael Guide
 :toc: preamble
 
+toc::[]
+
 == Introduction
 
 Jael is a _domain specific language_ for writing reliable, low-level embedded software. By focusing on a specific domain, restrictions can be placed on the software to acheive goals that would be difficult or impossible to acheive in a general purpose programming language. Jael attempts to explore how various features can be incorporated to acheive embedded specific goals. At a high level, these goals include:
