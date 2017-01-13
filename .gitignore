@@ -1,2 +1,4 @@
 dist
 .stack-work
+.liquid
+*.swp

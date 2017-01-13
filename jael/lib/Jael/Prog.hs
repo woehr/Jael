@@ -1,16 +1,20 @@
+{-# Language
+    DeriveFunctor,
+    NoImplicitPrelude #-}
+
 module Jael.Prog where
 
-import qualified Data.Map as M
-import qualified Data.Text as T
-import           Jael.Expr
-import           Jael.Session
---import           Jael.Type
+import BasePrelude
 
-data Prog e s = Prog { pExprs :: M.Map T.Text e
-                     , pSessAliases :: M.Map T.Text s
-                     } deriving (Eq, Show)
+newtype ProgramF a = ProgramF
+  { _unProgramF :: a
+  } deriving (Show, Functor)
 
-type ParsedProg = Prog MaybeTypedExpr Session
+data Program a b c = Program
+  { _types :: a
+  , _funcs :: b
+  , _globs :: c
+--  , _sesns :: d
+--  , _procs :: e
+  } deriving (Show)
 
-emptyProg :: Prog a b
-emptyProg = Prog M.empty M.empty

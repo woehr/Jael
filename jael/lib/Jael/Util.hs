@@ -1,5 +1,9 @@
+{-# Language DeriveFunctor #-}
+
 module Jael.Util where
 
+import Prelude ()
+import BasePrelude
 import qualified Data.Array as A
 import qualified Data.Graph as G
 import qualified Data.Map as M
@@ -10,6 +14,15 @@ import qualified Data.Text as T
 -- are annotated with, and 2) a functor to be annotated.
 data Ann x f a = Ann { ann :: x, unAnn :: f a }
   deriving (Eq, Show, Functor)
+
+data Token a = Token { value :: a, lineCol :: (Int, Int) }
+  deriving (Eq, Show, Functor)
+
+type Ident = Token T.Text
+type IntConst = Token Integer
+
+instance Ord a =>  Ord (Token a) where
+  compare x y = compare (value x) (value y)
 
 addIfUnique :: Ord a => (a, b) -> M.Map a b -> Maybe (M.Map a b)
 addIfUnique (k, v) m = case M.insertLookupWithKey (\_ n _ -> n) k v m of
@@ -31,10 +44,11 @@ insertCollectDups m xs = let (dups, m') = foldr collectDup ([], m) xs
 
 -- https://hackage.haskell.org/package/Unique
 repeated :: Ord a => [a] -> [a]
-repeated = map head . filterByLength (>1)
+repeated = map head . filterByGt1
 
-filterByLength :: Ord a => (Int -> Bool) -> [a] -> [[a]]
-filterByLength p = filter (p . length) . group . sort
+{-@ filterByGt1 :: [a] -> [{v:[a] | len v > 1}] @-}
+filterByGt1 :: Ord a => [a] -> [[a]]
+filterByGt1 = foldr (\x acc -> if length x > 1 then x:acc else acc) [] . group . sort
 
 -- Find undefined variables for a given dependencies map
 hasUndefined :: M.Map T.Text (S.Set T.Text) -> Maybe (S.Set T.Text)

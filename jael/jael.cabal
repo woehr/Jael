@@ -16,49 +16,39 @@ source-repository head
   location: git://github.com/woehr/jael
 
 library
-  exposed-modules:     Jael.CodeGen.Convert
-                       Jael.CodeGen.Module
-                       Jael.CodeGen.Passes
-                       Jael.Compile
-                       Jael.Compile.Common
-                       Jael.Compile.Stage1
-                       Jael.Compile.Stage2
-                       Jael.Conc.Env
-                       Jael.Conc.Proc
-                       Jael.Conc.Session
-                       Jael.Conc.TyCk.S2
-                       Jael.Conc.TyCk.S3
-                       Jael.Parser
+--  exposed-modules:     Jael.CodeGen.Convert
+--                       Jael.CodeGen.Module
+--                       Jael.CodeGen.Passes
+--                       Jael.Compile
+--                       Jael.Compile.Stage1
+--                       Jael.Compile.Stage2
+--                       Jael.Conc.Env
+--                       Jael.Conc.Proc
+--                       Jael.Conc.Session
+--                       Jael.Conc.TyCk.S2
+--                       Jael.Conc.TyCk.S3
+  exposed-modules:     Jael.Parser
                        Jael.Expr
                        Jael.Type
                        Jael.Session
-                       Jael.Seq.Env
-                       Jael.Seq.TI.S2
-                       Jael.Seq.TI.HM
-                       Jael.Seq.UserDefinedType
+--                       Jael.Seq.Env
+--                       Jael.Seq.TI.S2
+--                       Jael.Seq.TI.HM
+--                       Jael.Seq.UserDefinedType
                        Jael.Util
 
-  default-extensions:  DeriveFunctor,
-                       GADTs,
-                       RecordWildCards,
-                       TemplateHaskell,
-                       TupleSections,
-                       TypeFamilies,
-                       OverloadedStrings
-
-  build-depends:       base-noprelude >=4.8 && <5,
+  build-depends:       base >=4.8 && <5,
                        base-prelude,
                        mtl-prelude,
-                       jael-grammar
-
-  build-depends:       array,
+                       jael-grammar,
+                       array,
                        containers,
                        lens,
                        liquid-fixpoint,
                        llvm-general,
                        llvm-general-pure,
                        placeholders,
-                       recursion-schemes,
+                       recursion-schemes >= 5,
                        text,
                        wl-pprint-text
 
@@ -73,12 +63,9 @@ library
 executable jael
   main-is:             Main.hs
 
-  default-extensions:  OverloadedStrings
-
-  build-depends:       base-noprelude >=4.8,
-                       base-prelude
-
-  build-depends:       jael
+  build-depends:       base >=4.8 && <5,
+                       base-prelude,
+                       jael
 
   hs-source-dirs:      src
   default-language:    Haskell2010
@@ -92,24 +79,15 @@ test-suite test-jael
   type:                exitcode-stdio-1.0
   main-is:             Test.hs
 
-  default-extensions:  RecordWildCards,
-                       TupleSections,
-                       OverloadedStrings,
-                       QuasiQuotes
+  other-modules:       Jael.ParserSpec
 
-  build-depends:       base-noprelude >=4.8,
+  build-depends:       base          >=4.8 && <5,
                        base-prelude,
-                       HUnit,
-                       QuickCheck,
-                       template-haskell,
-                       test-framework,
-                       test-framework-hunit,
-                       test-framework-quickcheck2
-
-  build-depends:       jael,
+                       jael,
                        jael-grammar,
-                       containers,
-                       llvm-general-pure
+                       hspec         == 2.*,
+                       recursion-schemes >= 5,
+                       text
 
   hs-source-dirs:      test
   default-language:    Haskell2010

@@ -1,7 +1,14 @@
-{-# Language FlexibleInstances #-}
+{-# Language
+    DeriveFunctor
+  , FlexibleInstances
+  , TemplateHaskell
+  , TypeFamilies #-}
 
 module Jael.Expr where
 
+-- To make liquid haskell happy
+import Prelude ()
+import BasePrelude
 import qualified Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -9,13 +16,10 @@ import qualified Data.Text as T
 import           Development.Placeholders
 import           Jael.Type
 import           Jael.Util
-import qualified Text.PrettyPrint.Leijen.Text as PP
-
-type Ident = T.Text
 
 data Constant = CUnit
               | CBool Bool
-              | CInt Integer
+              | CInt IntConst
               | CTup
               | CAdd
               | CSub
@@ -52,7 +56,7 @@ data ExprF a = EAppF a a
 
 type instance F.Base Expr = ExprF
 
-instance F.Foldable Expr where
+instance F.Recursive Expr where
   project (EApp x y)     = EAppF x y
   project (EAbs x y)     = EAbsF x y
   project (ELet x y z)   = ELetF x y z
@@ -60,7 +64,7 @@ instance F.Foldable Expr where
   project (EVar x)       = EVarF x
   project (ECon x)       = EConF x
 
-instance F.Unfoldable Expr where
+instance F.Corecursive Expr where
   embed (EAppF x y)     = EApp x y
   embed (EAbsF x y)     = EAbs x y
   embed (ELetF x y z)   = ELet x y z
@@ -91,25 +95,18 @@ data AnnExprF x a = AnnExprF (Ann x ExprF a)
 
 type instance F.Base (AnnExpr t) = AnnExprF t
 
-instance F.Foldable (AnnExpr t) where
+instance F.Recursive (AnnExpr t) where
   project (AnnExpr Ann {ann=t, unAnn=e}) = AnnExprF Ann {ann=t, unAnn=e}
 
-instance F.Unfoldable (AnnExpr t) where
+instance F.Corecursive (AnnExpr t) where
   embed (AnnExprF Ann {ann=t, unAnn=e}) = AnnExpr Ann {ann=t, unAnn=e}
 
 type MaybeTypedExpr = AnnExpr (Maybe Type)
 type TypedExpr = AnnExpr Type
-
-instance PP.Pretty (AnnExpr Type) where
-  pretty (AnnExpr (Ann t (EAppF x y)  )) = PP.parens $ PP.pretty e <> PP.colon <> PP.pretty t
-  pretty (AnnExpr (Ann t (EAbsF x y)  )) = PP.parens $ PP.pretty e <> PP.colon <> PP.pretty t
-  pretty (AnnExpr (Ann t (ELetF x y z))) = PP.parens $ PP.pretty e <> PP.colon <> PP.pretty t
-  pretty (AnnExpr (Ann t (EIteF x y z))) = PP.parens $ PP.pretty e <> PP.colon <> PP.pretty t
-  pretty (AnnExpr (Ann t (EVarF x)    )) = PP.parens $ PP.pretty e <> PP.colon <> PP.pretty t
-  pretty (AnnExpr (Ann t (EConF x)    )) = PP.parens $ PP.pretty e <> PP.colon <> PP.pretty t
+type NamedExpr = (Ident, MaybeTypedExpr)
 
 mkUntypedExpr :: ExprF MaybeTypedExpr -> MaybeTypedExpr
-mkUntypedExpr e = AnnExpr $ Ann Nothing e
+mkUntypedExpr = AnnExpr . Ann Nothing
 
 mkConstExpr :: Constant -> MaybeTypedExpr
 mkConstExpr = mkUntypedExpr . EConF
@@ -169,5 +166,5 @@ hm _   (AnnExpr (Ann mType (EConF c)))       =
             CBitCat -> undefined
             CNot    -> undefined
   in case mType of
-          Just _  -> error "constants shouldn't be annotated with a type"
+          Just _  -> $(todo "constants can have a type with refinements")
           Nothing -> Right $ AnnExpr (Ann t (EConF c))

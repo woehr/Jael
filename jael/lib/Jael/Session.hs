@@ -1,5 +1,13 @@
+{-# Language
+  DeriveFunctor
+, NoImplicitPrelude
+, RecordWildCards
+, TypeFamilies #-}
+
 module Jael.Session where
 
+import BasePrelude
+import MTLPrelude
 import qualified Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
@@ -43,7 +51,7 @@ data SessionF a = SGetTyF Type a
 
 type instance F.Base Session = SessionF
 
-instance F.Foldable Session where
+instance F.Recursive Session where
   project (SGetTy x y) = SGetTyF x y
   project (SPutTy x y) = SPutTyF x y
   project (SGetSess x y) = SGetSessF x y
@@ -55,7 +63,7 @@ instance F.Foldable Session where
   project (SDualVar x) = SDualVarF x
   project (SEnd) = SEndF
 
-instance F.Unfoldable Session where
+instance F.Corecursive Session where
   embed (SGetTyF x y) = SGetTy x y
   embed (SPutTyF x y) = SPutTy x y
   embed (SGetSessF x y) = SGetSess x y

@@ -1,10 +1,18 @@
 {-|
-This module does not parse per se (much), but transforms automatically generated
-structures from the lbnf grammar definition into internal program structures.
+Functions for parsing and transforming the BNFC AST to Jael data structures.
+No error checking.
 -}
+
+{-# Language
+    FlexibleInstances,
+    FunctionalDependencies,
+    MultiParamTypeClasses,
+    NoImplicitPrelude,
+    RecordWildCards #-}
+
 module Jael.Parser where
 
-import qualified Data.Map as M
+import BasePrelude hiding (TVar)
 import qualified Data.Text as T
 --import           Development.Placeholders
 import qualified Language.Fixpoint.Types as L
@@ -16,123 +24,155 @@ import           Jael.Util
 
 type ParseFun a = [G.Token] -> G.Err a
 
--- This could use a better name as it's not really a parser error but an
--- error in the program structure.
-data ParserErr = PE_DuplicateDefinition T.Text
-               | PE_MultipleTypeAnn
-               deriving (Eq, Show)
-
-type ParserErrM = Either ParserErr
-
-insertCheckDups :: Ord a => M.Map a b -> a -> b -> Either a (M.Map a b)
-insertCheckDups m k v = case M.lookup k m of
-                             Just _ -> Left k
-                             Nothing -> Right $ M.insert k v m
-
 runParser :: ParseFun a -> T.Text -> Either T.Text a
 runParser p t = case p . G.myLexer . T.unpack $ t of
                      G.Bad err  -> Left (T.pack err)
                      G.Ok  tree -> Right tree
 
-parseUIdent :: G.UIdent -> T.Text
-parseUIdent (G.UIdent (_, n)) = T.pack n
+  -- Transform the grammar AST into sturctures more easily handled by the
+  -- compiler. No error checking is done.
+class Jaelify a b | a -> b where
+  jaelify :: a -> b
 
-parseLIdent :: G.LIdent -> T.Text
-parseLIdent (G.LIdent (_, n)) = T.pack n
+instance Jaelify G.UIdent Ident where
+  jaelify (G.UIdent (x, n)) = Token (T.pack n) x
 
-parseLScoped :: G.LScopedIdent -> T.Text
-parseLScoped (G.LScopedIdent (_, n)) = T.pack n
+instance Jaelify G.LIdent Ident where
+  jaelify (G.LIdent (x, n)) = Token (T.pack n) x
 
-parseFuncArg :: G.FuncArg -> (MaybeTypedExpr, Type) -> (MaybeTypedExpr, Type)
-parseFuncArg (G.FuncArg1 n t1) (e, t2) =
-  let argTy = parseType t1
-      absTy = TFun argTy t2
-  in  (mkAnnExpr (EAbsF (parseLIdent n) e) (Just absTy), absTy)
+instance Jaelify G.LScopedIdent Ident where
+  jaelify (G.LScopedIdent (x, n)) = Token (T.pack n) x
 
-parseFunc :: G.Func -> ParserErrM (T.Text, MaybeTypedExpr)
-parseFunc (G.Func1 n as ret e) =
-  let AnnExpr (Ann ft fe) = parseExpr e
-      bodyType = parseType ret
-      bodyExpr = mkAnnExpr fe $ Just bodyType
-  in  case ft of
-        Just _  -> throwError PE_MultipleTypeAnn
-        Nothing -> return (parseLIdent n, fst $ foldr parseFuncArg (bodyExpr, bodyType) as)
+instance Jaelify G.DecInt IntConst where
+  jaelify (G.DecInt (x, s)) = Token (parseDecInt s) x
 
-parseGlobal :: G.Global -> ParserErrM (T.Text, MaybeTypedExpr)
-parseGlobal (G.Global1 n e) = return (parseLIdent n, parseExpr e)
+instance Jaelify G.HexInt IntConst where
+  jaelify (G.HexInt (x, s)) = Token (parseHexInt s) x
 
+instance Jaelify G.OctInt IntConst where
+  jaelify (G.OctInt (x, s)) = Token (parseOctInt s) x
 
-parseTopDef :: ParsedProg -> G.TopDef -> ParserErrM ParsedProg
-parseTopDef p@Prog{..} (G.TopDefGlobal (G.Global1 n e)) =
-  case insertCheckDups pExprs (parseLIdent n) (parseExpr e) of
-       Left x -> Left (PE_DuplicateDefinition x)
-       Right m -> Right p{pExprs=m}
+instance Jaelify G.BinInt IntConst where
+  jaelify (G.BinInt (x, s)) = Token (parseBinInt s) x
 
-parseTopDef p@Prog{..} (G.TopDefFunc f) = do
-  (n, e) <- parseFunc f
-  case insertCheckDups pExprs n e of
-       Left x  -> throwError (PE_DuplicateDefinition x)
-       Right m -> return p{pExprs=m}
+instance Jaelify G.AnyInt IntConst where
+  jaelify (G.AnyIntDecInt x) = jaelify x
+  jaelify (G.AnyIntHexInt x) = jaelify x
+  jaelify (G.AnyIntOctInt x) = jaelify x
+  jaelify (G.AnyIntBinInt x) = jaelify x
 
-parseTopDef p@Prog{..} (G.TopDefTypeDef (G.TDefProto n s)) = undefined
+parseDecInt :: String -> Integer
+parseDecInt s@(x:xs) =
+  if x == '~'
+     then -(intDoParse readDec xs)
+     else   intDoParse readDec s
+parseDecInt _ = error "impossible"
 
-parseProgram :: G.Prog -> ParserErrM ParsedProg
-parseProgram (G.Prog1 defs) = foldM parseTopDef emptyProg defs
+parseHexInt :: String -> Integer
+parseHexInt ('0':'x':xs) = intDoParse readHex xs
+parseHexInt _ = error "impossible"
 
-parseIntErrorMsg :: String
-parseIntErrorMsg = "Lexer should not produce integer strings that parse\
-                   \ incorrectly. See definition in Grammar.cf"
+parseOctInt :: String -> Integer
+parseOctInt ('0':'o':xs) = intDoParse readOct xs
+parseOctInt _ = error "impossible"
 
-readBin :: ReadS Integer
-readBin = readInt 2 (\x -> x == '0' || x == '1') digitToInt
+parseBinInt :: String -> Integer
+parseBinInt ('0':'b':xs) = intDoParse readBin xs
+parseBinInt _ = error "impossible"
 
 intDoParse :: ReadS Integer -> String -> Integer
 intDoParse p xs =
   case p xs of
        [(i, [])] -> i
-       _         -> error parseIntErrorMsg
+       -- The lexer should never give strings that can't be parsed as Ints
+       _         -> error "impossible"
 
-parseAnyInt :: G.AnyInt -> Integer
-parseAnyInt (G.AnyIntDecInt x) = parseDecInt x
-parseAnyInt (G.AnyIntHexInt x) = parseHexInt x
-parseAnyInt (G.AnyIntOctInt x) = parseOctInt x
-parseAnyInt (G.AnyIntBinInt x) = parseBinInt x
+readBin :: ReadS Integer
+readBin = readInt 2 (\x -> x == '0' || x == '1') digitToInt
 
-parseDecInt :: G.DecInt -> Integer
-parseDecInt (G.DecInt (_, s@(x:xs))) =
-  if x == '~'
-     then -(intDoParse readDec xs)
-     else   intDoParse readDec s
-parseDecInt _ = error parseIntErrorMsg
+instance Jaelify G.Expr MaybeTypedExpr where
+  jaelify (G.EInt i) = mkConstExpr (CInt $ jaelify i)
+  jaelify G.ETrue    = mkConstExpr (CBool True)
+  jaelify G.EFalse   = mkConstExpr (CBool False)
+  jaelify G.EUnit    = mkConstExpr CUnit
+  jaelify (G.EVar i) = mkVarExpr $ jaelify i
+  jaelify (G.ETup e1 es) = parseETup $ map parseCommaSepExpr (e1:es)
+  jaelify (G.EApp n es) = mkAppExpr (mkVarExpr $ jaelify n) (map parseCommaSepExpr es)
+  jaelify (G.EAppScoped n es) = mkAppExpr (mkVarExpr $ jaelify n) (map parseCommaSepExpr es)
+  jaelify (G.EAnn e t) =
+    case jaelify e of
+      AnnExpr (Ann (Just _) _) -> error "Attempted to annotate an expression multiple times."
+      AnnExpr (Ann Nothing e') -> AnnExpr (Ann (Just (jaelify t)) e')
+  jaelify (G.EAnnQual e qt) = undefined
+  jaelify (G.EAnnQualNoVar e qt) = undefined
+  jaelify (G.EIf b t e) = mkUntypedExpr $ EIteF (jaelify b) (jaelify t) (jaelify e)
+  jaelify (G.ELogOr  l r) = mkApp COr  [l, r]
+  jaelify (G.ELogAnd l r) = mkApp CAnd [l, r]
+  jaelify (G.EEq     l r) = mkApp CEq  [l, r]
+  jaelify (G.ENotEq  l r) = mkApp CNe  [l, r]
+  jaelify (G.EGtEq   l r) = mkApp CGe  [l, r]
+  jaelify (G.ELtEq   l r) = mkApp CLe  [l, r]
+  jaelify (G.EGt     l r) = mkApp CGt  [l, r]
+  jaelify (G.ELt     l r) = mkApp CLt  [l, r]
+  jaelify (G.EPlus   l r) = mkApp CAdd [l, r]
+  jaelify (G.EMinus  l r) = mkApp CSub [l, r]
+  jaelify (G.ETimes  l r) = mkApp CMul [l, r]
+  jaelify (G.EDiv    l r) = mkApp CDiv [l, r]
+  jaelify (G.EMod    l r) = mkApp CMod [l, r]
+  jaelify (G.EBitCat l r) = mkApp CBitCat [l, r]
+  jaelify (G.ELogNot e  ) = mkApp CNot [e]
 
-parseHexInt :: G.HexInt -> Integer
-parseHexInt (G.HexInt (_, '0':'x':xs)) = intDoParse readHex xs
-parseHexInt _ = error parseIntErrorMsg
+instance Jaelify G.LetExpr MaybeTypedExpr where
+  --jaelify (G.LetExpr1 [] e) = jaelify e
+  jaelify (G.LetExpr1 ls e) =
+    foldr ((\(n, e1) e2 -> mkUntypedExpr (ELetF n e1 e2)) . letExpr)
+          (jaelify e)
+          ls
+    where letExpr :: G.LetElem -> (Ident, MaybeTypedExpr)
+          letExpr (G.LetElem1 n e) = (jaelify n, jaelify e)
 
-parseOctInt :: G.OctInt -> Integer
-parseOctInt (G.OctInt (_, 'o':xs)) = intDoParse readOct xs
-parseOctInt _ = error parseIntErrorMsg
+instance Jaelify G.Func NamedExpr where
+  jaelify (G.FuncRetType n as ret e) =
+    let AnnExpr (Ann ft fe) = jaelify e
+        bodyType = jaelify ret
+        bodyExpr = mkAnnExpr fe $ Just bodyType
+    in  case ft of
+          Just _  -> undefined
+          Nothing -> (jaelify n, fst $ foldr combineArgs (bodyExpr, bodyType) as)
+    where
+      combineArgs :: G.FuncArg -> (MaybeTypedExpr, Type) -> (MaybeTypedExpr, Type)
+      combineArgs (G.FuncArgType n t1) (e, t2) =
+        let argTy = jaelify t1
+            absTy = TFun argTy t2
+        in  (mkAnnExpr (EAbsF (jaelify n) e) (Just absTy), absTy)
 
-parseBinInt :: G.BinInt -> Integer
-parseBinInt (G.BinInt (_, 'b':xs)) = intDoParse readBin xs
-parseBinInt _ = error parseIntErrorMsg
 
-parseLetElem :: G.LetElem -> (T.Text, MaybeTypedExpr)
-parseLetElem (G.LetElem1 n e) = (parseLIdent n, parseExpr e)
+instance Jaelify G.Global NamedExpr where
+  jaelify (G.Global1 n e) = (jaelify n, jaelify e)
 
-parseLetExpr :: G.LetExpr -> MaybeTypedExpr
-parseLetExpr (G.LetExpr1 [] e) = parseExpr e
-parseLetExpr (G.LetExpr1 ls e) =
-  foldr ((\(n, e1) e2 -> mkUntypedExpr (ELetF n e1 e2)) . parseLetElem)
-        (parseExpr e)
-        ls
 
-parseBType :: G.BType -> BaseType
-parseBType G.TUnit   = BTUnit
-parseBType G.TBool   = BTBool
-parseBType G.TInt    = BTInt
-parseBType G.TBit    = BTBit
-parseBType (G.TBuffer t) = BTBuffer (parseType t)
+instance Jaelify G.Prog (Program [Type] [NamedExpr] [NamedExpr]) where
+  jaelify (G.Prog1 defs) =
+    let (types, funcs, globs) = foldr splitDef ([], [], []) defs
+    in  Program types funcs globs
+    where
+      splitDef :: G.TopDef
+               -> ([Type], [NamedExpr], [NamedExpr])
+               -> ([Type], [NamedExpr], [NamedExpr])
+      splitDef (G.TopDefGlobal g) (v, w, x) = (v, w, (jaelify g):x)
+      splitDef (G.TopDefFunc   f) (v, w, x) = (v, (jaelify f):w, x)
+
+instance Jaelify G.Type Type where
+  jaelify (G.TypeTypeA (G.TypeNamed n))  = undefined (jaelify n)
+  jaelify (G.TypeTypeB (G.TypeBase G.TUnit)) = TBase BTUnit
+  jaelify (G.TypeTypeB (G.TypeBase G.TBool)) = TBase BTBool
+  jaelify (G.TypeTypeB (G.TypeBase G.TInt))  = TBase BTInt
+  jaelify (G.TypeTypeB (G.TypeBase G.TBit))  = TBase BTBit
+  jaelify (G.TypeTypeB (G.TypeBase (G.TBuffer t))) = TBase $ BTBuffer (jaelify t)
+  jaelify (G.TypeTypeB (G.TypeVar  n))   = TVar  (jaelify n)
+  jaelify (G.TypeTypeB (G.TypeTup t ts)) = TTup $ map parseCommaSepType (t:ts)
+  jaelify (G.TypeTypeB (G.TypeNamedParams n ts)) = undefined (jaelify n)
+
 
 parseQPred :: G.QPred -> L.Expr
 parseQPred (G.QPredIff l r) = L.PIff (parseQPred l) (parseQPred r)
@@ -147,13 +187,13 @@ parseQPred (G.QPredAtom l op r) = L.PAtom (parseQRel op) (parseQExpr l) (parseQE
 parseQExpr :: G.QExpr -> L.Expr
 parseQExpr (G.QExprAdd l r)  = L.EBin L.Plus (parseQExpr l) (parseQExpr r)
 parseQExpr (G.QExprSub l r)  = L.EBin L.Minus (parseQExpr l) (parseQExpr r)
-parseQExpr (G.QExprMul c e)  = L.EBin L.Times (L.expr $ parseAnyInt c) (parseQExpr e)
-parseQExpr (G.QExprInt i)    = L.expr $ parseAnyInt i
-parseQExpr (G.QExprVar n)    = L.eVar $ parseLIdent n
+parseQExpr (G.QExprMul c e)  = L.EBin L.Times (L.expr . value $ jaelify c) (parseQExpr e)
+parseQExpr (G.QExprInt i)    = L.expr . value $ jaelify i
+parseQExpr (G.QExprVar n)    = L.eVar . value $ jaelify n
 parseQExpr (G.QExprApp n (a:as)) =
   foldl'
     L.EApp
-    (L.EApp (L.EVar $ L.symbol $ parseLIdent n) (parseCommaSepQExpr a))
+    (L.EApp (L.EVar . L.symbol . value . jaelify $ n) (parseCommaSepQExpr a))
     (map parseCommaSepQExpr as)
 parseQExpr (G.QExprApp _ _) = error "[G.CommaSepQExpr] should always have an element"
 
@@ -168,63 +208,16 @@ parseQRel G.QRelLe = L.Le
 parseQRel G.QRelGt = L.Gt
 parseQRel G.QRelLt = L.Lt
 
-parseQType :: G.QType -> Type
-parseQType (G.QTypeVVTy n b p) = TQual (VV $ parseLIdent n) (Just $ parseBType b) (parseQPred p)
-parseQType (G.QTypeNoVVTy b p) = TQual VVFresh              (Just $ parseBType b) (parseQPred p)
-parseQType (G.QTypeNoVVNoTy p) = TQual VVFresh              Nothing               (parseQPred p)
-
 parseCommaSepType :: G.CommaSepType -> Type
-parseCommaSepType (G.CommaSepTypeType t) = parseType t
-
-parseTNamedParams :: G.TNamedParams -> [Type]
-parseTNamedParams G.TNamedParamsEmpty = []
-parseTNamedParams (G.TNamedParamsList ts) = map parseCommaSepType ts
-
-parseType :: G.Type -> Type
-parseType (G.TypeBase b)     = TBase (parseBType b)
-parseType (G.TypeQual q)     =       parseQType q
-parseType (G.TypeVar  n)     = TVar  (parseLIdent n)
-parseType (G.TypeTup t ts)   = TTup $ map parseCommaSepType (t:ts)
-parseType (G.TypeNamed n ps) = TNamed (parseUIdent n) $ parseTNamedParams ps
+parseCommaSepType (G.CommaSepTypeType t) = jaelify t
 
 parseCommaSepExpr :: G.CommaSepExpr -> MaybeTypedExpr
-parseCommaSepExpr (G.CommaSepExprExpr e) = parseExpr e
+parseCommaSepExpr (G.CommaSepExprExpr e) = jaelify e
 
 parseETup :: [MaybeTypedExpr] -> MaybeTypedExpr
 parseETup (x:[]) = x
 parseETup (x:ys) = mkTupExpr x (parseETup ys)
 parseETup _ = error "parseETup should always be given a list with 2 elements"
 
-parseExpr :: G.Expr -> MaybeTypedExpr
-parseExpr (G.EInt i) = mkConstExpr (CInt $ parseDecInt i)
-parseExpr G.ETrue    = mkConstExpr (CBool True)
-parseExpr G.EFalse   = mkConstExpr (CBool False)
-parseExpr G.EUnit    = mkConstExpr CUnit
-parseExpr (G.EVar i) = mkVarExpr $ parseLIdent i
-parseExpr (G.ETup e1 es) = parseETup $ map parseCommaSepExpr (e1:es)
-parseExpr (G.EApp n es) = mkAppExpr (mkVarExpr $ parseLIdent n) (map parseCommaSepExpr es)
-parseExpr (G.EAppScoped n es) = mkAppExpr (mkVarExpr $ parseLScoped n) (map parseCommaSepExpr es)
-parseExpr (G.EAnn e t) =
-   case parseExpr e of
-        AnnExpr (Ann (Just _) _) -> error "Attempted to annotate an expression multiple times."
-        AnnExpr (Ann Nothing e') -> AnnExpr (Ann (Just (parseType t)) e')
-
-parseExpr (G.EIf b t e) = mkUntypedExpr $ EIteF (parseExpr b) (parseLetExpr t) (parseLetExpr e)
-parseExpr (G.ELogOr  l r) = mkApp COr  [l, r]
-parseExpr (G.ELogAnd l r) = mkApp CAnd [l, r]
-parseExpr (G.EEq     l r) = mkApp CEq  [l, r]
-parseExpr (G.ENotEq  l r) = mkApp CNe  [l, r]
-parseExpr (G.EGtEq   l r) = mkApp CGe  [l, r]
-parseExpr (G.ELtEq   l r) = mkApp CLe  [l, r]
-parseExpr (G.EGt     l r) = mkApp CGt  [l, r]
-parseExpr (G.ELt     l r) = mkApp CLt  [l, r]
-parseExpr (G.EPlus   l r) = mkApp CAdd [l, r]
-parseExpr (G.EMinus  l r) = mkApp CSub [l, r]
-parseExpr (G.ETimes  l r) = mkApp CMul [l, r]
-parseExpr (G.EDiv    l r) = mkApp CDiv [l, r]
-parseExpr (G.EMod    l r) = mkApp CMod [l, r]
-parseExpr (G.EBitCat l r) = mkApp CBitCat [l, r]
-parseExpr (G.ELogNot e  ) = mkApp CNot [e]
-
 mkApp :: Constant -> [G.Expr] -> MaybeTypedExpr
-mkApp f as = mkAppExpr (mkConstExpr f) $ map parseExpr as
+mkApp f as = mkAppExpr (mkConstExpr f) $ map jaelify as

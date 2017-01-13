@@ -1,7 +1,6 @@
 module Jael.Compile.Stage2 where
 
 import qualified Data.Map as M
-import           Jael.Compile.Common
 import           Jael.Conc.Proc
 import           Jael.Conc.TyCk.S2
 import           Jael.Seq.AST

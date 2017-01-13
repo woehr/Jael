@@ -10,20 +10,6 @@ position token BinInt ({"0b"} ["01"]+) ;
 
 rules AnyInt ::= DecInt | HexInt | OctInt | BinInt ;
 
--- Sequential Types
-
-rules CommaSepType ::= Type ;
-separator nonempty CommaSepType "," ;
-
-TNamedParamsEmpty. TNamedParams ::= ;
-TNamedParamsList.  TNamedParams ::= "(" [CommaSepType] ")" ;
-
-TBit.       BType ::= "Bits" ;
-TBool.      BType ::= "Bool" ;
-TInt.       BType ::= "Int"    ;
-TUnit.      BType ::= "Void" ;
-TBuffer.    BType ::= "Buffer" "(" Type ")" ;
-
 -- liquid types
 -- See https://ucsd-progsys.github.io/liquidhaskell-tutorial/02-logic.html
 -- and the definition of Expr at
@@ -66,38 +52,48 @@ coercions QExpr 3 ;
 rules CommaSepQExpr ::= QExpr ;
 separator nonempty CommaSepQExpr "," ;
 
-QTypeVVTy.     QType ::= "{" LIdent ":" BType "|" QPred "}" ;
-QTypeNoVVTy.   QType ::= "{"            BType "|" QPred "}" ;
-QTypeNoVVNoTy. QType ::= "{" "_"              "|" QPred "}" ;
+TBit.       BType ::= "Bits" ;
+TBool.      BType ::= "Bool" ;
+TInt.       BType ::= "Int"    ;
+TUnit.      BType ::= "Void" ;
+TBuffer.    BType ::= "Buffer" "(" Type ")" ;
 
-TypeBase.  Type ::= BType ;
-TypeQual.  Type ::= QType ;
-TypeVar.   Type ::= LIdent ;
-TypeTup.   Type ::= "(" CommaSepType "," [CommaSepType] ")" ;
-TypeNamed. Type ::= UIdent TNamedParams ;
+rules QTypeVar   ::= "{" LIdent ":" UnqualType "|" QPred "}" ;
+rules QTypeNoVar ::= "{"            UnqualType "|" QPred "}" ;
+
+rules CommaSepType ::= Type ;
+separator nonempty CommaSepType "," ;
+
+-- Type is split into TypeA and TypeB. TypeB is used in sessions where
+-- TypeNamed would introduce a shift/reduce conflict.
+TypeNamed.       TypeA ::= UIdent ;
+TypeNamedParams. TypeB ::= UIdent "(" [CommaSepType] ")" ;
+TypeBase.        TypeB ::= BType ;
+TypeVar.         TypeB ::= LIdent ;
+TypeTup.         TypeB ::= "(" CommaSepType "," [CommaSepType] ")" ;
+
+rules UnqualType ::= TypeA | TypeB ;
+rules Type ::= QTypeVar | UnqualType ;
 
 -- Session Types
 
-rules SessChoice ::= LIdent "=>" Session1 ;
+rules SessChoice ::= LIdent "=>" Session ;
 separator nonempty SessChoice "," ;
 
-SessTy.   SessOrTy ::= Type ;
-SessSess. SessOrTy ::= Session1 ;
+SessType.  SessOrTy ::= TypeB ;
+SessQType. SessOrTy ::= QTypeVar ;
+SessSess.  SessOrTy ::= Session ;
 
-SessRec.  Session1 ::= "rec" UIdent "." Session2 ;
+SessRec.     Session ::= "rec" UIdent "." Session ;
 
-SessGet.  Session2 ::= "?" "[" SessOrTy "]" Session1 ;
-SessPut.  Session2 ::= "!" "[" SessOrTy "]" Session1 ;
-SessSel.  Session2 ::= "+" "[" [SessChoice] "]" ;
-SessCho.  Session2 ::= "&" "[" [SessChoice] "]" ;
+SessGet.     Session ::= "?" "[" SessOrTy "]" Session ;
+SessPut.     Session ::= "!" "[" SessOrTy "]" Session ;
+SessSel.     Session ::= "+" "[" [SessChoice] "]" ;
+SessCho.     Session ::= "&" "[" [SessChoice] "]" ;
 
-SessEnd. Session3 ::= ;
--- recursion variable surrounded in <> to distinguish it from TNamed in
--- SessGet and SessPut
-SessVar.     Session3 ::= "<" UIdent ">" ;
-SessVarDual. Session3 ::= "<" "dual" UIdent ">" ;
-
-coercions Session 3 ;
+SessEnd.     Session ::= ;
+SessVar.     Session ::= UIdent ;
+SessVarDual. Session ::= "dual" UIdent ;
 
 -- Expressions
 
@@ -149,20 +145,22 @@ ELogNot.    Expr12 ::= "!" Expr12 ;
 
 ----- End operators -----
 
-EIf.        Expr13 ::= "if" Expr "{" LetExpr "}" "else" "{" LetExpr "}" ;
+EIf.           Expr13 ::= "if" Expr "{" LetExpr "}" "else" "{" LetExpr "}" ;
 
-ETrue.      Expr16 ::= "true" ;
-EFalse.     Expr16 ::= "false" ;
-EInt.       Expr16 ::= DecInt ;
-EVar.       Expr16 ::= LIdent ;
-EApp.       Expr16 ::= LIdent       "(" [CommaSepExpr] ")" ;
-EAppScoped. Expr16 ::= LScopedIdent "(" [CommaSepExpr] ")" ;
-EUnit.      Expr16 ::= "void" ;
-ETup.       Expr16 ::= "(" CommaSepExpr "," [CommaSepExpr] ")" ;
+ETrue.         Expr14 ::= "true" ;
+EFalse.        Expr14 ::= "false" ;
+EInt.          Expr14 ::= DecInt ;
+EUnit.         Expr14 ::= "void" ;
+ETup.          Expr14 ::= "(" CommaSepExpr "," [CommaSepExpr] ")" ;
+EApp.          Expr14 ::= LIdent       "(" [CommaSepExpr] ")" ;
+EAppScoped.    Expr14 ::= LScopedIdent "(" [CommaSepExpr] ")" ;
+EVar.          Expr14 ::= LIdent ;
 
-EAnn.       Expr17 ::= Expr16 ":" Type ;
+EAnn.          Expr15 ::= Expr14 ":" Type ;
+--EAnnQual.      Expr15 ::= Expr14 ":" QTypeVar ;
+EAnnQualNoVar. Expr15 ::= Expr14 ":" QTypeNoVar ;
 
-coercions    Expr 17 ;
+coercions   Expr 15 ;
 
 -- Process grammar
 
@@ -218,20 +216,24 @@ coercions Proc 2 ;
 TDefProto.  TypeDef ::= "protocol" UIdent ":" Session ";" ;
 -- TDefArea.   TypeDef ::= "area"     UIdent "@" AnyInt ":" UIdent ";" ;
 
-rules FuncArg ::= LIdent ":" Type ;
+FuncArgType.  FuncArg ::= LIdent ":" UnqualType ;
+FuncArgQType. FuncArg ::= LIdent ":" QTypeNoVar ;
 separator nonempty FuncArg "," ;
 
-ProcArgSess. ProcArg ::= "^" LIdent ":" Session ;
-ProcArgType. ProcArg ::=     LIdent ":" Type ;
+ProcArgSess.  ProcArg ::= "^" LIdent ":" Session ;
+ProcArgType.  ProcArg ::=     LIdent ":" UnqualType ;
+ProcArgQType. ProcArg ::=     LIdent ":" QTypeNoVar ;
 separator ProcArg "," ;
 
 rules  Global  ::= LIdent "=" Expr ";" ;
 
--- func myFunction(x: a, y: Something, z:{v: Int | v >= 0}) -> Int { ... }
--- func myFunction(x: a, y: Something, z:{Int | z >= 0}) -> {w : Int | w <= 0} { ... }
-rules Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" Expr "}" ;
+-- func myFunction(x: a, y: Something, z: {Int | z >= 0}) -> Int { ... }
+-- func myFunction(x: a, y: Something, z: {Int | z >= 0}) -> {w : Int | w <= 0} { ... }
+FuncRet.  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" Expr "}" ;
+--FuncRetType.  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" Expr "}" ;
+--FuncRetQType. Func    ::= "func" LIdent "(" [FuncArg] ")" "->" QTypeVar "{" Expr "}" ;
 
-rules ProcDef ::= "proc" UIdent "(" [ProcArg] ")" "{" Proc "}" ;
+rules ProcDef ::= "proc" LIdent "(" [ProcArg] ")" "{" Proc "}" ;
 
 rules TopDef ::= TypeDef | Global | Func | ProcDef ;
 terminator  TopDef "" ;
@@ -241,5 +243,5 @@ rules Prog ::= [TopDef] ;
 comment "//" ;
 
 -- Only export necessary parsers.
-entrypoints Prog ;
+entrypoints Prog, Func, Expr, Type, QTypeVar, QTypeNoVar, ProcDef, Proc, Session ;
 

@@ -1,35 +1,28 @@
-{ nixpkgs ? import <nixpkgs> {}, compiler ? "default" }:
+{ nixpkgs ? import ../nix/pkgs.nix {}, compiler ? "default" }:
 
 let
 
   inherit (nixpkgs) pkgs;
 
-  jael-grammar = haskellPackages.callPackage ../jael-grammar {};
-
-  f = { mkDerivation, array, base-noprelude, base-prelude
-      , containers, HUnit, lens, liquid-fixpoint
-      , llvm-general, llvm-general-pure, mtl-prelude, placeholders
-      , QuickCheck, recursion-schemes, stdenv, template-haskell
-      , test-framework, test-framework-hunit, test-framework-quickcheck2
-      , text, wl-pprint-text
+  f = { mkDerivation, array, base, base-prelude, containers, hspec
+      , jael-grammar, lens, liquid-fixpoint, llvm-general
+      , llvm-general-pure, mtl-prelude, placeholders, recursion-schemes
+      , stdenv, text, wl-pprint-text
       }:
-      let liquid-fixpoint' = pkgs.haskell.lib.dontCheck liquid-fixpoint;
-      in mkDerivation {
+      mkDerivation {
         pname = "jael";
         version = "0.1.0.0";
         src = ./.;
         isLibrary = true;
         isExecutable = true;
         libraryHaskellDepends = [
-          array base-noprelude base-prelude containers jael-grammar lens
-          liquid-fixpoint' llvm-general llvm-general-pure mtl-prelude
+          array base base-prelude containers jael-grammar lens
+          liquid-fixpoint llvm-general llvm-general-pure mtl-prelude
           placeholders recursion-schemes text wl-pprint-text
         ];
-        executableHaskellDepends = [ base-noprelude base-prelude ];
+        executableHaskellDepends = [ base base-prelude ];
         testHaskellDepends = [
-          base-noprelude base-prelude containers HUnit jael-grammar
-          llvm-general-pure QuickCheck template-haskell test-framework
-          test-framework-hunit test-framework-quickcheck2
+          base base-prelude containers hspec jael-grammar llvm-general-pure
         ];
         description = "Jael: An Embedded Language";
         license = stdenv.lib.licenses.gpl2;
