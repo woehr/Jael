@@ -10,10 +10,12 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 
--- An annotated type. Takes 1) a type with which nodes (right word?) of a functor
--- are annotated with, and 2) a functor to be annotated.
+-- An f a annotated with an x.
 data Ann x f a = Ann { ann :: x, unAnn :: f a }
   deriving (Eq, Show, Functor)
+
+setAnn :: Ann x f a -> x -> Ann x f a
+setAnn (Ann _ fa) x = Ann x fa
 
 data Token a = Token { value :: a, lineCol :: (Int, Int) }
   deriving (Eq, Show, Functor)

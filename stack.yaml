@@ -36,4 +36,4 @@ extra-deps:
 - transformers-compat-0.5.1.4
 - unix-compat-0.4.3.1
 #resolver: lts-7.14
-resolver: lts-6.26
+resolver: lts-6.27

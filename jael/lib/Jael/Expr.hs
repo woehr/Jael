@@ -96,13 +96,13 @@ data AnnExprF x a = AnnExprF (Ann x ExprF a)
 type instance F.Base (AnnExpr t) = AnnExprF t
 
 instance F.Recursive (AnnExpr t) where
-  project (AnnExpr Ann {ann=t, unAnn=e}) = AnnExprF Ann {ann=t, unAnn=e}
+  project (AnnExpr (Ann t e)) = AnnExprF (Ann t e)
 
 instance F.Corecursive (AnnExpr t) where
-  embed (AnnExprF Ann {ann=t, unAnn=e}) = AnnExpr Ann {ann=t, unAnn=e}
+  embed (AnnExprF (Ann t e)) = AnnExpr (Ann t e)
 
-type MaybeTypedExpr = AnnExpr (Maybe Type)
-type TypedExpr = AnnExpr Type
+type MaybeTypedExpr = AnnExpr (Maybe QType)
+type TypedExpr = AnnExpr QType
 type NamedExpr = (Ident, MaybeTypedExpr)
 
 mkUntypedExpr :: ExprF MaybeTypedExpr -> MaybeTypedExpr
@@ -146,9 +146,9 @@ hm env (AnnExpr (Ann mType (EIteF b t e)))   = undefined
 hm env (AnnExpr (Ann mType (EVarF n)))       = undefined
 hm _   (AnnExpr (Ann mType (EConF c)))       =
   let t = case c of
-            CUnit   -> TBase BTUnit
-            CBool _ -> TBase BTBool
-            CInt _  -> TBase BTInt
+            CUnit   -> TBuiltin BTUnit
+            CBool _ -> TBuiltin BTBool
+            CInt _  -> TBuiltin BTInt
             CTup    -> undefined
             CAdd    -> undefined
             CSub    -> undefined

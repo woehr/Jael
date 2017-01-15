@@ -85,7 +85,7 @@ test-suite test-jael
                        base-prelude,
                        jael,
                        jael-grammar,
-                       hspec         == 2.*,
+--                       hspec         == 2.*,
                        recursion-schemes >= 5,
                        text
 

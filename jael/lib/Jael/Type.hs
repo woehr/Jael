@@ -16,49 +16,48 @@ class TIOps a where
   ftv :: a -> S.Set T.Text
   apply :: M.Map T.Text Type -> a -> a
 
-data BaseType = BTUnit
-              | BTBool
-              | BTInt
-              | BTBit
-              | BTBuffer Type
-              deriving (Eq, Show)
+data Builtin = BTUnit
+             | BTBool
+             | BTInt
+             | BTBit
+             | BTBuffer QType
+             deriving (Eq, Show)
 
-data ValVar = VV T.Text
-            | VVFresh
-            deriving (Eq, Show)
+type VV = T.Text
+type ValVar = Maybe VV
 
--- Add refinements regarding the size of Type so termination checks on
+-- Add info about the size of Unqualified so termination checks on
 -- recursive functions can be performed.
 {-@ autosize Type @-}
-data Type = TBase BaseType
+data Type = TBuiltin Builtin
           | TFun Type Type
           | TVar Ident
           | TTup [Type]
-          | TNamed T.Text [Type]
+          | TNamed Ident [Type]
           deriving (Eq, Show)
 
-data TypeF a = TBaseF BaseType
+data TypeF a = TBuiltinF Builtin
              | TFunF a a
              | TVarF Ident
              | TTupF [a]
-             | TNamedF T.Text [a]
+             | TNamedF Ident [a]
              deriving (Eq, Functor, Show)
 
 type instance F.Base Type = TypeF
 
 instance F.Recursive Type where
-  project (TBase  x)     = TBaseF  x
-  project (TFun   x y  ) = TFunF   x y
-  project (TVar   x)     = TVarF   x
-  project (TTup   x)     = TTupF   x
-  project (TNamed x y)   = TNamedF x y
+  project (TBuiltin x) = TBuiltinF x
+  project (TFun x y)   = TFunF x y
+  project (TVar x)     = TVarF x
+  project (TTup x)     = TTupF x
+  project (TNamed x y) = TNamedF x y
 
 instance F.Corecursive Type where
-  embed (TBaseF  x)     = TBase  x
-  embed (TFunF   x y)   = TFun   x y
-  embed (TVarF   x)     = TVar   x
-  embed (TTupF   x)     = TTup   x
-  embed (TNamedF x y)   = TNamed x y
+  embed (TBuiltinF x) = TBuiltin x
+  embed (TFunF x y)   = TFun x y
+  embed (TVarF x)     = TVar x
+  embed (TTupF x)     = TTup x
+  embed (TNamedF x y) = TNamed x y
 
 instance TIOps Type where
   ftv = F.cata alg
@@ -72,12 +71,23 @@ instance TIOps Type where
     where alg t@(TVarF v) = M.findWithDefault (F.embed t) (value v) s
           alg t = F.embed t
 
+data Qual = Qual VV L.Expr
+          deriving (Eq, Show)
+
 arityOf :: Type -> Integer
 arityOf (TFun _ x) = 1 + arityOf x
 arityOf _ = 0
 
--- Expr from liquid-fixpoint is the data type for predicates
-data QType = QTValVar ValVar L.Expr
-           | QTTypedValVar ValVar QType L.Expr
-           | QTNothing L.Expr
-           deriving (Eq, Show)
+data QType = QType (Ann (Maybe Qual) TypeF QType)
+  deriving (Eq, Show)
+
+data QTypeF a = QTypeF (Ann (Maybe Qual) TypeF a)
+  deriving (Eq, Functor, Show)
+
+type instance F.Base QType = QTypeF
+
+instance F.Recursive QType where
+  project (QType (Ann a t)) = QTypeF (Ann a t)
+
+instance F.Corecursive QType where
+  embed (QTypeF (Ann a t)) = QType (Ann a t)

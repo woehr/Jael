@@ -16,6 +16,7 @@ import BasePrelude hiding (TVar)
 import qualified Data.Text as T
 --import           Development.Placeholders
 import qualified Language.Fixpoint.Types as L
+import qualified Data.Functor.Foldable as F
 import qualified Jael.Grammar as G
 import           Jael.Expr
 import           Jael.Prog
@@ -103,8 +104,7 @@ instance Jaelify G.Expr MaybeTypedExpr where
     case jaelify e of
       AnnExpr (Ann (Just _) _) -> error "Attempted to annotate an expression multiple times."
       AnnExpr (Ann Nothing e') -> AnnExpr (Ann (Just (jaelify t)) e')
-  jaelify (G.EAnnQual e qt) = undefined
-  jaelify (G.EAnnQualNoVar e qt) = undefined
+  jaelify (G.EAnn e q) = undefined
   jaelify (G.EIf b t e) = mkUntypedExpr $ EIteF (jaelify b) (jaelify t) (jaelify e)
   jaelify (G.ELogOr  l r) = mkApp COr  [l, r]
   jaelify (G.ELogAnd l r) = mkApp CAnd [l, r]
@@ -132,7 +132,7 @@ instance Jaelify G.LetExpr MaybeTypedExpr where
           letExpr (G.LetElem1 n e) = (jaelify n, jaelify e)
 
 instance Jaelify G.Func NamedExpr where
-  jaelify (G.FuncRetType n as ret e) =
+  jaelify (G.Func1 n as ret e) =
     let AnnExpr (Ann ft fe) = jaelify e
         bodyType = jaelify ret
         bodyExpr = mkAnnExpr fe $ Just bodyType
@@ -140,12 +140,11 @@ instance Jaelify G.Func NamedExpr where
           Just _  -> undefined
           Nothing -> (jaelify n, fst $ foldr combineArgs (bodyExpr, bodyType) as)
     where
-      combineArgs :: G.FuncArg -> (MaybeTypedExpr, Type) -> (MaybeTypedExpr, Type)
-      combineArgs (G.FuncArgType n t1) (e, t2) =
+      combineArgs :: G.FuncArg -> (MaybeTypedExpr, QType) -> (MaybeTypedExpr, QType)
+      combineArgs (G.FuncArg1 n t1) (e, t2) =
         let argTy = jaelify t1
-            absTy = TFun argTy t2
+            absTy = qNothing $ TFunF argTy t2
         in  (mkAnnExpr (EAbsF (jaelify n) e) (Just absTy), absTy)
-
 
 instance Jaelify G.Global NamedExpr where
   jaelify (G.Global1 n e) = (jaelify n, jaelify e)
@@ -162,17 +161,41 @@ instance Jaelify G.Prog (Program [Type] [NamedExpr] [NamedExpr]) where
       splitDef (G.TopDefGlobal g) (v, w, x) = (v, w, (jaelify g):x)
       splitDef (G.TopDefFunc   f) (v, w, x) = (v, (jaelify f):w, x)
 
-instance Jaelify G.Type Type where
-  jaelify (G.TypeTypeA (G.TypeNamed n))  = undefined (jaelify n)
-  jaelify (G.TypeTypeB (G.TypeBase G.TUnit)) = TBase BTUnit
-  jaelify (G.TypeTypeB (G.TypeBase G.TBool)) = TBase BTBool
-  jaelify (G.TypeTypeB (G.TypeBase G.TInt))  = TBase BTInt
-  jaelify (G.TypeTypeB (G.TypeBase G.TBit))  = TBase BTBit
-  jaelify (G.TypeTypeB (G.TypeBase (G.TBuffer t))) = TBase $ BTBuffer (jaelify t)
-  jaelify (G.TypeTypeB (G.TypeVar  n))   = TVar  (jaelify n)
-  jaelify (G.TypeTypeB (G.TypeTup t ts)) = TTup $ map parseCommaSepType (t:ts)
-  jaelify (G.TypeTypeB (G.TypeNamedParams n ts)) = undefined (jaelify n)
+instance Jaelify G.Type QType where
+  jaelify (G.TypeQType t) = jaelify t
+  jaelify (G.TypeUnqualType t) = jaelify t
 
+instance Jaelify G.QType QType where
+  jaelify (G.QTypeVar n t p) = QType (Ann (Just $ Qual $ jaelify n $ parseQPred p) (jaelify t))
+  jaelify (G.QTypeNoVar t p) = undefined
+
+instance Jaelify G.UnqualType (TypeF QType) where
+  jaelify (G.UnqualTypeTypeA (G.TypeNamed n))  =
+    TNamedF (jaelify n) []
+  jaelify (G.UnqualTypeTypeB (G.TypeNamedParams n ts)) =
+    TNamedF (jaelify n) $ map unCommaSeparate ts
+
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TUnit)) =
+    TBuiltinF BTUnit
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBool)) =
+    TBuiltinF BTBool
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TInt))  =
+    TBuiltinF BTInt
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBit))  =
+    TBuiltinF BTBit
+  jaelify (G.UnqualTypeTypeB (G.TypeBase (G.TBuffer t))) =
+    TBuiltinF $ BTBuffer (jaelify t)
+
+  jaelify (G.UnqualTypeTypeB (G.TypeVar  n))   =
+    TVarF (jaelify n)
+  jaelify (G.UnqualTypeTypeB (G.TypeTup t ts)) =
+    TTupF $ map unCommaSeparate (t:ts)
+
+unCommaSeparate :: G.CommaSepType -> QType
+unCommaSeparate (G.CommaSepTypeType t) = jaelify t
+
+qNothing :: TypeF QType -> QType
+qNothing t = QType (Ann Nothing t)
 
 parseQPred :: G.QPred -> L.Expr
 parseQPred (G.QPredIff l r) = L.PIff (parseQPred l) (parseQPred r)
@@ -207,9 +230,6 @@ parseQRel G.QRelGe = L.Ge
 parseQRel G.QRelLe = L.Le
 parseQRel G.QRelGt = L.Gt
 parseQRel G.QRelLt = L.Lt
-
-parseCommaSepType :: G.CommaSepType -> Type
-parseCommaSepType (G.CommaSepTypeType t) = jaelify t
 
 parseCommaSepExpr :: G.CommaSepExpr -> MaybeTypedExpr
 parseCommaSepExpr (G.CommaSepExprExpr e) = jaelify e
