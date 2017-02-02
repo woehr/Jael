@@ -16,5 +16,5 @@ data Program a b c = Program
   , _globs :: c
 --  , _sesns :: d
 --  , _procs :: e
-  } deriving (Show)
+  } deriving (Eq, Show)
 

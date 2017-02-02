@@ -1,4 +1,4 @@
-{ nixpkgs ? import ../nix/pkgs.nix {}, compiler ? "default" }:
+{ nixpkgs ? import <nixpkgs> {}, compiler ? "default" }:
 
 let
 

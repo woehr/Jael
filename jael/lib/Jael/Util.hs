@@ -1,9 +1,16 @@
 {-# Language DeriveFunctor #-}
 
-module Jael.Util where
+module Jael.Util
+  ( Token(..)
+  , Ident
+  , IntConst
+  , iterCofree
+  )where
 
 import Prelude ()
 import BasePrelude
+import Control.Comonad
+import Control.Comonad.Cofree
 import qualified Data.Array as A
 import qualified Data.Graph as G
 import qualified Data.Map as M
@@ -11,11 +18,12 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 
 -- An f a annotated with an x.
-data Ann x f a = Ann { ann :: x, unAnn :: f a }
-  deriving (Eq, Show, Functor)
+--data Ann f a = Ann a (f (Ann f a))
+--  deriving (Eq, Show)
 
-setAnn :: Ann x f a -> x -> Ann x f a
-setAnn (Ann _ fa) x = Ann x fa
+iterCofree :: Functor f => (a -> f b -> b) -> Cofree f a -> b
+iterCofree f cfa = uncofree f cfa
+  where uncofree fn x = fn (extract x) $ fmap (uncofree fn) $ unwrap x
 
 data Token a = Token { value :: a, lineCol :: (Int, Int) }
   deriving (Eq, Show, Functor)

@@ -1,40 +1,34 @@
 {-# Language DeriveFunctor #-}
-{-# Language TypeFamilies #-}
+{-# Language FlexibleInstances #-}
+{-# Language NoImplicitPrelude #-}
+{-# Language OverloadedStrings #-}
+{-# Language TemplateHaskell #-}
+{-# Language TypeSynonymInstances #-}
 
 module Jael.Type where
 
-import Prelude ()
-import BasePrelude hiding (TVar)
-import qualified Data.Functor.Foldable as F
-import qualified Data.Map as M
-import qualified Data.Set as S
-import qualified Data.Text as T
-import qualified Language.Fixpoint.Types as L
-import Jael.Util
+import           BasePrelude hiding ((<>), (<$>), (<+>), empty)
 
-class TIOps a where
-  ftv :: a -> S.Set T.Text
-  apply :: M.Map T.Text Type -> a -> a
+import           Control.Comonad.Cofree
+import qualified Control.Comonad.Trans.Cofree as C
+import qualified Data.Text as T
+import           Data.Eq.Deriving (deriveEq1)
+import           Data.Functor.Foldable
+import           Text.Show.Deriving (deriveShow1)
+import           Text.PrettyPrint.Leijen.Text
+
+import qualified Language.Fixpoint.Types as L
+
+import           Jael.Util
+import           Jael.Util.Ann
+import           Jael.Pretty
 
 data Builtin = BTUnit
              | BTBool
              | BTInt
-             | BTBit
+             | BTBits
              | BTBuffer QType
              deriving (Eq, Show)
-
-type VV = T.Text
-type ValVar = Maybe VV
-
--- Add info about the size of Unqualified so termination checks on
--- recursive functions can be performed.
-{-@ autosize Type @-}
-data Type = TBuiltin Builtin
-          | TFun Type Type
-          | TVar Ident
-          | TTup [Type]
-          | TNamed Ident [Type]
-          deriving (Eq, Show)
 
 data TypeF a = TBuiltinF Builtin
              | TFunF a a
@@ -43,51 +37,58 @@ data TypeF a = TBuiltinF Builtin
              | TNamedF Ident [a]
              deriving (Eq, Functor, Show)
 
-type instance F.Base Type = TypeF
+type Type = Fix TypeF
 
-instance F.Recursive Type where
-  project (TBuiltin x) = TBuiltinF x
-  project (TFun x y)   = TFunF x y
-  project (TVar x)     = TVarF x
-  project (TTup x)     = TTupF x
-  project (TNamed x y) = TNamedF x y
+instance Pretty Type where
+  pretty = cata ppTypeAlg
 
-instance F.Corecursive Type where
-  embed (TBuiltinF x) = TBuiltin x
-  embed (TFunF x y)   = TFun x y
-  embed (TVarF x)     = TVar x
-  embed (TTupF x)     = TTup x
-  embed (TNamedF x y) = TNamed x y
+ppTypeAlg :: TypeF Doc -> Doc
+ppTypeAlg (TBuiltinF b) = case b of
+  BTBits -> text "Bits"
+  BTBool -> text "Bool"
+  BTInt  -> text "Int"
+  BTUnit -> text "Void"
+  BTBuffer t -> text "Buffer" <> parens (pretty t)
+ppTypeAlg (TNamedF (Token n _) ts) =
+  textStrict n <>
+  if length ts == 0 then empty else tupled ts
+ppTypeAlg (TVarF (Token n _)) = textStrict n
+ppTypeAlg (TTupF ts) = tupled ts
+ppTypeAlg (TFunF t1 t2) =
+  t1 <$> text "->" <+> t2
 
-instance TIOps Type where
-  ftv = F.cata alg
-    where alg (TVarF t)      = S.singleton (value t)
-          alg (TFunF t1 t2)  = t1 `S.union` t2
-          alg (TTupF ts)     = S.unions ts
-          alg (TNamedF _ ts) = S.unions ts
-          alg _              = S.empty
+data VV = VV T.Text
+        | NoVV
+        deriving (Eq, Show)
 
-  apply s = F.cata alg
-    where alg t@(TVarF v) = M.findWithDefault (F.embed t) (value v) s
-          alg t = F.embed t
+renderVV :: Int -> VV -> Doc
+renderVV _ (VV t) = textStrict t
+renderVV i NoVV   = textStrict $ T.replicate i "\\"
 
 data Qual = Qual VV L.Expr
           deriving (Eq, Show)
 
+type QType = Ann TypeF (Maybe Qual)
+
+instance Pretty QType where
+  pretty = cata alg
+    where
+      alg :: C.CofreeF TypeF (Maybe Qual) Doc -> Doc
+      alg ((Just (Qual vv e)) C.:< t) =
+        braces (renderVV 0 vv <+> text ":" <+>
+                ppTypeAlg t <+> text "|" <+>
+                fpPretty e)
+      alg (Nothing  C.:< t) = ppTypeAlg t
+
+noQual :: Type -> QType
+noQual = cata alg
+  where
+    alg :: TypeF QType -> QType
+    alg x = Nothing :< x
+
 arityOf :: Type -> Integer
-arityOf (TFun _ x) = 1 + arityOf x
+arityOf (Fix (TFunF _ x)) = 1 + arityOf x
 arityOf _ = 0
 
-data QType = QType (Ann (Maybe Qual) TypeF QType)
-  deriving (Eq, Show)
-
-data QTypeF a = QTypeF (Ann (Maybe Qual) TypeF a)
-  deriving (Eq, Functor, Show)
-
-type instance F.Base QType = QTypeF
-
-instance F.Recursive QType where
-  project (QType (Ann a t)) = QTypeF (Ann a t)
-
-instance F.Corecursive QType where
-  embed (QTypeF (Ann a t)) = QType (Ann a t)
+$(deriveEq1   ''TypeF)
+$(deriveShow1 ''TypeF)

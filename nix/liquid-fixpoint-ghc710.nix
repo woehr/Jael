@@ -12,8 +12,8 @@ mkDerivation {
   version = "9.9.9.9";
   src = fetchgit {
     url = https://github.com/ucsd-progsys/liquid-fixpoint;
-    rev = "cf3d1a35b90eeff48ddfd672bc11ff053dd7a746";
-    sha256 = "1cvp6mrgq8yd0v2gm84dn5mcd4h3gv8w6w025k2nmb428mfqspwf";
+    rev = "d6c56f1a75fd546685498231f7ca273ffef36a2c";
+    sha256 = "1b5cajrivz2qdpn8kfmnlnr0b18b6a3mhb8qy2ynxqghgabfp8vb";
   };
   isLibrary = true;
   isExecutable = true;

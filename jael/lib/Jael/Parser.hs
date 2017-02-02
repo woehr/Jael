@@ -3,20 +3,20 @@ Functions for parsing and transforming the BNFC AST to Jael data structures.
 No error checking.
 -}
 
-{-# Language
-    FlexibleInstances,
-    FunctionalDependencies,
-    MultiParamTypeClasses,
-    NoImplicitPrelude,
-    RecordWildCards #-}
+{-# Language FlexibleInstances #-}
+{-# Language FunctionalDependencies #-}
+{-# Language MultiParamTypeClasses #-}
+{-# Language NoImplicitPrelude #-}
+{-# Language RecordWildCards #-}
 
 module Jael.Parser where
 
-import BasePrelude hiding (TVar)
+import           BasePrelude
+
+import           Control.Comonad.Cofree
 import qualified Data.Text as T
---import           Development.Placeholders
 import qualified Language.Fixpoint.Types as L
-import qualified Data.Functor.Foldable as F
+
 import qualified Jael.Grammar as G
 import           Jael.Expr
 import           Jael.Prog
@@ -92,20 +92,39 @@ readBin :: ReadS Integer
 readBin = readInt 2 (\x -> x == '0' || x == '1') digitToInt
 
 instance Jaelify G.Expr MaybeTypedExpr where
-  jaelify (G.EInt i) = mkConstExpr (CInt $ jaelify i)
-  jaelify G.ETrue    = mkConstExpr (CBool True)
-  jaelify G.EFalse   = mkConstExpr (CBool False)
-  jaelify G.EUnit    = mkConstExpr CUnit
-  jaelify (G.EVar i) = mkVarExpr $ jaelify i
+  jaelify (G.EInt i) = MTECon (CInt $ jaelify i) Nothing
+  jaelify G.ETrue    = MTECon (CBool True) Nothing
+  jaelify G.EFalse   = MTECon (CBool False) Nothing
+  jaelify G.EUnit    = MTECon CUnit Nothing
+  jaelify (G.EVar i) = MTEVar (jaelify i) Nothing
   jaelify (G.ETup e1 es) = parseETup $ map parseCommaSepExpr (e1:es)
-  jaelify (G.EApp n es) = mkAppExpr (mkVarExpr $ jaelify n) (map parseCommaSepExpr es)
-  jaelify (G.EAppScoped n es) = mkAppExpr (mkVarExpr $ jaelify n) (map parseCommaSepExpr es)
+
+  jaelify (G.EApp n es) =
+    foldl' (\acc e -> Nothing :< EAppF acc e)
+           (MTEVar (jaelify n) Nothing)
+           (map parseCommaSepExpr es)
+
+  jaelify (G.EAppScoped n es) =
+    foldl' (\acc e -> Nothing :< EAppF acc e)
+           (MTEVar (jaelify n) Nothing)
+           (map parseCommaSepExpr es)
+
+  jaelify (G.EAbs ns e) = foldr foldLambda (jaelify e) ns
+    where foldLambda :: G.LambdaArg -> MaybeTypedExpr -> MaybeTypedExpr
+          foldLambda (G.LambdaArg1 n []) a = Nothing :< EAbsF (jaelify n, Nothing) a
+          foldLambda (G.LambdaArg1 n mt) a =
+            case mt of
+              [(G.MaybeType1 t)] ->
+                Nothing :< EAbsF (jaelify n, Just $ jaelify t) a
+              _ -> error "Grammar should only allow lists of 0 or 1"
+
   jaelify (G.EAnn e t) =
     case jaelify e of
-      AnnExpr (Ann (Just _) _) -> error "Attempted to annotate an expression multiple times."
-      AnnExpr (Ann Nothing e') -> AnnExpr (Ann (Just (jaelify t)) e')
-  jaelify (G.EAnn e q) = undefined
-  jaelify (G.EIf b t e) = mkUntypedExpr $ EIteF (jaelify b) (jaelify t) (jaelify e)
+      ((Just _) :< _) -> error "Handle properly, attempted to \
+                                \annotate an expression multiple times."
+      (Nothing :< e') -> (Just $ jaelify t) :< e'
+
+  jaelify (G.EIf b t e) = (Nothing :<) $ EIteF (jaelify b) (jaelify t) (jaelify e)
   jaelify (G.ELogOr  l r) = mkApp COr  [l, r]
   jaelify (G.ELogAnd l r) = mkApp CAnd [l, r]
   jaelify (G.EEq     l r) = mkApp CEq  [l, r]
@@ -123,51 +142,43 @@ instance Jaelify G.Expr MaybeTypedExpr where
   jaelify (G.ELogNot e  ) = mkApp CNot [e]
 
 instance Jaelify G.LetExpr MaybeTypedExpr where
-  --jaelify (G.LetExpr1 [] e) = jaelify e
   jaelify (G.LetExpr1 ls e) =
-    foldr ((\(n, e1) e2 -> mkUntypedExpr (ELetF n e1 e2)) . letExpr)
+    foldr ((\(n, e1) e2 -> (Nothing :< ELetF n e1 e2)) . letExpr)
           (jaelify e)
           ls
     where letExpr :: G.LetElem -> (Ident, MaybeTypedExpr)
-          letExpr (G.LetElem1 n e) = (jaelify n, jaelify e)
+          letExpr (G.LetElem1 n e') = (jaelify n, jaelify e')
 
-instance Jaelify G.Func NamedExpr where
+instance Jaelify G.Func FuncExpr where
   jaelify (G.Func1 n as ret e) =
-    let AnnExpr (Ann ft fe) = jaelify e
-        bodyType = jaelify ret
-        bodyExpr = mkAnnExpr fe $ Just bodyType
-    in  case ft of
-          Just _  -> undefined
-          Nothing -> (jaelify n, fst $ foldr combineArgs (bodyExpr, bodyType) as)
-    where
-      combineArgs :: G.FuncArg -> (MaybeTypedExpr, QType) -> (MaybeTypedExpr, QType)
-      combineArgs (G.FuncArg1 n t1) (e, t2) =
-        let argTy = jaelify t1
-            absTy = qNothing $ TFunF argTy t2
-        in  (mkAnnExpr (EAbsF (jaelify n) e) (Just absTy), absTy)
+    (jaelify n, map argTup as, jaelify ret, jaelify e)
+    where argTup (G.FuncArg1 a t) = (jaelify a, jaelify t)
 
-instance Jaelify G.Global NamedExpr where
+instance Jaelify G.Global GlobExpr where
   jaelify (G.Global1 n e) = (jaelify n, jaelify e)
 
-
-instance Jaelify G.Prog (Program [Type] [NamedExpr] [NamedExpr]) where
+instance Jaelify G.Prog (Program [Type] [GlobExpr] [FuncExpr]) where
   jaelify (G.Prog1 defs) =
     let (types, funcs, globs) = foldr splitDef ([], [], []) defs
     in  Program types funcs globs
     where
       splitDef :: G.TopDef
-               -> ([Type], [NamedExpr], [NamedExpr])
-               -> ([Type], [NamedExpr], [NamedExpr])
-      splitDef (G.TopDefGlobal g) (v, w, x) = (v, w, (jaelify g):x)
-      splitDef (G.TopDefFunc   f) (v, w, x) = (v, (jaelify f):w, x)
+               -> ([Type], [GlobExpr], [FuncExpr])
+               -> ([Type], [GlobExpr], [FuncExpr])
+      splitDef (G.TopDefGlobal g) (v, w, x) = (v, jaelify g : w, x)
+      splitDef (G.TopDefFunc   f) (v, w, x) = (v, w, jaelify f : x)
+      splitDef (G.TopDefTypeDef _) _ = undefined
+      splitDef (G.TopDefProcDef _) _ = undefined
 
 instance Jaelify G.Type QType where
   jaelify (G.TypeQType t) = jaelify t
-  jaelify (G.TypeUnqualType t) = jaelify t
+  jaelify (G.TypeUnqualType t) = Nothing :< jaelify t
 
 instance Jaelify G.QType QType where
-  jaelify (G.QTypeVar n t p) = QType (Ann (Just $ Qual $ jaelify n $ parseQPred p) (jaelify t))
-  jaelify (G.QTypeNoVar t p) = undefined
+  jaelify (G.QTypeVar n t p) =
+    (Just $ Qual (VV . value . jaelify $ n) $ parseQPred p) :< (jaelify t)
+  jaelify (G.QTypeNoVar t p) =
+    (Just $ Qual NoVV $ parseQPred p) :< (jaelify t)
 
 instance Jaelify G.UnqualType (TypeF QType) where
   jaelify (G.UnqualTypeTypeA (G.TypeNamed n))  =
@@ -175,14 +186,10 @@ instance Jaelify G.UnqualType (TypeF QType) where
   jaelify (G.UnqualTypeTypeB (G.TypeNamedParams n ts)) =
     TNamedF (jaelify n) $ map unCommaSeparate ts
 
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TUnit)) =
-    TBuiltinF BTUnit
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBool)) =
-    TBuiltinF BTBool
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TInt))  =
-    TBuiltinF BTInt
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBit))  =
-    TBuiltinF BTBit
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TUnit)) = TBuiltinF BTUnit
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBool)) = TBuiltinF BTBool
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TInt))  = TBuiltinF BTInt
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBit))  = TBuiltinF BTBits
   jaelify (G.UnqualTypeTypeB (G.TypeBase (G.TBuffer t))) =
     TBuiltinF $ BTBuffer (jaelify t)
 
@@ -193,9 +200,6 @@ instance Jaelify G.UnqualType (TypeF QType) where
 
 unCommaSeparate :: G.CommaSepType -> QType
 unCommaSeparate (G.CommaSepTypeType t) = jaelify t
-
-qNothing :: TypeF QType -> QType
-qNothing t = QType (Ann Nothing t)
 
 parseQPred :: G.QPred -> L.Expr
 parseQPred (G.QPredIff l r) = L.PIff (parseQPred l) (parseQPred r)
@@ -234,10 +238,11 @@ parseQRel G.QRelLt = L.Lt
 parseCommaSepExpr :: G.CommaSepExpr -> MaybeTypedExpr
 parseCommaSepExpr (G.CommaSepExprExpr e) = jaelify e
 
+{-@ es :: [MaybeTypedExpr] | len es >= 2 @-}
 parseETup :: [MaybeTypedExpr] -> MaybeTypedExpr
-parseETup (x:[]) = x
-parseETup (x:ys) = mkTupExpr x (parseETup ys)
-parseETup _ = error "parseETup should always be given a list with 2 elements"
+parseETup es = Nothing :< ETupF es
 
 mkApp :: Constant -> [G.Expr] -> MaybeTypedExpr
-mkApp f as = mkAppExpr (mkConstExpr f) $ map jaelify as
+mkApp f as = foldl' (\acc e -> Nothing :< EAppF acc e)
+                    (MTECon f Nothing)
+                    (map jaelify as)

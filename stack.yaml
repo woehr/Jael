@@ -15,7 +15,9 @@ packages:
 - location: jael-grammar/
 - location:
     git: https://github.com/ucsd-progsys/liquid-fixpoint
-    commit: 6141e5ae445bfc2ff37a93f54fad3c0f020a634a
+    commit: cf3d1a35b90eeff48ddfd672bc11ff053dd7a746
+    #539b6ae111b9c68b9e5041a9ba0ba05697c02a6d
+    #6141e5ae445bfc2ff37a93f54fad3c0f020a634a
   extra-dep: true
 - location:
     git: https://github.com/bscarlet/llvm-general
@@ -25,15 +27,16 @@ packages:
   - llvm-general-pure
   extra-dep: true
 extra-deps:
-  #- BNFC-2.8.1
 - bifunctors-5.4.1
 - dotgen-0.4.2
 - fgl-visualize-0.1.0.1
 - intern-0.9.1.4
 - located-base-0.1.1.0
-- recursion-schemes-5
+- recursion-schemes-5.0.1
 - semigroupoids-5.1
 - transformers-compat-0.5.1.4
 - unix-compat-0.4.3.1
-#resolver: lts-7.14
-resolver: lts-6.27
+  #- pretty-1.1.3.3
+- wl-pprint-text-1.1.1.0
+resolver: lts-7.16
+#resolver: lts-6.27

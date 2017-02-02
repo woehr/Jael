@@ -27,30 +27,38 @@ library
 --                       Jael.Conc.Session
 --                       Jael.Conc.TyCk.S2
 --                       Jael.Conc.TyCk.S3
-  exposed-modules:     Jael.Parser
-                       Jael.Expr
-                       Jael.Type
+  exposed-modules:     Jael.Expr
+                       Jael.Infer
+                       Jael.Parser
+                       Jael.Pretty
+                       Jael.Prog
                        Jael.Session
+                       Jael.TIOps
+                       Jael.Type
 --                       Jael.Seq.Env
 --                       Jael.Seq.TI.S2
 --                       Jael.Seq.TI.HM
 --                       Jael.Seq.UserDefinedType
                        Jael.Util
+                       Jael.Util.Ann
 
   build-depends:       base >=4.8 && <5,
-                       base-prelude,
-                       mtl-prelude,
-                       jael-grammar,
                        array,
+                       base-prelude,
+                       bifunctors,
+                       comonad,
                        containers,
-                       lens,
+                       deriving-compat >= 0.3,
+                       free,
+                       jael-grammar,
                        liquid-fixpoint,
                        llvm-general,
                        llvm-general-pure,
+                       mtl-prelude,
                        placeholders,
-                       recursion-schemes >= 5,
+                       recursion-schemes >= 5.0.1,
                        text,
-                       wl-pprint-text
+                       wl-pprint-text >= 1.1.1.0
 
   hs-source-dirs:      lib
   default-language:    Haskell2010
@@ -79,13 +87,16 @@ test-suite test-jael
   type:                exitcode-stdio-1.0
   main-is:             Test.hs
 
-  other-modules:       Jael.ParserSpec
+  other-modules:       Jael.ExprSpec,
+                       Jael.ParserSpec
 
   build-depends:       base          >=4.8 && <5,
                        base-prelude,
                        jael,
                        jael-grammar,
---                       hspec         == 2.*,
+                       free,
+                       hspec         == 2.*,
+                       liquid-fixpoint,
                        recursion-schemes >= 5,
                        text
 

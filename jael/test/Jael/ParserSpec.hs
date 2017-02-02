@@ -1,4 +1,5 @@
-{-# Language NoImplicitPrelude
+{-# Language
+  NoImplicitPrelude
 , OverloadedStrings #-}
 
 module Jael.ParserSpec (spec) where
@@ -6,27 +7,37 @@ module Jael.ParserSpec (spec) where
 import BasePrelude
 import Test.Hspec
 
+import           Control.Comonad.Cofree
 import qualified Data.Text as T
-import qualified Data.Functor.Foldable as F
+import           Data.Functor.Foldable
 import qualified Jael.Grammar as G
+import qualified Language.Fixpoint.Types as L
+
 import Jael.Expr
 import Jael.Parser
+import Jael.Prog
+import Jael.Type
 import Jael.Util
 
+parseThrow :: ParseFun a -> T.Text -> a
+parseThrow p t = case runParser p t of
+                   Left err -> error (T.unpack err)
+                   Right x -> x
+
 parseExpr :: T.Text -> G.Expr
-parseExpr t = case runParser G.pExpr t of
-                Left err -> error (T.unpack err)
-                Right expr -> expr
+parseExpr = parseThrow G.pExpr
+
+parseType :: T.Text -> G.Type
+parseType = parseThrow G.pType
+
+parseProg :: T.Text -> G.Prog
+parseProg = parseThrow G.pProg
 
 annotateUntyped :: Expr -> MaybeTypedExpr
-annotateUntyped = F.cata alg
-  where 
-    alg (EAppF e a)     = AnnExpr (Ann Nothing $ EAppF e a)
-    alg (EAbsF n e)     = AnnExpr (Ann Nothing $ EAbsF n e)
-    alg (ELetF n e1 e2) = AnnExpr (Ann Nothing $ ELetF n e1 e2)
-    alg (EIteF b t e)   = AnnExpr (Ann Nothing $ EIteF b t e)
-    alg (EVarF n)       = AnnExpr (Ann Nothing $ EVarF n)
-    alg (EConF c)       = AnnExpr (Ann Nothing $ EConF c)
+annotateUntyped = cata (\e -> Nothing :< e)
+
+applyArgs :: Expr -> [Expr] -> Expr
+applyArgs x as = foldl' (\a v -> Fix $ EAppF v a) x as
 
 spec :: Spec
 spec = do
@@ -70,7 +81,21 @@ spec = do
       it "hex ints must be prefixed with '0x'" $ do
         evaluate (parseHexInt "01ff") `shouldThrow` errorCall "impossible"
 
-  describe "jaelify transforms the grammar AST to a Jael Expr" $ do
+  describe "jaelify transforms the grammar to something useful" $ do
     it "transforms variables and constants" $ do
-      (jaelify . parseExpr) "5" `shouldBe` annotateUntyped (ECon $ CInt (Token 5 (1,1)))
+      (jaelify . parseExpr) "5" `shouldBe` annotateUntyped (Fix $ EConF $ CInt (Token 5 (1,1)))
+    it "transforms exprs" $ do
+      (jaelify . parseExpr) "x+y" `shouldBe` annotateUntyped
+        (Fix $ EAppF (Fix $ EAppF (Fix $ EConF $ CAdd)
+                                  (Fix $ EVarF $ Token "x" (1,1)))
+                     (Fix $ EVarF $ Token "y" (1,3))
+        )
+    it "transforms types" $ do
+      (jaelify . parseType) "A({x:Int|x>0})" `shouldBe`
+        (Nothing :<
+           TNamedF (Token {value = "A", lineCol = (1,1)})
+                   [Just (Qual (VV "x") (L.PAtom L.Gt (L.EVar "x") (L.ECon (L.I 0))))
+                    :< TBuiltinF BTInt
+                   ]
+        )
 

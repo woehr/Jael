@@ -145,7 +145,16 @@ ELogNot.    Expr12 ::= "!" Expr12 ;
 
 ----- End operators -----
 
-EIf.           Expr13 ::= "if" Expr "{" LetExpr "}" "else" "{" LetExpr "}" ;
+EIf.           Expr14 ::= "if" Expr "{" LetExpr "}" "else" "{" LetExpr "}" ;
+
+rules MaybeType ::= ":" Type ;
+[].    [MaybeType] ::= ;
+(:[]). [MaybeType] ::= MaybeType ;
+
+rules LambdaArg ::= LIdent [MaybeType] ;
+separator LambdaArg "," ;
+
+EAbs.          Expr14 ::= "\\" "(" [LambdaArg] ")" "->" "{" LetExpr "}" ;
 
 ETrue.         Expr14 ::= "true" ;
 EFalse.        Expr14 ::= "false" ;
@@ -230,9 +239,9 @@ rules  Global  ::= LIdent "=" Expr ";" ;
 
 -- func myFunction(x: a, y: Something, z: {Int | z >= 0}) -> Int { ... }
 -- func myFunction(x: a, y: Something, z: {Int | z >= 0}) -> {w : Int | w <= 0} { ... }
-rules  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" Expr "}" ;
---FuncRetType.  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" Expr "}" ;
---FuncRetQType. Func    ::= "func" LIdent "(" [FuncArg] ")" "->" QTypeVar "{" Expr "}" ;
+rules  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" LetExpr "}" ;
+--FuncRetType.  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" LetExpr "}" ;
+--FuncRetQType. Func    ::= "func" LIdent "(" [FuncArg] ")" "->" QTypeVar "{" LetExpr "}" ;
 
 rules ProcDef ::= "proc" LIdent "(" [ProcArg] ")" "{" Proc "}" ;
 
