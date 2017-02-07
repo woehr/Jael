@@ -45,7 +45,6 @@ library
   build-depends:       base >=4.8 && <5,
                        array,
                        base-prelude,
-                       bifunctors,
                        comonad,
                        containers,
                        deriving-compat >= 0.3,

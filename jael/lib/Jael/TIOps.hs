@@ -11,6 +11,8 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 
+import qualified Language.Fixpoint.Types as L
+
 import Jael.Expr
 import Jael.Type
 import Jael.Util
@@ -49,7 +51,7 @@ instance TIOps QType where
 -- Both apply implementations work
 
   apply s = iterCofree f
-    where f :: Maybe Qual -> TypeF QType -> QType
+    where f :: [L.Reft] -> TypeF QType -> QType
           f a (TVarF n) = flip setAnn a $ noQual (apply s $ Fix $ TVarF n)
           f a q = a :< q
 
@@ -61,6 +63,6 @@ instance TIOps QType where
 
 --------------- Instances for various kinds of exprs ---------------
 
-instance TIOps TypedExpr where
+instance TIOps HMTypedExpr where
   ftv = freeVars . removeAnn
   apply s = fmap (apply s)

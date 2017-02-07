@@ -14,8 +14,10 @@ mkDerivation {
   version = "0.6.0.0";
   src = fetchgit {
     url = "https://github.com/ucsd-progsys/liquidhaskell";
-    rev = "01155b7aec52a2a971467b920c7e1f2405f67a7c";
-    sha256 = "0qbdp5fpa4fn1axqa5a6p053msykxdy6g99ln6wslc792mvgj1yi";
+    rev = "61929e06503a41376d3b1af014bbc876b5da13ae";
+#rev = "01155b7aec52a2a971467b920c7e1f2405f67a7c";
+    sha256 = "1jfp48dhp1sjcwy3dbbfa093r39pfcw9c5m67il62llc8snjagzd";
+#sha256 = "0qbdp5fpa4fn1axqa5a6p053msykxdy6g99ln6wslc792mvgj1yi";
   };
   isLibrary = true;
   isExecutable = true;

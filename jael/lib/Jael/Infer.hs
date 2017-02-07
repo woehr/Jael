@@ -47,7 +47,7 @@ initState = HmInfS 0
 
 type HmInfM = RWST HmEnv [Constraint] HmInfS (Except T.Text)
 
-hmInf :: HmEnv -> MaybeTypedExpr -> Either T.Text TypedExpr
+hmInf :: HmEnv -> MaybeTypedExpr -> Either T.Text HMTypedExpr
 hmInf env mTyped =
   let x = runIdentity $ runExceptT $ runRWST (cata doHm mTyped) env initState
   in case x of
@@ -56,60 +56,54 @@ hmInf env mTyped =
          s <- runIdentity $ runExceptT $ unificationSolver (nullSub, w)
          Right $ apply s typed
 
-doHm :: C.CofreeF (ExprF (Ident, Maybe QType)) (Maybe QType) (HmInfM TypedExpr) -> HmInfM TypedExpr
-doHm (Just t C.:< e) = do
-  te <- doHm $ Nothing C.:< e
-  unify (getType te) (removeAnn t)
-  return $ setAnn te t
-
-doHm (Nothing C.:< EVarF n) = do
+doHm :: C.CofreeF ExprF [QType] (HmInfM HMTypedExpr)
+     -> HmInfM HMTypedExpr
+doHm ([] C.:< EVarF n) = do
   env <- ask
   case M.lookup (value n) env of
     Nothing -> error $ "unbound variable " ++ show (value n)
     Just s -> do
       t <- instantiate s
-      return $ noQual t :< EVarF n
+      return $ t :< EVarF n
 
-doHm (Nothing C.:< EIteF b t e) = do
+doHm ([] C.:< EIteF b t e) = do
   te1 <- b
   te2 <- t
   te3 <- e
   let (t1, t2, t3) = (getType te1, getType te2, getType te3)
   unify t1 (Fix $ TBuiltinF BTBool)
   unify t2 t3
-  return $ noQual t2 :< EIteF te1 te2 te3
+  return $ t2 :< EIteF te1 te2 te3
 
-doHm (Nothing C.:< ELetF n e1 e2) = do
+doHm ([] C.:< ELetF n e1 e2) = do
   env <- ask
   te1 <- e1
   let s = generalize env (getType te1)
   te2 <- inEnv (value n, s) e2
-  return $ noQual (getType te2) :< ELetF n te1 te2
+  return $ getType te2 :< ELetF n te1 te2
 
-doHm (Nothing C.:< EAppF e1 e2) = do
+doHm ([] C.:< EAppF e1 e2) = do
   t <- freshTv
   te1 <- e1
   te2 <- e2
   let (t1, t2) = (getType te1, getType te2)
   unify t1 (Fix $ TFunF t2 t)
-  return $ noQual t :< EAppF te1 te2
+  return $ t :< EAppF te1 te2
 
-doHm (Nothing C.:< EAbsF (n@(Token v _), mt) e) = do
-  t <- case mt of
-         Just v'sType -> return $ removeAnn v'sType
-         Nothing -> freshTv
+doHm ([] C.:< EAbsF n@(Token v _) e) = do
+  t <- freshTv
   te <- inEnv (v, Scheme [] t) e
-  return $ noQual (Fix $ TFunF t (getType te)) :< EAbsF n te
+  return $ (Fix $ TFunF t (getType te)) :< EAbsF n te
 
-doHm (Nothing C.:< ETupF es) = do
+doHm ([] C.:< ETupF es) = do
   tes <- sequence es
   let ts = map getType tes
   tupTv <- freshTv
   let t = Fix $ TTupF ts
   unify tupTv t
-  return $ noQual t :< ETupF tes
+  return $ t :< ETupF tes
 
-doHm (Nothing C.:< EConF c) = do
+doHm ([] C.:< EConF c) = do
   tv <- freshTv
   let t = case c of
             CUnit   -> TBuiltinF BTUnit
@@ -132,7 +126,13 @@ doHm (Nothing C.:< EConF c) = do
                              (Fix $ TBuiltinF BTBits)
             CNot    -> bool2bool
   unify tv (Fix t)
-  return $ noQual tv :< EConF c
+  return $ tv :< EConF c
+
+doHm (ts C.:< e) = do
+  te <- doHm $ [] C.:< e
+  let t = getType te
+  mapM_ (unify t . removeAnn) ts
+  return te
 
 instantiate :: Scheme -> HmInfM Type
 instantiate (Scheme vs t) = do

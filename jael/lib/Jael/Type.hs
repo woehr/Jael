@@ -11,7 +11,6 @@ import           BasePrelude hiding ((<>), (<$>), (<+>), empty)
 
 import           Control.Comonad.Cofree
 import qualified Control.Comonad.Trans.Cofree as C
-import qualified Data.Text as T
 import           Data.Eq.Deriving (deriveEq1)
 import           Data.Functor.Foldable
 import           Text.Show.Deriving (deriveShow1)
@@ -49,42 +48,33 @@ ppTypeAlg (TBuiltinF b) = case b of
   BTInt  -> text "Int"
   BTUnit -> text "Void"
   BTBuffer t -> text "Buffer" <> parens (pretty t)
+
 ppTypeAlg (TNamedF (Token n _) ts) =
   textStrict n <>
   if length ts == 0 then empty else tupled ts
+
 ppTypeAlg (TVarF (Token n _)) = textStrict n
 ppTypeAlg (TTupF ts) = tupled ts
-ppTypeAlg (TFunF t1 t2) =
-  t1 <$> text "->" <+> t2
+ppTypeAlg (TFunF t1 t2) = t1 <+> text "->" <+> t2
 
-data VV = VV T.Text
-        | NoVV
-        deriving (Eq, Show)
-
-renderVV :: Int -> VV -> Doc
-renderVV _ (VV t) = textStrict t
-renderVV i NoVV   = textStrict $ T.replicate i "\\"
-
-data Qual = Qual VV L.Expr
-          deriving (Eq, Show)
-
-type QType = Ann TypeF (Maybe Qual)
+type QType = Ann TypeF [L.Reft]
 
 instance Pretty QType where
   pretty = cata alg
     where
-      alg :: C.CofreeF TypeF (Maybe Qual) Doc -> Doc
-      alg ((Just (Qual vv e)) C.:< t) =
-        braces (renderVV 0 vv <+> text ":" <+>
-                ppTypeAlg t <+> text "|" <+>
-                fpPretty e)
-      alg (Nothing  C.:< t) = ppTypeAlg t
+      alg :: C.CofreeF TypeF [L.Reft] Doc -> Doc
+      alg ([] C.:< t) = ppTypeAlg t
+      alg (rs C.:< t) =
+        foldr (\(L.Reft (n,e)) acc -> acc <+> colon <+> braces
+                (textStrict (L.symbolText n) <+> text "|" <+> fpPretty e))
+              (ppTypeAlg t)
+              rs
 
 noQual :: Type -> QType
 noQual = cata alg
   where
     alg :: TypeF QType -> QType
-    alg x = Nothing :< x
+    alg x = [] :< x
 
 arityOf :: Type -> Integer
 arityOf (Fix (TFunF _ x)) = 1 + arityOf x

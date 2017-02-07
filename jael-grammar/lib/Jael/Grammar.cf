@@ -154,7 +154,7 @@ rules MaybeType ::= ":" Type ;
 rules LambdaArg ::= LIdent [MaybeType] ;
 separator LambdaArg "," ;
 
-EAbs.          Expr14 ::= "\\" "(" [LambdaArg] ")" "->" "{" LetExpr "}" ;
+EAbs.          Expr14 ::= "\\" "(" [LambdaArg] ")" [MaybeType] "{" LetExpr "}" ;
 
 ETrue.         Expr14 ::= "true" ;
 EFalse.        Expr14 ::= "false" ;
@@ -239,7 +239,7 @@ rules  Global  ::= LIdent "=" Expr ";" ;
 
 -- func myFunction(x: a, y: Something, z: {Int | z >= 0}) -> Int { ... }
 -- func myFunction(x: a, y: Something, z: {Int | z >= 0}) -> {w : Int | w <= 0} { ... }
-rules  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" LetExpr "}" ;
+rules  Func    ::= "func" LIdent "(" [FuncArg] ")" ":" Type "{" LetExpr "}" ;
 --FuncRetType.  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" LetExpr "}" ;
 --FuncRetQType. Func    ::= "func" LIdent "(" [FuncArg] ")" "->" QTypeVar "{" LetExpr "}" ;
 

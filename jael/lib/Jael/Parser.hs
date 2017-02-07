@@ -14,6 +14,9 @@ module Jael.Parser where
 import           BasePrelude
 
 import           Control.Comonad.Cofree
+import qualified Control.Comonad.Trans.Cofree as C
+import           Data.Functor.Foldable
+import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Language.Fixpoint.Types as L
 
@@ -92,39 +95,52 @@ readBin :: ReadS Integer
 readBin = readInt 2 (\x -> x == '0' || x == '1') digitToInt
 
 instance Jaelify G.Expr MaybeTypedExpr where
-  jaelify (G.EInt i) = MTECon (CInt $ jaelify i) Nothing
-  jaelify G.ETrue    = MTECon (CBool True) Nothing
-  jaelify G.EFalse   = MTECon (CBool False) Nothing
-  jaelify G.EUnit    = MTECon CUnit Nothing
-  jaelify (G.EVar i) = MTEVar (jaelify i) Nothing
+  jaelify (G.EInt i) = MTECon (CInt $ jaelify i) []
+  jaelify G.ETrue    = MTECon (CBool True) []
+  jaelify G.EFalse   = MTECon (CBool False) []
+  jaelify G.EUnit    = MTECon CUnit []
+  jaelify (G.EVar i) = MTEVar (jaelify i) []
   jaelify (G.ETup e1 es) = parseETup $ map parseCommaSepExpr (e1:es)
 
   jaelify (G.EApp n es) =
-    foldl' (\acc e -> Nothing :< EAppF acc e)
-           (MTEVar (jaelify n) Nothing)
+    foldl' (\acc e -> [] :< EAppF acc e)
+           (MTEVar (jaelify n) [])
            (map parseCommaSepExpr es)
 
   jaelify (G.EAppScoped n es) =
-    foldl' (\acc e -> Nothing :< EAppF acc e)
-           (MTEVar (jaelify n) Nothing)
+    foldl' (\acc e -> [] :< EAppF acc e)
+           (MTEVar (jaelify n) [])
            (map parseCommaSepExpr es)
 
-  jaelify (G.EAbs ns e) = foldr foldLambda (jaelify e) ns
-    where foldLambda :: G.LambdaArg -> MaybeTypedExpr -> MaybeTypedExpr
-          foldLambda (G.LambdaArg1 n []) a = Nothing :< EAbsF (jaelify n, Nothing) a
-          foldLambda (G.LambdaArg1 n mt) a =
-            case mt of
-              [(G.MaybeType1 t)] ->
-                Nothing :< EAbsF (jaelify n, Just $ jaelify t) a
-              _ -> error "Grammar should only allow lists of 0 or 1"
+  jaelify (G.EAbs ns ret e) =
+    let (xs, _) = unzip args
+        ret' = unMaybeType ret
+        (et :< ef) = jaelify e
+        e' = (ret' ++ et) :< ef
+        absExpr = foldr (\x y -> [] :< EAbsF x y) e' xs
+        -- Push the type annotation from the lambda into variables
+    in  cata alg absExpr
+    where
+      args = map unLambdaArg ns
+      argMap = M.fromList $ map (first value) args
+
+      unLambdaArg (G.LambdaArg1 n mt) = (jaelify n, unMaybeType mt)
+
+      unMaybeType [G.MaybeType1 t] = [jaelify t]
+      unMaybeType []               = []
+      unMaybeType _ = error "Grammar should only allow lists of 0 or 1 length"
+
+      alg :: C.CofreeF ExprF [QType] MaybeTypedExpr -> MaybeTypedExpr
+      alg (ts C.:< v@(EVarF (Token n _))) = case M.lookup n argMap of
+        Just t -> (t++ts) :< v
+        Nothing -> ts :< v
+      alg x = embed x
 
   jaelify (G.EAnn e t) =
-    case jaelify e of
-      ((Just _) :< _) -> error "Handle properly, attempted to \
-                                \annotate an expression multiple times."
-      (Nothing :< e') -> (Just $ jaelify t) :< e'
+    let (ts :< e') = jaelify e
+    in  (jaelify t:ts) :< e'
 
-  jaelify (G.EIf b t e) = (Nothing :<) $ EIteF (jaelify b) (jaelify t) (jaelify e)
+  jaelify (G.EIf b t e) = ([] :<) $ EIteF (jaelify b) (jaelify t) (jaelify e)
   jaelify (G.ELogOr  l r) = mkApp COr  [l, r]
   jaelify (G.ELogAnd l r) = mkApp CAnd [l, r]
   jaelify (G.EEq     l r) = mkApp CEq  [l, r]
@@ -143,7 +159,7 @@ instance Jaelify G.Expr MaybeTypedExpr where
 
 instance Jaelify G.LetExpr MaybeTypedExpr where
   jaelify (G.LetExpr1 ls e) =
-    foldr ((\(n, e1) e2 -> (Nothing :< ELetF n e1 e2)) . letExpr)
+    foldr ((\(n, e1) e2 -> ([] :< ELetF n e1 e2)) . letExpr)
           (jaelify e)
           ls
     where letExpr :: G.LetElem -> (Ident, MaybeTypedExpr)
@@ -172,13 +188,13 @@ instance Jaelify G.Prog (Program [Type] [GlobExpr] [FuncExpr]) where
 
 instance Jaelify G.Type QType where
   jaelify (G.TypeQType t) = jaelify t
-  jaelify (G.TypeUnqualType t) = Nothing :< jaelify t
+  jaelify (G.TypeUnqualType t) = [] :< jaelify t
 
 instance Jaelify G.QType QType where
   jaelify (G.QTypeVar n t p) =
-    (Just $ Qual (VV . value . jaelify $ n) $ parseQPred p) :< (jaelify t)
+    [L.reft (L.symbol . value . jaelify $ n) $ parseQPred p] :< jaelify t
   jaelify (G.QTypeNoVar t p) =
-    (Just $ Qual NoVV $ parseQPred p) :< (jaelify t)
+    [L.reft (L.vv Nothing) (parseQPred p)] :< jaelify t
 
 instance Jaelify G.UnqualType (TypeF QType) where
   jaelify (G.UnqualTypeTypeA (G.TypeNamed n))  =
@@ -240,9 +256,14 @@ parseCommaSepExpr (G.CommaSepExprExpr e) = jaelify e
 
 {-@ es :: [MaybeTypedExpr] | len es >= 2 @-}
 parseETup :: [MaybeTypedExpr] -> MaybeTypedExpr
-parseETup es = Nothing :< ETupF es
+parseETup es = [] :< ETupF es
 
 mkApp :: Constant -> [G.Expr] -> MaybeTypedExpr
-mkApp f as = foldl' (\acc e -> Nothing :< EAppF acc e)
-                    (MTECon f Nothing)
+mkApp f as = foldl' (\acc e -> [] :< EAppF acc e)
+                    (MTECon f [])
                     (map jaelify as)
+
+gListToMaybe :: Jaelify a b => [a] -> Maybe b
+gListToMaybe [] = Nothing
+gListToMaybe (x:[]) = Just $ jaelify x
+gListToMaybe _ = error "Expected grammar to only allow lists of 0 or 1 elements"

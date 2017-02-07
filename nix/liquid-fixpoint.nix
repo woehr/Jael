@@ -3,7 +3,9 @@
 , cmdargs, containers, deepseq, directory, dotgen, fgl
 , fgl-visualize, filemanip, filepath, ghc-prim, hashable, intern
 , located-base, mtl, ocaml, parallel, parsec, pretty, process
-, stdenv, syb, tasty, tasty-hunit, tasty-rerun, text, text-format
+, stdenv, syb
+#, tasty, tasty-hunit, tasty-rerun
+, text, text-format
 , time, transformers, unordered-containers, z3
 , fetchgit
 }:
@@ -27,7 +29,7 @@ mkDerivation {
   ];
   executableHaskellDepends = [ base ];
   testHaskellDepends = [
-    base directory filepath process tasty tasty-hunit tasty-rerun text
+#    base directory filepath process tasty tasty-hunit tasty-rerun text
   ];
   testSystemDepends = [ z3 ];
   homepage = "https://github.com/ucsd-progsys/liquid-fixpoint";

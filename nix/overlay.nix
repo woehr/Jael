@@ -3,7 +3,15 @@ self: super: {
     packages = super.haskell.packages // {
       ghc7103 = super.haskell.packages.ghc7103.override {
         overrides = hself: hsuper: {
+          tasty-ant-xml = hself.callPackage ./tasty-ant-xml-1.0.2.nix {};
+          llvm-general-pure = hself.callPackage ./llvm-general-pure.nix {};
+          llvm-general = hself.callPackage ./llvm-general.nix { llvm-config = self.llvm_39; };
+
           liquid-fixpoint = hself.callPackage ./liquid-fixpoint.nix {};
+
+          jael-grammar = hself.callPackage ./jael-grammar.nix {};
+          jael = hself.callPackage ./jael.nix {};
+
           liquiddesugar = hself.callPackage ./liquiddesugar.nix {};
           liquidhaskell = hself.callPackage ./liquidhaskell.nix {};
         };

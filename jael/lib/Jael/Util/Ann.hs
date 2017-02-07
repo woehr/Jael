@@ -3,7 +3,6 @@
 module Jael.Util.Ann where
 
 import BasePrelude
-import Control.Comonad
 import Control.Comonad.Cofree
 import Data.Functor.Foldable
 
