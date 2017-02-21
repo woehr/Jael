@@ -2,10 +2,11 @@
 {-# Language FlexibleInstances #-}
 {-# Language NoImplicitPrelude #-}
 {-# Language OverloadedStrings #-}
+{-# Language PatternSynonyms #-}
 {-# Language TemplateHaskell #-}
 {-# Language TypeSynonymInstances #-}
 
-module Jael.Type where
+module Jael.Types.Type where
 
 import           BasePrelude hiding ((<>), (<$>), (<+>), empty)
 
@@ -13,14 +14,15 @@ import           Control.Comonad.Cofree
 import qualified Control.Comonad.Trans.Cofree as C
 import           Data.Eq.Deriving (deriveEq1)
 import           Data.Functor.Foldable
+import qualified Data.Text as T
 import           Text.Show.Deriving (deriveShow1)
 import           Text.PrettyPrint.Leijen.Text
 
-import qualified Language.Fixpoint.Types as L
+import qualified Language.Fixpoint.Types as F
 
-import           Jael.Util
-import           Jael.Util.Ann
 import           Jael.Pretty
+import           Jael.Types.Ann
+import           Jael.Util
 
 data Builtin = BTUnit
              | BTBool
@@ -37,6 +39,29 @@ data TypeF a = TBuiltinF Builtin
              deriving (Eq, Functor, Show)
 
 type Type = Fix TypeF
+type QType = Ann TypeF [F.Reft]
+
+data Scheme a = Scheme [T.Text] a
+  deriving (Eq, Show)
+
+type TScheme = Scheme Type
+type QScheme = Scheme QType
+
+pattern TBuiltin :: Builtin -> Type
+pattern TBuiltin a = Fix (TBuiltinF a)
+
+pattern TFun :: Type -> Type -> Type
+pattern TFun a b = Fix (TFunF a b)
+
+pattern TVar :: Ident -> Type
+pattern TVar a = Fix (TVarF a)
+
+pattern TTup :: [Type] -> Type
+pattern TTup as = Fix (TTupF as)
+
+pattern TNamed :: Ident -> [Type] -> Type
+pattern TNamed a bs = Fix (TNamedF a bs)
+
 
 instance Pretty Type where
   pretty = cata ppTypeAlg
@@ -57,16 +82,14 @@ ppTypeAlg (TVarF (Token n _)) = textStrict n
 ppTypeAlg (TTupF ts) = tupled ts
 ppTypeAlg (TFunF t1 t2) = t1 <+> text "->" <+> t2
 
-type QType = Ann TypeF [L.Reft]
-
 instance Pretty QType where
   pretty = cata alg
     where
-      alg :: C.CofreeF TypeF [L.Reft] Doc -> Doc
+      alg :: C.CofreeF TypeF [F.Reft] Doc -> Doc
       alg ([] C.:< t) = ppTypeAlg t
       alg (rs C.:< t) =
-        foldr (\(L.Reft (n,e)) acc -> acc <+> colon <+> braces
-                (textStrict (L.symbolText n) <+> text "|" <+> fpPretty e))
+        foldr (\(F.Reft (n,e)) acc -> acc <+> colon <+> braces
+                (textStrict (F.symbolText n) <+> text "|" <+> fpPretty e))
               (ppTypeAlg t)
               rs
 
@@ -75,6 +98,9 @@ noQual = cata alg
   where
     alg :: TypeF QType -> QType
     alg x = [] :< x
+
+shape :: QType -> Type
+shape = removeAnn
 
 arityOf :: Type -> Integer
 arityOf (Fix (TFunF _ x)) = 1 + arityOf x

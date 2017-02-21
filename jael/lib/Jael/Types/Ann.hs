@@ -1,11 +1,8 @@
 {-# Language NoImplicitPrelude #-}
 
-module Jael.Util.Ann where
+module Jael.Types.Ann where
 
-import BasePrelude
-import Control.Comonad.Cofree
-import Data.Functor.Foldable
-
+import Jael.Prelude
 import Jael.Util
 
 type Ann f a = Cofree f a

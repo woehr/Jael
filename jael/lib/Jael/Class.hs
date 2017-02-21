@@ -1,28 +1,22 @@
-{-# Language FlexibleInstances #-}
 {-# Language NoImplicitPrelude #-}
+{-# Language TypeSynonymInstances #-}
+{-# Language FlexibleInstances #-}
 
-module Jael.TIOps where
+module Jael.Class where
 
-import           BasePrelude
-
-import           Control.Comonad.Cofree
-import           Data.Functor.Foldable
+import           Jael.Prelude
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 
-import qualified Language.Fixpoint.Types as L
+import qualified Language.Fixpoint.Types as F
 
-import Jael.Expr
-import Jael.Type
+import Jael.Types
 import Jael.Util
-import Jael.Util.Ann
 
 class TIOps a where
   ftv :: a -> S.Set T.Text
   apply :: M.Map T.Text Type -> a -> a
-
---------------- Instances for various kinds of types ---------------
 
 instance TIOps Type where
   ftv = cata alg
@@ -37,10 +31,6 @@ instance TIOps Type where
           alg t@(TVarF v) = M.findWithDefault (embed t) (value v) s
           alg t = embed t
 
-instance TIOps a => TIOps [a] where
-  ftv = S.unions . map ftv
-  apply s = map (apply s)
-
 instance TIOps (Type, Type) where
   ftv (t1, t2) = S.union (ftv t1) (ftv t2)
   apply s ts = join bimap (apply s) ts
@@ -51,9 +41,13 @@ instance TIOps QType where
 -- Both apply implementations work
 
   apply s = iterCofree f
-    where f :: [L.Reft] -> TypeF QType -> QType
+    where f :: [F.Reft] -> TypeF QType -> QType
           f a (TVarF n) = flip setAnn a $ noQual (apply s $ Fix $ TVarF n)
           f a q = a :< q
+
+instance TIOps a => TIOps [a] where
+  ftv = S.unions . map ftv
+  apply s = map (apply s)
 
 --  apply s = cata alg
 --    where alg :: C.CofreeF TypeF (Maybe Qual) QType -> QType
@@ -66,3 +60,4 @@ instance TIOps QType where
 instance TIOps HMTypedExpr where
   ftv = freeVars . removeAnn
   apply s = fmap (apply s)
+

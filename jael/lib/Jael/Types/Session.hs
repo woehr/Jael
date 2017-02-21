@@ -1,18 +1,16 @@
-{-# Language
-  DeriveFunctor
-, NoImplicitPrelude
-, RecordWildCards
-, TypeFamilies #-}
+{-# Language DeriveFunctor #-}
+{-# Language NoImplicitPrelude #-}
+{-# Language RecordWildCards #-}
+{-# Language TypeFamilies #-}
 
-module Jael.Session where
+module Jael.Types.Session where
 
-import BasePrelude
-import MTLPrelude
+import Jael.Prelude
 import qualified Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
-import           Jael.Type
+import           Jael.Types.Type
 
 data SessDefErr = SDEDupInd     T.Text
                 | SDEDupLabels  (S.Set T.Text)

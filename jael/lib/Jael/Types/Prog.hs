@@ -1,10 +1,9 @@
-{-# Language
-    DeriveFunctor,
-    NoImplicitPrelude #-}
+{-# Language DeriveFunctor #-}
+{-# Language NoImplicitPrelude #-}
 
-module Jael.Prog where
+module Jael.Types.Prog where
 
-import BasePrelude
+import Jael.Prelude
 
 newtype ProgramF a = ProgramF
   { _unProgramF :: a

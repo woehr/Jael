@@ -16,31 +16,19 @@ source-repository head
   location: git://github.com/woehr/jael
 
 library
---  exposed-modules:     Jael.CodeGen.Convert
---                       Jael.CodeGen.Module
---                       Jael.CodeGen.Passes
---                       Jael.Compile
---                       Jael.Compile.Stage1
---                       Jael.Compile.Stage2
---                       Jael.Conc.Env
---                       Jael.Conc.Proc
---                       Jael.Conc.Session
---                       Jael.Conc.TyCk.S2
---                       Jael.Conc.TyCk.S3
-  exposed-modules:     Jael.Expr
+  exposed-modules:     Jael.Class
+                       Jael.ConsGen
                        Jael.Infer
-                       Jael.Parser
+                       Jael.Prelude
                        Jael.Pretty
-                       Jael.Prog
-                       Jael.Session
-                       Jael.TIOps
-                       Jael.Type
---                       Jael.Seq.Env
---                       Jael.Seq.TI.S2
---                       Jael.Seq.TI.HM
---                       Jael.Seq.UserDefinedType
+                       Jael.Types
+                       Jael.Types.Ann
+                       Jael.Types.Expr
+                       Jael.Types.Parser
+                       Jael.Types.Prog
+                       Jael.Types.Session
+                       Jael.Types.Type
                        Jael.Util
-                       Jael.Util.Ann
 
   build-depends:       base >=4.8 && <5,
                        array,

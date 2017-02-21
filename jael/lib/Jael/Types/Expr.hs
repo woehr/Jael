@@ -7,22 +7,18 @@
 {-# Language TupleSections #-}
 {-# Language TypeSynonymInstances #-}
 
-module Jael.Expr where
+module Jael.Types.Expr where
 
--- To make liquid haskell happy
-import           Prelude ()
-import           BasePrelude hiding ((<>), (<$>), (<+>))
-import           Control.Comonad hiding ((<$>))
-import           Control.Comonad.Cofree
+import           Jael.Prelude hiding ((<>), (<+>), (<$>))
 import qualified Control.Comonad.Trans.Cofree as C
-import           Data.Functor.Foldable
+import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 import           Text.PrettyPrint.Leijen.Text
 
-import           Jael.Type
+import           Jael.Types.Ann
+import           Jael.Types.Type
 import           Jael.Util
-import           Jael.Util.Ann
 
 data Constant = CUnit
               | CBool Bool
@@ -76,6 +72,8 @@ data ExprF a = EAppF a a
              | ETupF [a]
              | EVarF Ident
              | EConF Constant
+             | ETIns (M.Map T.Text Type) a
+             | ETGen [T.Text] a
              deriving (Eq, Functor, Show)
 
 type Expr = Fix ExprF
@@ -138,6 +136,9 @@ instance Pretty MaybeTypedExpr where
       alg (_  C.:< (EAppF e1 e2)) = case e1 of
         (PApp f as) -> PApp f $ as ++ [e2]
         _           -> PApp e1 [e2]
+
+      alg (_ C.:< (ETGen _ e)) = e
+      alg (_ C.:< (ETIns _ e)) = e
 
       alg (_  C.:< (EAbsF (Token n _) e)) = case e of
         (PAbs as e') -> PAbs (n : as) e'

@@ -9,21 +9,18 @@ No error checking.
 {-# Language NoImplicitPrelude #-}
 {-# Language RecordWildCards #-}
 
-module Jael.Parser where
+module Jael.Types.Parser where
 
-import           BasePrelude
-
-import           Control.Comonad.Cofree
+import           Jael.Prelude
 import qualified Control.Comonad.Trans.Cofree as C
-import           Data.Functor.Foldable
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Language.Fixpoint.Types as L
 
 import qualified Jael.Grammar as G
-import           Jael.Expr
-import           Jael.Prog
-import           Jael.Type
+import           Jael.Types.Expr
+import           Jael.Types.Prog
+import           Jael.Types.Type
 import           Jael.Util
 
 type ParseFun a = [G.Token] -> G.Err a
