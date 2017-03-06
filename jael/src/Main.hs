@@ -1,8 +1,7 @@
 {-# Language NoImplicitPrelude #-}
 
-import Prelude ()
-import BasePrelude
-import Jael.Expr
+import Jael.Prelude
+--import Jael.Expr
 --import Text.PrettyPrint.Leijen.Text
 
 main :: IO ()

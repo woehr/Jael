@@ -4,17 +4,13 @@
 
 module Jael.Infer where
 
-import           BasePrelude hiding (TVar)
-import           MTLPrelude
-
-import           Control.Comonad.Cofree
+import           Jael.Prelude
 import qualified Control.Comonad.Trans.Cofree as C
-import           Data.Functor.Foldable
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 
-import           Jael.Class
+import           Jael.Classes
 import           Jael.Types
 import           Jael.Util
 
@@ -26,15 +22,7 @@ nullSub = M.empty
 compSub :: TypeSub -> TypeSub -> TypeSub
 l `compSub` r = (M.map (apply l) r) `M.union` l
 
-instance TIOps TScheme where
-  ftv (Scheme vs t) = ftv t S.\\ S.fromList vs
-  apply s (Scheme vs t) = Scheme vs $ apply (foldr M.delete s vs) t
-
 type HmEnv = M.Map T.Text TScheme
-
-instance TIOps HmEnv where
-  ftv = S.unions . map ftv. M.elems
-  apply s = M.map (apply s)
 
 emptyEnv :: HmEnv
 emptyEnv = M.empty
@@ -64,69 +52,61 @@ doHm :: C.CofreeF ExprF [QType] (HmInfM HMTypedExpr)
      -> HmInfM HMTypedExpr
 
 --instantiate :: Scheme -> HmInfM Type
---instantiate (Scheme vs t) = do
---  vs' <- mapM (const freshTv) vs
---  return $ apply (M.fromList $ zip vs vs') t
+--instantiate (Scheme fvs t) = do
+--  fvs' <- mapM (const freshTv) fvs
+--  return $ apply (M.fromList $ zip fvs fvs') t
 doHm ([] C.:< EVarF n) = do
   env <- ask
   case M.lookup (value n) env of
     Nothing -> error $ "unbound variable " ++ show (value n)
-    Just (Scheme vs t) -> do
-      vs' <- mapM (const freshTv) vs
-      let s = M.fromList $ zip vs vs'
-      return $ (apply s t) :< ETIns s (t :< EVarF n)
-      --t <- instantiate s
-      --return $ t :< EVarF n
+    Just (Scheme tvs t) -> do
+      tvs' <- mapM (const freshTv) tvs
+      let s = zip tvs tvs'
+      return $ TIns s t :< EVarF n
 
 doHm ([] C.:< EIteF b t e) = do
   te1 <- b
   te2 <- t
   te3 <- e
   let (t1, t2, t3) = (getType te1, getType te2, getType te3)
-  unify t1 $ TBuiltin BTBool
+  unify t1 $ TBool
   unify t2 t3
   return $ t2 :< EIteF te1 te2 te3
 
---generalize :: HmEnv -> Type -> Scheme
---generalize env t =
---  let vs = ftv t S.\\ ftv env
---  in Scheme (S.toList vs) t
 doHm ([] C.:< ELetF n e1 e2) = do
   env <- ask
-  te1 <- e1
-  let t1 = getType te1
-  let fvs = S.toList $ ftv t1 S.\\ ftv env
-  te2 <- inEnv (value n, Scheme fvs t1) e2
+  (t1 :< e1') <- e1
+  let s@(Scheme fvs _) = generalize env t1
+  te2 <- inEnv (value n, s) e2
   let t2 = getType te2
-  return $ t2 :< ELetF n (t1 :< ETGen fvs te1) te2
+  return $ t2 :< ELetF n (TGen fvs t1 :< e1') te2
 
 doHm ([] C.:< EAppF e1 e2) = do
-  t <- freshTv
-  te1 <- e1
-  te2 <- e2
+  tv <- freshTv
+  (te1, te2) <- liftM2 (,) e1 e2
   let (t1, t2) = (getType te1, getType te2)
-  unify t1 (TFun t2 t)
-  return $ t :< EAppF te1 te2
+  unify t1 (TFun t2 tv)
+  return $ tv :< EAppF te1 te2
 
 doHm ([] C.:< EAbsF n@(Token v _) e) = do
-  t <- freshTv
-  te <- inEnv (v, Scheme [] t) e
-  return $ (TFun t (getType te)) :< EAbsF n te
+  tv <- freshTv
+  te <- inEnv (v, Scheme [] tv) e
+  return $ (TFun tv $ getType te) :< EAbsF n te
 
 doHm ([] C.:< ETupF es) = do
   tes <- sequence es
-  let ts = map getType tes
+  let tvs = map getType tes
   tupTv <- freshTv
-  let t = TTup ts
+  let t = TTup tvs
   unify tupTv t
   return $ t :< ETupF tes
 
 doHm ([] C.:< EConF c) = do
   tv <- freshTv
   let t = case c of
-            CUnit   -> TBuiltin BTUnit
-            CBool _ -> TBuiltin BTBool
-            CInt _  -> TBuiltin BTInt
+            CUnit   -> TUnit
+            CBool _ -> TBool
+            CInt _  -> TInt
             CAdd    -> int2int2int
             CSub    -> int2int2int
             CMul    -> int2int2int
@@ -140,14 +120,10 @@ doHm ([] C.:< EConF c) = do
             CLe     -> bool2bool2bool
             CGt     -> bool2bool2bool
             CLt     -> bool2bool2bool
-            CBitCat -> TFun (TBuiltin BTBits)
-                            (TBuiltin BTBits)
+            CBitCat -> TFun TBits TBits
             CNot    -> bool2bool
   unify tv t
   return $ tv :< EConF c
-
-doHm (_ C.:< (ETGen _ _)) = error "Should not be present prior to type checking"
-doHm (_ C.:< (ETIns _ _)) = error "Should not be present prior to type checking"
 
 doHm (ts C.:< e) = do
   te <- doHm $ [] C.:< e
@@ -163,6 +139,11 @@ inEnv (n, s) m = do
 unify :: Type -> Type -> HmInfM ()
 unify t1 t2 = tell [(t1, t2)]
 
+generalize :: HmEnv -> Type -> TScheme
+generalize env t =
+  let fvs = ftv t S.\\ ftv env
+  in Scheme (S.toList fvs) t
+
 type Constraint = (Type, Type)
 type Unifier = (TypeSub, [Constraint])
 type SolveM = ExceptT T.Text Identity
@@ -176,26 +157,30 @@ unificationSolver (s, cs) =
       unificationSolver (s' `compSub` s, apply s' cs')
 
 unifier :: Type -> Type -> SolveM TypeSub
-unifier x y = doUnify (unfix x) (unfix y)
-  where doUnify t1 t2 | t1 == t2 = return nullSub
-        doUnify (TFunF l r) (TFunF l' r') = unifyMany [l, r] [l', r']
-        doUnify (TVarF n) t = bind n t
-        doUnify t (TVarF n) = bind n t
-        doUnify (TTupF ts) (TTupF ts') = unifyMany ts ts'
-        doUnify (TNamedF (Token n _) ts) (TNamedF (Token n' _) ts') =
-          if n == n'
-            then unifyMany ts ts'
-            else error $ "can't match " ++ show n ++ " and " ++ show n'
-        doUnify t t' = error $ "Non-unifying types " ++ show t ++ " and " ++ show t'
+unifier t1 t2 | t1 == t2 = return nullSub
+unifier (TIns s t1) t2 = unifier (apply (M.fromList s) t1) t2
+unifier t1 (TIns s t2) = unifier t1 (apply (M.fromList s) t2)
+unifier (TGen _ t1) t2 = unifier t1 t2
+unifier t1 (TGen _ t2) = unifier t1 t2
+unifier (TFun l r) (TFun l' r') = unifyMany [l, r] [l', r']
+unifier (TVar n) t = bind n t
+unifier t (TVar n) = bind n t
+unifier (TTup ts) (TTup ts') = unifyMany ts ts'
+unifier (TCon (Token n _) ts) (TCon (Token n' _) ts') =
+  if n == n'
+     then unifyMany ts ts'
+     else error $ "can't match " ++ show n ++ " and " ++ show n'
+unifier t t' = error $ "Non-unifying types " ++ show t ++ " and " ++ show t'
 
-        bind v t
-          | ((Token n _), (TVarF (Token n' _))) <- (v, t)
-          , n == n'
-          = return nullSub
-          | S.member (value v) (ftv $ Fix t)
-          = error "occurs check"
-          | otherwise
-          = return $ M.singleton (value v) (Fix t)
+bind :: Ident -> Type -> SolveM TypeSub
+bind v t
+  | ((Token n _), (TVar (Token n' _))) <- (v, t)
+  , n == n'
+  = return nullSub
+  | S.member (value v) (ftv t)
+  = error "occurs check"
+  | otherwise
+  = return $ M.singleton (value v) t
 
 unifyMany :: [Type] -> [Type] -> SolveM TypeSub
 unifyMany [] [] = return nullSub
@@ -209,22 +194,16 @@ emptyUnifier :: Unifier
 emptyUnifier = (nullSub, [])
 
 int2int2int :: Type
-int2int2int = TFun (TBuiltin BTInt)
-                   (TFun (TBuiltin BTInt)
-                         (TBuiltin BTInt)
-                    )
+int2int2int = TFun TInt (TFun TInt TInt)
 
 bool2bool :: Type
-bool2bool = TFun (TBuiltin BTBool)
-                 (TBuiltin BTBool)
+bool2bool = TFun TBool TBool
 
 bool2bool2bool :: Type
-bool2bool2bool = TFun (TBuiltin BTBool)
-                      (bool2bool)
+bool2bool2bool = TFun TBool bool2bool
 
 freshTv :: HmInfM Type
 freshTv = do
   c <- gets hmsCount
   modify (\_ -> HmInfS $ c + 1)
-  return $ TVar $ Token (T.pack $ 'a' : show c) (0,0) -- Dummy location
-
+  return $ TVar $ Token (T.pack $ 'a' : show c) dummyLoc

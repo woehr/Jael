@@ -15,7 +15,7 @@ import           Jael.Prelude
 import qualified Control.Comonad.Trans.Cofree as C
 import qualified Data.Map as M
 import qualified Data.Text as T
-import qualified Language.Fixpoint.Types as L
+import qualified Language.Fixpoint.Types as F
 
 import qualified Jael.Grammar as G
 import           Jael.Types.Expr
@@ -185,68 +185,65 @@ instance Jaelify G.Prog (Program [Type] [GlobExpr] [FuncExpr]) where
 
 instance Jaelify G.Type QType where
   jaelify (G.TypeQType t) = jaelify t
-  jaelify (G.TypeUnqualType t) = [] :< jaelify t
+  jaelify (G.TypeUnqualType t) = F.trueReft :< jaelify t
 
 instance Jaelify G.QType QType where
   jaelify (G.QTypeVar n t p) =
-    [L.reft (L.symbol . value . jaelify $ n) $ parseQPred p] :< jaelify t
+    F.reft (F.symbol . value . jaelify $ n) (parseQPred p) :< jaelify t
   jaelify (G.QTypeNoVar t p) =
-    [L.reft (L.vv Nothing) (parseQPred p)] :< jaelify t
+    F.reft (F.vv Nothing) (parseQPred p) :< jaelify t
 
 instance Jaelify G.UnqualType (TypeF QType) where
   jaelify (G.UnqualTypeTypeA (G.TypeNamed n))  =
-    TNamedF (jaelify n) []
+    TConF (jaelify n) []
   jaelify (G.UnqualTypeTypeB (G.TypeNamedParams n ts)) =
-    TNamedF (jaelify n) $ map unCommaSeparate ts
+    TConF (jaelify n) $ map unCommaSeparate ts
 
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TUnit)) = TBuiltinF BTUnit
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBool)) = TBuiltinF BTBool
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TInt))  = TBuiltinF BTInt
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBit))  = TBuiltinF BTBits
-  jaelify (G.UnqualTypeTypeB (G.TypeBase (G.TBuffer t))) =
-    TBuiltinF $ BTBuffer (jaelify t)
-
-  jaelify (G.UnqualTypeTypeB (G.TypeVar  n))   =
-    TVarF (jaelify n)
+  jaelify (G.UnqualTypeTypeB (G.TypeVar  n))       = TVarF (jaelify n)
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TUnit)) = TUnitF
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBool)) = TBoolF
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TInt))  = TIntF
+  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBit))  = TBitsF
+  jaelify (G.UnqualTypeTypeB (G.TypeBase (G.TBuffer t))) = TBufferF (jaelify t)
   jaelify (G.UnqualTypeTypeB (G.TypeTup t ts)) =
     TTupF $ map unCommaSeparate (t:ts)
 
 unCommaSeparate :: G.CommaSepType -> QType
 unCommaSeparate (G.CommaSepTypeType t) = jaelify t
 
-parseQPred :: G.QPred -> L.Expr
-parseQPred (G.QPredIff l r) = L.PIff (parseQPred l) (parseQPred r)
-parseQPred (G.QPredImp l r) = L.PImp (parseQPred l) (parseQPred r)
-parseQPred (G.QPredOr  l r) = L.POr  (map parseQPred [l, r])
-parseQPred (G.QPredAnd l r) = L.PAnd (map parseQPred [l, r])
-parseQPred (G.QPredNot p)   = L.PNot (parseQPred p)
-parseQPred G.QPredTrue      = L.prop True
-parseQPred G.QPredFalse     = L.prop False
-parseQPred (G.QPredAtom l op r) = L.PAtom (parseQRel op) (parseQExpr l) (parseQExpr r)
+parseQPred :: G.QPred -> F.Expr
+parseQPred (G.QPredIff l r) = F.PIff (parseQPred l) (parseQPred r)
+parseQPred (G.QPredImp l r) = F.PImp (parseQPred l) (parseQPred r)
+parseQPred (G.QPredOr  l r) = F.POr  (map parseQPred [l, r])
+parseQPred (G.QPredAnd l r) = F.PAnd (map parseQPred [l, r])
+parseQPred (G.QPredNot p)   = F.PNot (parseQPred p)
+parseQPred G.QPredTrue      = F.prop True
+parseQPred G.QPredFalse     = F.prop False
+parseQPred (G.QPredAtom l op r) = F.PAtom (parseQRel op) (parseQExpr l) (parseQExpr r)
 
-parseQExpr :: G.QExpr -> L.Expr
-parseQExpr (G.QExprAdd l r)  = L.EBin L.Plus (parseQExpr l) (parseQExpr r)
-parseQExpr (G.QExprSub l r)  = L.EBin L.Minus (parseQExpr l) (parseQExpr r)
-parseQExpr (G.QExprMul c e)  = L.EBin L.Times (L.expr . value $ jaelify c) (parseQExpr e)
-parseQExpr (G.QExprInt i)    = L.expr . value $ jaelify i
-parseQExpr (G.QExprVar n)    = L.eVar . value $ jaelify n
+parseQExpr :: G.QExpr -> F.Expr
+parseQExpr (G.QExprAdd l r)  = F.EBin F.Plus (parseQExpr l) (parseQExpr r)
+parseQExpr (G.QExprSub l r)  = F.EBin F.Minus (parseQExpr l) (parseQExpr r)
+parseQExpr (G.QExprMul c e)  = F.EBin F.Times (F.expr . value $ jaelify c) (parseQExpr e)
+parseQExpr (G.QExprInt i)    = F.expr . value $ jaelify i
+parseQExpr (G.QExprVar n)    = F.eVar . value $ jaelify n
 parseQExpr (G.QExprApp n (a:as)) =
   foldl'
-    L.EApp
-    (L.EApp (L.EVar . L.symbol . value . jaelify $ n) (parseCommaSepQExpr a))
+    F.EApp
+    (F.EApp (F.eVar . value . jaelify $ n) (parseCommaSepQExpr a))
     (map parseCommaSepQExpr as)
 parseQExpr (G.QExprApp _ _) = error "[G.CommaSepQExpr] should always have an element"
 
-parseCommaSepQExpr :: G.CommaSepQExpr -> L.Expr
+parseCommaSepQExpr :: G.CommaSepQExpr -> F.Expr
 parseCommaSepQExpr (G.CommaSepQExprQExpr e) = parseQExpr e
 
-parseQRel :: G.QRel -> L.Brel
-parseQRel G.QRelEq = L.Eq
-parseQRel G.QRelNe = L.Ne
-parseQRel G.QRelGe = L.Ge
-parseQRel G.QRelLe = L.Le
-parseQRel G.QRelGt = L.Gt
-parseQRel G.QRelLt = L.Lt
+parseQRel :: G.QRel -> F.Brel
+parseQRel G.QRelEq = F.Eq
+parseQRel G.QRelNe = F.Ne
+parseQRel G.QRelGe = F.Ge
+parseQRel G.QRelLe = F.Le
+parseQRel G.QRelGt = F.Gt
+parseQRel G.QRelLt = F.Lt
 
 parseCommaSepExpr :: G.CommaSepExpr -> MaybeTypedExpr
 parseCommaSepExpr (G.CommaSepExprExpr e) = jaelify e

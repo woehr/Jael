@@ -16,8 +16,10 @@ source-repository head
   location: git://github.com/woehr/jael
 
 library
-  exposed-modules:     Jael.Class
+  exposed-modules:     Jael.Classes
+                       Jael.Classes.TIOps
                        Jael.ConsGen
+                       Jael.Constants
                        Jael.Infer
                        Jael.Prelude
                        Jael.Pretty
@@ -27,7 +29,9 @@ library
                        Jael.Types.Parser
                        Jael.Types.Prog
                        Jael.Types.Session
+                       Jael.Types.Template
                        Jael.Types.Type
+                       Jael.Uniqify
                        Jael.Util
 
   build-depends:       base >=4.8 && <5,
@@ -45,6 +49,7 @@ library
                        placeholders,
                        recursion-schemes >= 5.0.1,
                        text,
+                       unordered-containers,
                        wl-pprint-text >= 1.1.1.0
 
   hs-source-dirs:      lib
@@ -74,8 +79,12 @@ test-suite test-jael
   type:                exitcode-stdio-1.0
   main-is:             Test.hs
 
-  other-modules:       Jael.ExprSpec,
-                       Jael.ParserSpec
+  other-modules:       Jael.Test.Util
+                       Jael.ConsGenSpec
+                       Jael.InferSpec
+                       Jael.UniqifySpec
+                       Jael.Types.ExprSpec
+                       Jael.Types.ParserSpec
 
   build-depends:       base          >=4.8 && <5,
                        base-prelude,
@@ -85,7 +94,9 @@ test-suite test-jael
                        hspec         == 2.*,
                        liquid-fixpoint,
                        recursion-schemes >= 5,
-                       text
+                       text,
+                       array, containers, comonad, wl-pprint-text >= 1.1.1.0,
+                       mtl-prelude, deriving-compat, unordered-containers
 
   hs-source-dirs:      test
   default-language:    Haskell2010

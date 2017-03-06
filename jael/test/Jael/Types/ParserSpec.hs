@@ -1,22 +1,16 @@
-{-# Language
-  NoImplicitPrelude
-, OverloadedStrings #-}
+{-# Language NoImplicitPrelude #-}
+{-# Language OverloadedStrings #-}
 
-module Jael.ParserSpec (spec) where
+module Jael.Types.ParserSpec (spec) where
 
-import BasePrelude
+import Jael.Prelude
 import Test.Hspec
 
-import           Control.Comonad.Cofree
 import qualified Data.Text as T
-import           Data.Functor.Foldable
 import qualified Jael.Grammar as G
-import qualified Language.Fixpoint.Types as L
+import qualified Language.Fixpoint.Types as F
 
-import Jael.Expr
-import Jael.Parser
-import Jael.Prog
-import Jael.Type
+import Jael.Types
 import Jael.Util
 
 parseThrow :: ParseFun a -> T.Text -> a
@@ -30,14 +24,14 @@ parseExpr = parseThrow G.pExpr
 parseType :: T.Text -> G.Type
 parseType = parseThrow G.pType
 
-parseProg :: T.Text -> G.Prog
-parseProg = parseThrow G.pProg
+--parseProg :: T.Text -> G.Prog
+--parseProg = parseThrow G.pProg
 
 annotateUntyped :: Expr -> MaybeTypedExpr
-annotateUntyped = cata (\e -> Nothing :< e)
+annotateUntyped = cata (\e -> [] :< e)
 
-applyArgs :: Expr -> [Expr] -> Expr
-applyArgs x as = foldl' (\a v -> Fix $ EAppF v a) x as
+--applyArgs :: Expr -> [Expr] -> Expr
+--applyArgs x as = foldl' (\a v -> Fix $ EAppF v a) x as
 
 spec :: Spec
 spec = do
@@ -92,10 +86,10 @@ spec = do
         )
     it "transforms types" $ do
       (jaelify . parseType) "A({x:Int|x>0})" `shouldBe`
-        (Nothing :<
-           TNamedF (Token {value = "A", lineCol = (1,1)})
-                   [Just (Qual (VV "x") (L.PAtom L.Gt (L.EVar "x") (L.ECon (L.I 0))))
-                    :< TBuiltinF BTInt
+        (F.trueReft :<
+           TConF (Token "A" (1,1))
+                   [F.reft (F.symbol ("x"::T.Text)) (F.PAtom F.Gt (F.EVar "x") (F.ECon (F.I 0)))
+                    :< TIntF
                    ]
         )
 

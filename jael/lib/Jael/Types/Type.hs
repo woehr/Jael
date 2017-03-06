@@ -5,6 +5,9 @@
 {-# Language PatternSynonyms #-}
 {-# Language TemplateHaskell #-}
 {-# Language TypeSynonymInstances #-}
+{-# Language DeriveDataTypeable #-}
+{-# Language StandaloneDeriving #-}
+{-# Language RankNTypes #-}
 
 module Jael.Types.Type where
 
@@ -24,31 +27,54 @@ import           Jael.Pretty
 import           Jael.Types.Ann
 import           Jael.Util
 
-data Builtin = BTUnit
-             | BTBool
-             | BTInt
-             | BTBits
-             | BTBuffer QType
-             deriving (Eq, Show)
-
-data TypeF a = TBuiltinF Builtin
-             | TFunF a a
+data TypeF a = TFunF a a
              | TVarF Ident
              | TTupF [a]
-             | TNamedF Ident [a]
-             deriving (Eq, Functor, Show)
+             | TConF Ident [a]
+             | TInsF [(T.Text, a)] a
+             | TGenF [T.Text] a
+             deriving (Data, Eq, Functor, Show)
 
 type Type = Fix TypeF
-type QType = Ann TypeF [F.Reft]
+type QType = Ann TypeF F.Reft
+
+deriving instance Data QType
 
 data Scheme a = Scheme [T.Text] a
-  deriving (Eq, Show)
+  deriving (Data, Eq, Functor, Show)
 
 type TScheme = Scheme Type
 type QScheme = Scheme QType
 
-pattern TBuiltin :: Builtin -> Type
-pattern TBuiltin a = Fix (TBuiltinF a)
+pattern TUnitF :: TypeF a
+pattern TUnitF = TConF "Unit" []
+
+pattern TUnit :: Type
+pattern TUnit = Fix (TConF "Unit" [])
+
+pattern TBoolF :: TypeF a
+pattern TBoolF = TConF "Bool" []
+
+pattern TBool :: Type
+pattern TBool = Fix (TConF "Bool" [])
+
+pattern TIntF :: TypeF a
+pattern TIntF = TConF "Int" []
+
+pattern TInt :: Type
+pattern TInt = Fix (TConF "Int" [])
+
+pattern TBitsF :: TypeF a
+pattern TBitsF = TConF "Bits" []
+
+pattern TBits :: Type
+pattern TBits = Fix (TConF "Bits" [])
+
+pattern TBufferF :: forall t. t -> TypeF t
+pattern TBufferF a = TConF "Buffer" [a]
+
+pattern TBuffer :: Type -> Type
+pattern TBuffer a = Fix (TConF "Buffer" [a])
 
 pattern TFun :: Type -> Type -> Type
 pattern TFun a b = Fix (TFunF a b)
@@ -59,22 +85,24 @@ pattern TVar a = Fix (TVarF a)
 pattern TTup :: [Type] -> Type
 pattern TTup as = Fix (TTupF as)
 
-pattern TNamed :: Ident -> [Type] -> Type
-pattern TNamed a bs = Fix (TNamedF a bs)
+pattern TCon :: Ident -> [Type] -> Type
+pattern TCon a bs = Fix (TConF a bs)
 
+pattern TIns :: [(T.Text, Type)] -> Type -> Type
+pattern TIns subs t = Fix (TInsF subs t)
+
+pattern TGen :: [T.Text] -> Type -> Type
+pattern TGen as t = Fix (TGenF as t)
 
 instance Pretty Type where
   pretty = cata ppTypeAlg
 
 ppTypeAlg :: TypeF Doc -> Doc
-ppTypeAlg (TBuiltinF b) = case b of
-  BTBits -> text "Bits"
-  BTBool -> text "Bool"
-  BTInt  -> text "Int"
-  BTUnit -> text "Void"
-  BTBuffer t -> text "Buffer" <> parens (pretty t)
 
-ppTypeAlg (TNamedF (Token n _) ts) =
+ppTypeAlg (TInsF ss t) = textStrict "ins" <> list (map (\(x,y)->tupled $ [textStrict x, y]) ss) <+> t
+ppTypeAlg (TGenF vs t) = textStrict "gen" <> list (map textStrict vs) <+> t
+
+ppTypeAlg (TConF (Token n _) ts) =
   textStrict n <>
   if length ts == 0 then empty else tupled ts
 
@@ -85,19 +113,22 @@ ppTypeAlg (TFunF t1 t2) = t1 <+> text "->" <+> t2
 instance Pretty QType where
   pretty = cata alg
     where
-      alg :: C.CofreeF TypeF [F.Reft] Doc -> Doc
-      alg ([] C.:< t) = ppTypeAlg t
-      alg (rs C.:< t) =
-        foldr (\(F.Reft (n,e)) acc -> acc <+> colon <+> braces
-                (textStrict (F.symbolText n) <+> text "|" <+> fpPretty e))
-              (ppTypeAlg t)
-              rs
+      alg :: C.CofreeF TypeF F.Reft Doc -> Doc
+      alg ((F.Reft (n, e)) C.:< t) =
+        braces $
+          (textStrict (F.symbolText n) <+>
+           colon <+>
+           ppTypeAlg t <+> (if e == F.PTrue
+                            then empty
+                            else "|" <+> fpPretty e
+                           )
+          )
 
 noQual :: Type -> QType
 noQual = cata alg
   where
     alg :: TypeF QType -> QType
-    alg x = [] :< x
+    alg x = F.trueReft :< x
 
 shape :: QType -> Type
 shape = removeAnn
