@@ -1,6 +1,7 @@
 {-# Language NoImplicitPrelude #-}
 {-# Language TypeSynonymInstances #-}
 {-# Language FlexibleInstances #-}
+{-# Language RecordWildCards #-}
 
 module Jael.ConsGen where
 
