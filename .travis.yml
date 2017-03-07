@@ -96,14 +96,14 @@ matrix:
     addons:
       apt:
         sources: [llvm-toolchain-trusty-3.9]
-        packages: [libgmp-dev llvm-3.9]
+        packages: [libgmp-dev llvm-3.9-dev]
 
   - env: BUILD=stack ARGS="--resolver lts-8"
     compiler: ": #stack 8.0.2"
     addons:
       apt:
         sources: [llvm-toolchain-trusty-3.9]
-        packages: [libgmp-dev llvm-3.9]
+        packages: [libgmp-dev llvm-3.9-dev]
 
   # Nightly builds are allowed to fail
 #  - env: BUILD=stack ARGS="--resolver nightly"
