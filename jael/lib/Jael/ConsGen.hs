@@ -1,4 +1,6 @@
 {-# Language NoImplicitPrelude #-}
+{-# Language TypeSynonymInstances #-}
+{-# Language FlexibleInstances #-}
 
 module Jael.ConsGen where
 
@@ -15,6 +17,12 @@ import qualified Language.Fixpoint.Types as F
 import           Jael.Types hiding (removeAnn)
 import           Jael.Util
 
+class Sortable a where
+  toSort :: a -> F.Sort
+
+instance Sortable Template where
+  toSort = undefined
+
 type Template = QScheme
 --type Template = QType
 
@@ -24,8 +32,8 @@ data CGEnv = CGEnv
   } deriving (Show)
 
 data CGCons a = CGCons
-  { wfs :: [F.WfC a]
-  , subs :: [F.SubC a]
+  { wfcs :: [F.WfC a]
+  , subcs :: [F.SubC a]
   } deriving (Show)
 
 instance Monoid (CGCons a) where
@@ -64,7 +72,8 @@ consGenGen :: [T.Text] -> TypedExpr -> CG Template
 consGenGen vs te = do
   assert (not . null $ vs) $ return ()
   (Scheme vs' t) <- consGen te
-  assert (S.fromList vs `S.intersection` S.fromList vs' == S.empty) $ return ()
+  assert ((S.fromList vs `S.intersection` S.fromList vs') == S.empty)
+    $ return ()
   return $ Scheme (vs ++ vs') t
 
 consGenIns :: [(T.Text, QType)] -> TypedExpr -> CG Template
@@ -74,7 +83,7 @@ consGenIns ins te = do
   (Scheme as' qt) <- consGen te
   assert (not . null $ as') $ return ()
   assert (S.fromList as == S.fromList as') $ return ()
-  tell $ mkWfC fs
+  mkWfC fs
   return $ Scheme [] $ subQType (M.fromList $ zip as $ map tmpltType fs) qt
 
 subQType :: M.Map T.Text QType -> QType -> QType
@@ -84,13 +93,15 @@ subQType s = cata alg
           M.findWithDefault (embed t) (value n) s `strengthenQ` r
         alg t = embed t
 
-mkWfC :: [Template] -> CGCons ()
+mkWfC :: [Template] -> CG ()
 mkWfC tmplts =
   let bindEnv = undefined
-      tmplts' = concat $ map (\x -> F.wfC bindEnv (srOf x) ()) tmplts
-  in  CGCons { wfs = tmplts', subs = [] }
-  where srOf :: Template -> F.SortedReft
-        srOf = undefined
+      srefts = concat $ map splitWs tmplts
+      ws = concat $ map (\sr -> F.wfC bindEnv sr ()) srefts
+  in  tell $ CGCons { wfcs = ws, subcs = [] }
+
+splitWs :: Template -> [F.SortedReft]
+splitWs = undefined
 
 tmpltType :: Template -> QType
 tmpltType (Scheme _ t) = t
