@@ -29,7 +29,6 @@ library
                        Jael.Types.Parser
                        Jael.Types.Prog
                        Jael.Types.Session
-                       Jael.Types.Template
                        Jael.Types.Type
                        Jael.Uniqify
                        Jael.Util

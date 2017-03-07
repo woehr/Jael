@@ -5,14 +5,18 @@ module Jael.ConsGen where
 import           Jael.Prelude
 
 import qualified Control.Comonad.Trans.Cofree as C
+import qualified Data.HashMap.Strict as H
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Language.Fixpoint.Types as F
 
-import           Jael.Constants (intConst, add)
-import           Jael.Types
+--import           Jael.Constants (intConst, add)
+import           Jael.Types hiding (removeAnn)
 import           Jael.Util
+
+type Template = QScheme
+--type Template = QType
 
 data CGEnv = CGEnv
   { cgTmplts :: M.Map T.Text Template
@@ -37,51 +41,59 @@ initState = CGState 0
 
 type CG = RWST CGEnv (CGCons ()) CGState (Except T.Text)
 
---consGen :: TemplateExpr -> CG Template
---
---consGen ((r :< TInsF vs t) :< e) =
---  assert (r == F.trueReft) $ consGenIns vs (t :< e)
---
---consGen ((r :< TGenF vs t) :< e) =
---  assert (r == F.trueReft) $ consGenGen vs (t :< e)
---
+consGen :: TypedExpr -> CG Template
+
+consGen ((r :< TInsF vs t) :< e) =
+  assert (r == F.trueReft) $ consGenIns vs (t :< e)
+
+consGen ((r :< TGenF vs t) :< e) =
+  assert (r == F.trueReft) $ consGenGen vs (t :< e)
+
 --consGen (qt :< EVarF (Token n _)) = do
 --  (Scheme vs t) <- tmpltOf n
 --  return $ Scheme vs $ t `strengthen` F.symbolReft n `strengthenQ` qt
---
+
 --consGen (qt :< EConF (CInt (Token i _))) =
 --  return $ (fmap liftQType $ intConst i) `strengthenT` liftQType qt
 --consGen (qt :< EConF CAdd) =
 --  return $ add `strengthenT` qt
---
+
 --consGen _  = undefined
---
---consGenGen :: [T.Text] -> TypedExpr -> CG Template
---consGenGen as te = do
---  (Scheme as' t) <- consGen te
---  assert (null as') $ return $ Scheme as t
---
---consGenIns :: [(T.Text, QType)] -> TypedExpr -> CG Template
---consGenIns ins te = do
---  let (as, ts) = unzip ins
---  fs <- mapM (freshTmplt . removeAnn) ts
---  (Scheme as' qt) <- consGen te
---  assert (S.fromList as == S.fromList as') $ return ()
---  tell $ mkWfC fs
---  return $ Scheme as $ subTType (M.fromList $ zip as $ map tmpltType fs) qt
---
---subTType :: M.Map T.Text TType -> TType -> TType
---subTType s = cata alg
---  where alg :: C.CofreeF TypeF F.Reft TType -> TType
---        alg t@(r C.:< TVarF n) =
---          M.findWithDefault (embed t) (value n) s `strengthen` r
---        alg t = embed t
+
+consGenGen :: [T.Text] -> TypedExpr -> CG Template
+consGenGen vs te = do
+  assert (not . null $ vs) $ return ()
+  (Scheme vs' t) <- consGen te
+  assert (S.fromList vs `S.intersection` S.fromList vs' == S.empty) $ return ()
+  return $ Scheme (vs ++ vs') t
+
+consGenIns :: [(T.Text, QType)] -> TypedExpr -> CG Template
+consGenIns ins te = do
+  let (as, ts) = unzip ins
+  fs <- mapM (freshTmplt . shape) ts
+  (Scheme as' qt) <- consGen te
+  assert (not . null $ as') $ return ()
+  assert (S.fromList as == S.fromList as') $ return ()
+  tell $ mkWfC fs
+  return $ Scheme [] $ subQType (M.fromList $ zip as $ map tmpltType fs) qt
+
+subQType :: M.Map T.Text QType -> QType -> QType
+subQType s = cata alg
+  where alg :: C.CofreeF TypeF F.Reft QType -> QType
+        alg t@(r C.:< TVarF n) =
+          M.findWithDefault (embed t) (value n) s `strengthenQ` r
+        alg t = embed t
 
 mkWfC :: [Template] -> CGCons ()
-mkWfC tmplt = undefined
+mkWfC tmplts =
+  let bindEnv = undefined
+      tmplts' = concat $ map (\x -> F.wfC bindEnv (srOf x) ()) tmplts
+  in  CGCons { wfs = tmplts', subs = [] }
+  where srOf :: Template -> F.SortedReft
+        srOf = undefined
 
-liftQType :: QType -> TType
-liftQType = fmap TmpltReft
+tmpltType :: Template -> QType
+tmpltType (Scheme _ t) = t
 
 tmpltOf :: T.Text -> CG Template
 tmpltOf n = fromMaybe
@@ -89,16 +101,29 @@ tmpltOf n = fromMaybe
                      \always have what we lookup in our environment")
               <$> (M.lookup n <$> asks cgTmplts)
 
-instTmplt :: Template -> (T.Text, QType) -> Template
-instTmplt = undefined
+--instTmplt :: Template -> (T.Text, QType) -> Template
+--instTmplt = undefined
 
 freshTmplt :: Type -> CG Template
-freshTmplt t = undefined
---  Scheme (S.toList $ ftv t)
+freshTmplt t = do
+  q <- cata alg t
+  return $ Scheme [] q
+  where alg :: TypeF (CG QType) -> CG QType
+        alg (TVarF _) = error "Can we have vars?"
+        alg (TGenF _ _) = error "Can we have gen here?"
+        alg (TInsF _ _) = error "Can we have ins here?"
+        alg (TFunF q1 q2) = liftM2 (:<) freshKVar (liftM2 TFunF q1 q2)
+        alg (TConF n qs) = liftM2 (:<) freshKVar (liftM (TConF n) $ sequence qs)
+        alg (TTupF qs) = liftM2 (:<) freshKVar (liftM TTupF $ sequence qs)
 
---strengthen :: TType -> F.Reft -> TType
---strengthen ((TmpltReft r) :< fq) r' = (TmpltReft $ r <> r') :< fq
---strengthen ((TmpltKVar r i s) :< fq) r' = (TmpltKVar (r <> r') i s) :< fq
+freshKVar :: CG F.Reft
+freshKVar = do
+  k <- gets kIndex
+  modify (\(s@CGState{..}) -> s{kIndex = k+1})
+  return $ F.reft F.vv_ $ F.PKVar (F.intKvar k) (F.Su H.empty)
+
+strengthenQ :: QType -> F.Reft -> QType
+strengthenQ (r :< fq) r' = (r <> r') :< fq
 
 --strengthenTmplt :: Template -> TType -> Template
 --strengthenTmplt (Scheme xs t1) t2 = Scheme xs $ strengthenT t1 t2

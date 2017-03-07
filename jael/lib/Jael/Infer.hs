@@ -51,18 +51,15 @@ hmInf env mTyped =
 doHm :: C.CofreeF ExprF [QType] (HmInfM HMTypedExpr)
      -> HmInfM HMTypedExpr
 
---instantiate :: Scheme -> HmInfM Type
---instantiate (Scheme fvs t) = do
---  fvs' <- mapM (const freshTv) fvs
---  return $ apply (M.fromList $ zip fvs fvs') t
 doHm ([] C.:< EVarF n) = do
   env <- ask
   case M.lookup (value n) env of
     Nothing -> error $ "unbound variable " ++ show (value n)
-    Just (Scheme tvs t) -> do
-      tvs' <- mapM (const freshTv) tvs
-      let s = zip tvs tvs'
-      return $ TIns s t :< EVarF n
+    Just (Scheme tvs t) ->
+      if null tvs
+         then return $ t :< EVarF n
+         else do tvs' <- mapM (const freshTv) tvs
+                 return $ TIns (zip tvs tvs') t :< EVarF n
 
 doHm ([] C.:< EIteF b t e) = do
   te1 <- b
@@ -76,10 +73,10 @@ doHm ([] C.:< EIteF b t e) = do
 doHm ([] C.:< ELetF n e1 e2) = do
   env <- ask
   (t1 :< e1') <- e1
-  let s@(Scheme fvs _) = generalize env t1
+  let (s, t1') = generalize env t1
   te2 <- inEnv (value n, s) e2
   let t2 = getType te2
-  return $ t2 :< ELetF n (TGen fvs t1 :< e1') te2
+  return $ t2 :< ELetF n (t1' :< e1') te2
 
 doHm ([] C.:< EAppF e1 e2) = do
   tv <- freshTv
@@ -139,10 +136,14 @@ inEnv (n, s) m = do
 unify :: Type -> Type -> HmInfM ()
 unify t1 t2 = tell [(t1, t2)]
 
-generalize :: HmEnv -> Type -> TScheme
+generalize :: HmEnv -> Type -> (TScheme, Type)
 generalize env t =
   let fvs = ftv t S.\\ ftv env
-  in Scheme (S.toList fvs) t
+      t' = if null fvs
+              then t
+              else TGen (S.toList fvs) t
+      s = Scheme (S.toList fvs) t'
+  in (s, t')
 
 type Constraint = (Type, Type)
 type Unifier = (TypeSub, [Constraint])

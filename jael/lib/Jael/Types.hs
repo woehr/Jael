@@ -7,5 +7,4 @@ import Jael.Types.Expr     as X
 import Jael.Types.Parser   as X
 import Jael.Types.Prog     as X
 import Jael.Types.Session  as X
-import Jael.Types.Template as X
 import Jael.Types.Type     as X
