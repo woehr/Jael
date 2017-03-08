@@ -150,8 +150,11 @@ matrix:
 
 before_install:
 # Using compiler above sets CC to an invalid value, so unset it
-- export CC=/usr/bin/gcc-4.8
-- export CXX=/usr/bin/g++-4.8
+- unset CC
+- mkdir -p gcc-symlinks
+- ln -s /usr/bin/gcc-4.8 gcc-symlinks/gcc
+- ln -s /usr/bin/g++-4.8 gcc-symlinks/g++
+- export PATH=$PWD/gcc-symlinks:$PATH
 
 # We want to always allow newer versions of packages when building on GHC HEAD
 - CABALARGS=""
