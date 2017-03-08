@@ -98,16 +98,16 @@ matrix:
         sources:
           - ubuntu-toolchain-r-test
           - llvm-toolchain-trusty-3.9
-        packages: [gcc-5 libgmp-dev llvm-3.9-dev]
+        packages: [gcc-4.8 libgmp-dev llvm-3.9-dev]
 
-  - env: BUILD=stack ARGS="--resolver lts-8"
-    compiler: ": #stack 8.0.2"
-    addons:
-      apt:
-        sources:
-          - ubuntu-toolchain-r-test
-          - llvm-toolchain-trusty-3.9
-        packages: [gcc-5 libgmp-dev llvm-3.9-dev]
+#  - env: BUILD=stack ARGS="--resolver lts-8"
+#    compiler: ": #stack 8.0.2"
+#    addons:
+#      apt:
+#        sources:
+#          - ubuntu-toolchain-r-test
+#          - llvm-toolchain-trusty-3.9
+#        packages: [gcc-4.8 libgmp-dev llvm-3.9-dev]
 
   # Nightly builds are allowed to fail
 #  - env: BUILD=stack ARGS="--resolver nightly"
@@ -132,13 +132,13 @@ matrix:
 #    compiler: ": #stack 7.10.3 osx"
 #    os: osx
 
-  - env: BUILD=stack ARGS="--resolver lts-7"
-    compiler: ": #stack 8.0.1 osx"
-    os: osx
+#  - env: BUILD=stack ARGS="--resolver lts-7"
+#    compiler: ": #stack 8.0.1 osx"
+#    os: osx
 
-  - env: BUILD=stack ARGS="--resolver lts-8"
-    compiler: ": #stack 8.0.2 osx"
-    os: osx
+#  - env: BUILD=stack ARGS="--resolver lts-8"
+#    compiler: ": #stack 8.0.2 osx"
+#    os: osx
 
 #  - env: BUILD=stack ARGS="--resolver nightly"
 #    compiler: ": #stack nightly osx"
@@ -150,7 +150,8 @@ matrix:
 
 before_install:
 # Using compiler above sets CC to an invalid value, so unset it
-- unset CC
+- export CC=/usr/bin/gcc-4.8
+- export CXX=/usr/bin/g++-4.8
 
 # We want to always allow newer versions of packages when building on GHC HEAD
 - CABALARGS=""
