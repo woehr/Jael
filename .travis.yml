@@ -102,7 +102,7 @@ matrix:
         sources:
           - ubuntu-toolchain-r-test
           - llvm-toolchain-trusty-3.9
-        packages: [gcc-5 libgmp-dev llvm-3.9-dev]
+        packages: [gcc-5 g++-5 libgmp-dev llvm-3.9-dev]
 
 #  - env: BUILD=stack ARGS="--resolver lts-8"
 #    compiler: ": #stack 8.0.2"
