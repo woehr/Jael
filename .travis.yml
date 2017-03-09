@@ -9,7 +9,7 @@
 # named .travis.yml
 
 # Use new container infrastructure to enable caching
-sudo: true
+sudo: false
 
 # Do not choose a language; we provide our own build tools.
 language: generic
@@ -98,7 +98,7 @@ matrix:
         sources:
           - ubuntu-toolchain-r-test
           - llvm-toolchain-trusty-3.9
-        packages: [gcc-4.8 libgmp-dev llvm-3.9-dev]
+        packages: [gcc-5 libgmp-dev llvm-3.9-dev]
 
 #  - env: BUILD=stack ARGS="--resolver lts-8"
 #    compiler: ": #stack 8.0.2"
@@ -107,7 +107,7 @@ matrix:
 #        sources:
 #          - ubuntu-toolchain-r-test
 #          - llvm-toolchain-trusty-3.9
-#        packages: [gcc-4.8 libgmp-dev llvm-3.9-dev]
+#        packages: [gcc-5 libgmp-dev llvm-3.9-dev]
 
   # Nightly builds are allowed to fail
 #  - env: BUILD=stack ARGS="--resolver nightly"
@@ -155,8 +155,6 @@ before_install:
 #- ln -s /usr/bin/gcc-4.8 gcc-symlinks/gcc
 #- ln -s /usr/bin/g++-4.8 gcc-symlinks/g++
 #- export PATH=$PWD/gcc-symlinks:$PATH
-- sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 20
-- sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 20
 
 # We want to always allow newer versions of packages when building on GHC HEAD
 - CABALARGS=""
@@ -184,8 +182,11 @@ before_install:
   fi
 
 install:
-#- export CC=/usr/bin/gcc-4.8
-#- export CXX=/usr/bin/g++-4.8
+- export CC=/usr/bin/gcc-5
+- export CXX=/usr/bin/g++-5
+- $GCC --version
+- $GXX --version
+- llvm-config --version
 - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
 - if [ -f configure.ac ]; then autoreconf -i; fi
 - |
