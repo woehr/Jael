@@ -9,7 +9,7 @@
 # named .travis.yml
 
 # Use new container infrastructure to enable caching
-sudo: false
+sudo: true
 
 # Do not choose a language; we provide our own build tools.
 language: generic
@@ -155,6 +155,8 @@ before_install:
 #- ln -s /usr/bin/gcc-4.8 gcc-symlinks/gcc
 #- ln -s /usr/bin/g++-4.8 gcc-symlinks/g++
 #- export PATH=$PWD/gcc-symlinks:$PATH
+- sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-4.8 20
+- sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-4.8 20
 
 # We want to always allow newer versions of packages when building on GHC HEAD
 - CABALARGS=""
@@ -182,8 +184,8 @@ before_install:
   fi
 
 install:
-- export CC=/usr/bin/g++-4.8
-- export CXX=/usr/bin/g++-4.8
+#- export CC=/usr/bin/gcc-4.8
+#- export CXX=/usr/bin/g++-4.8
 - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
 - if [ -f configure.ac ]; then autoreconf -i; fi
 - |
