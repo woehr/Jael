@@ -183,7 +183,7 @@ before_install:
 
 install:
 - mkdir -p $HOME/bin
-- ln -s $HOME/llvm-3.9/bin/llvm-config $HOME/bin/llvm-config
+- ln -s /usr/bin/llvm-config-3.9 $HOME/bin/llvm-config
 - export PATH=$HOME/bin:$PATH
 - export CC=/usr/bin/$GCC
 - export CXX=/usr/bin/$GXX
