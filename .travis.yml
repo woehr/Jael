@@ -21,6 +21,10 @@ cache:
   - $HOME/.cabal
   - $HOME/.stack
 
+env:
+  global:
+    - GCC=gcc-5 GXX=g++-5
+
 # The different configurations we want to test. We have BUILD=cabal which uses
 # cabal-install, and BUILD=stack which uses Stack. More documentation on each
 # of those below.
@@ -151,10 +155,6 @@ matrix:
 before_install:
 # Using compiler above sets CC to an invalid value, so unset it
 - unset CC
-#- mkdir -p gcc-symlinks
-#- ln -s /usr/bin/gcc-4.8 gcc-symlinks/gcc
-#- ln -s /usr/bin/g++-4.8 gcc-symlinks/g++
-#- export PATH=$PWD/gcc-symlinks:$PATH
 
 # We want to always allow newer versions of packages when building on GHC HEAD
 - CABALARGS=""
@@ -182,11 +182,16 @@ before_install:
   fi
 
 install:
-- export CC=/usr/bin/gcc-5
-- export CXX=/usr/bin/g++-5
-#- $GCC --version
-#- $GXX --version
+- mkdir -p $HOME/bin
+- ln -s $HOME/llvm-3.9/bin/llvm-config $HOME/bin/llvm-config
+- export PATH=$HOME/bin:$PATH
+- export CC=/usr/bin/$GCC
+- export CXX=/usr/bin/$GXX
+
+- $GCC --version
+- $GXX --version
 - llvm-config --version
+
 - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
 - if [ -f configure.ac ]; then autoreconf -i; fi
 - |
