@@ -4,6 +4,9 @@
 
 module Jael.Uniqify
   ( uniqifyVars
+  , uniqifyReft
+  , UniqifyM
+  , UniqifyS(..)
   )
 where
 
@@ -56,8 +59,8 @@ uniqifyAlg (t C.:< EAppF e1 e2) = do
 
 uniqifyAlg (t C.:< EAbsF x e) = do
   e' <- e
-  t' <- uniqifyReft t
   x' <- subOrFreshPV (value x)
+  t' <- uniqifyReft t
   modify $ \s@(UniqifyS{..}) -> s { varMap = M.delete (value x) varMap }
   return $ t' :< EAbsF x{value = x'} e'
 
@@ -97,11 +100,12 @@ uniqifyReft = cata uniqifyReftAlg
 
 uniqifyReftAlg :: C.CofreeF TypeF F.Reft (UniqifyM QType) -> (UniqifyM QType)
 
-uniqifyReftAlg (r C.:< (TFunF t1 t2)) = do
+uniqifyReftAlg (r C.:< (TFunF b t1 t2)) = do
   t1' <- t1
   t2' <- t2
   r' <- subReft r
-  return $ r' :< TFunF t1' t2'
+  b' <- liftM (fromMaybe $ value b) $ subFor (value b)
+  return $ r' :< TFunF b{value=b'} t1' t2'
 
 uniqifyReftAlg (r C.:< TTupF ts) = do
   ts' <- sequence ts

@@ -183,15 +183,15 @@ instance Jaelify G.Prog (Program [Type] [GlobExpr] [FuncExpr]) where
       splitDef (G.TopDefTypeDef _) _ = undefined
       splitDef (G.TopDefProcDef _) _ = undefined
 
-instance Jaelify G.Type QType where
-  jaelify (G.TypeQType t) = jaelify t
-  jaelify (G.TypeUnqualType t) = F.trueReft :< jaelify t
+instance Jaelify G.BaseType QType where
+  jaelify (G.BaseTypeQType t) = jaelify t
+  jaelify (G.BaseTypeUnqualType t) = F.trueReft :< jaelify t
 
 instance Jaelify G.QType QType where
   jaelify (G.QTypeVar n t p) =
     F.reft (F.symbol . value . jaelify $ n) (parseQPred p) :< jaelify t
   jaelify (G.QTypeNoVar t p) =
-    F.reft (F.vv Nothing) (parseQPred p) :< jaelify t
+    F.reft F.vv_ (parseQPred p) :< jaelify t
 
 instance Jaelify G.UnqualType (TypeF QType) where
   jaelify (G.UnqualTypeTypeA (G.TypeNamed n))  =
@@ -200,13 +200,18 @@ instance Jaelify G.UnqualType (TypeF QType) where
     TConF (jaelify n) $ map unCommaSeparate ts
 
   jaelify (G.UnqualTypeTypeB (G.TypeVar  n))       = TVarF (jaelify n)
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TUnit)) = TUnitF
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBool)) = TBoolF
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TInt))  = TIntF
-  jaelify (G.UnqualTypeTypeB (G.TypeBase G.TBit))  = TBitsF
-  jaelify (G.UnqualTypeTypeB (G.TypeBase (G.TBuffer t))) = TBufferF (jaelify t)
+  jaelify (G.UnqualTypeTypeB (G.TypeBuiltin G.TUnit)) = TUnitF
+  jaelify (G.UnqualTypeTypeB (G.TypeBuiltin G.TBool)) = TBoolF
+  jaelify (G.UnqualTypeTypeB (G.TypeBuiltin G.TInt))  = TIntF
+  jaelify (G.UnqualTypeTypeB (G.TypeBuiltin G.TBit))  = TBitsF
+  jaelify (G.UnqualTypeTypeB (G.TypeBuiltin (G.TBuffer t))) = TBufferF (jaelify t)
   jaelify (G.UnqualTypeTypeB (G.TypeTup t ts)) =
     TTupF $ map unCommaSeparate (t:ts)
+
+instance Jaelify G.Type QType where
+  jaelify (G.TypeBase t) = jaelify t
+  jaelify (G.TypeFun i t1 t2) =
+    F.trueReft :< TFunF (jaelify i) (jaelify t1) (jaelify t2)
 
 unCommaSeparate :: G.CommaSepType -> QType
 unCommaSeparate (G.CommaSepTypeType t) = jaelify t

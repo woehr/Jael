@@ -15,7 +15,6 @@ module Jael.Types.Expr where
 import           Jael.Prelude hiding ((<>), (<+>), (<$>))
 import qualified Control.Comonad.Trans.Cofree as C
 import           Data.Eq.Deriving (deriveEq1)
-import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Language.Fixpoint.Types as F
@@ -273,8 +272,10 @@ addReftsTo (r :< (TVarF _))  (r' :< t)  = return $ (r `mappend` r') :< t
 addReftsTo (_ :< t1) (_ :< t2@(TVarF _)) = error $
   "Can't add quals from " ++ show t1 ++ " to " ++ show t2
 
-addReftsTo (r :< TFunF t1 t2) (r' :< TFunF t1' t2') = liftA (r `mappend` r' :<) $
-  liftA2 TFunF (t1 `addReftsTo` t1') (t2 `addReftsTo` t2')
+addReftsTo (r :< TFunF b1 t1 t2) (r' :< TFunF b2 t1' t2') =
+  assert (b1 == b2)
+  liftA (r `mappend` r' :<) $
+  liftA2 (TFunF b1) (t1 `addReftsTo` t1') (t2 `addReftsTo` t2')
 
 addReftsTo (r :< TTupF ts) (r' :< TTupF ts') =
   liftA (r `mappend` r' :<) $ liftA TTupF $ ts `addReftsList` ts'

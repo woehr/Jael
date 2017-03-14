@@ -27,7 +27,7 @@ import           Jael.Pretty
 import           Jael.Types.Ann
 import           Jael.Util
 
-data TypeF a = TFunF a a
+data TypeF a = TFunF Ident a a
              | TVarF Ident
              | TTupF [a]
              | TConF Ident [a]
@@ -76,8 +76,8 @@ pattern TBufferF a = TConF "Buffer" [a]
 pattern TBuffer :: Type -> Type
 pattern TBuffer a = Fix (TConF "Buffer" [a])
 
-pattern TFun :: Type -> Type -> Type
-pattern TFun a b = Fix (TFunF a b)
+pattern TFun :: Ident -> Type -> Type -> Type
+pattern TFun a b c = Fix (TFunF a b c)
 
 pattern TVar :: Ident -> Type
 pattern TVar a = Fix (TVarF a)
@@ -108,7 +108,8 @@ ppTypeAlg (TConF (Token n _) ts) =
 
 ppTypeAlg (TVarF (Token n _)) = textStrict n
 ppTypeAlg (TTupF ts) = tupled ts
-ppTypeAlg (TFunF t1 t2) = t1 <+> text "->" <+> t2
+ppTypeAlg (TFunF b t1 t2) =
+  textStrict (value b) <+> colon <+> t1 <+> text "->" <+> t2
 
 instance Pretty QType where
   pretty = cata alg
@@ -134,7 +135,7 @@ shape :: QType -> Type
 shape = removeAnn
 
 arityOf :: Type -> Integer
-arityOf (Fix (TFunF _ x)) = 1 + arityOf x
+arityOf (Fix (TFunF _ _ x)) = 1 + arityOf x
 arityOf _ = 0
 
 $(deriveEq1   ''TypeF)

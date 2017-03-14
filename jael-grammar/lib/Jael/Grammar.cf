@@ -54,7 +54,7 @@ separator nonempty CommaSepQExpr "," ;
 
 TBit.       BType ::= "Bits" ;
 TBool.      BType ::= "Bool" ;
-TInt.       BType ::= "Int"    ;
+TInt.       BType ::= "Int" ;
 TUnit.      BType ::= "Void" ;
 TBuffer.    BType ::= "Buffer" "(" Type ")" ;
 
@@ -68,12 +68,17 @@ separator nonempty CommaSepType "," ;
 -- TypeNamed would introduce a shift/reduce conflict.
 TypeNamed.       TypeA ::= UIdent ;
 TypeNamedParams. TypeB ::= UIdent "(" [CommaSepType] ")" ;
-TypeBase.        TypeB ::= BType ;
+TypeBuiltin.     TypeB ::= BType ;
 TypeVar.         TypeB ::= LIdent ;
 TypeTup.         TypeB ::= "(" CommaSepType "," [CommaSepType] ")" ;
 
 rules UnqualType ::= TypeA | TypeB ;
-rules Type ::= QType | UnqualType ;
+rules BaseType   ::= QType | UnqualType ;
+
+TypeFun.  Type1 ::= LIdent ":" Type2 "->" Type ;
+TypeBase. Type2 ::= BaseType ;
+
+coercions Type 2 ;
 
 -- Session Types
 

@@ -23,6 +23,7 @@ library
                        Jael.Infer
                        Jael.Prelude
                        Jael.Pretty
+                       Jael.Quotes
                        Jael.Types
                        Jael.Types.Ann
                        Jael.Types.Expr
@@ -47,6 +48,7 @@ library
                        mtl-prelude,
                        placeholders,
                        recursion-schemes >= 5.0.1,
+                       template-haskell,
                        text,
                        unordered-containers,
                        wl-pprint-text >= 1.1.1.0
@@ -79,6 +81,7 @@ test-suite test-jael
   main-is:             Test.hs
 
   other-modules:       Jael.Test.Util
+                       Jael.Classes.TIOpsSpec
                        Jael.ConsGenSpec
                        Jael.InferSpec
                        Jael.UniqifySpec
