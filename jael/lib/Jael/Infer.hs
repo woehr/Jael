@@ -10,6 +10,7 @@ import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 
+import qualified Jael.Constants as JC
 import           Jael.Classes
 import           Jael.Types
 import           Jael.Util
@@ -82,13 +83,13 @@ doHm ([] C.:< EAppF e1 e2) = do
   tv <- freshTv
   (te1, te2) <- liftM2 (,) e1 e2
   let (t1, t2) = (getType te1, getType te2)
-  unify t1 (TFun t2 tv)
+  unify t1 (TFun (error "unexpected") t2 tv)
   return $ tv :< EAppF te1 te2
 
 doHm ([] C.:< EAbsF n@(Token v _) e) = do
   tv <- freshTv
   te <- inEnv (v, Scheme [] tv) e
-  return $ (TFun tv $ getType te) :< EAbsF n te
+  return $ (TFun n tv $ getType te) :< EAbsF n te
 
 doHm ([] C.:< ETupF es) = do
   tes <- sequence es
@@ -104,21 +105,21 @@ doHm ([] C.:< EConF c) = do
             CUnit   -> TUnit
             CBool _ -> TBool
             CInt _  -> TInt
-            CAdd    -> int2int2int
-            CSub    -> int2int2int
-            CMul    -> int2int2int
-            CDiv    -> int2int2int
-            CMod    -> int2int2int
-            COr     -> bool2bool2bool
-            CAnd    -> bool2bool2bool
-            CEq     -> bool2bool2bool
-            CNe     -> bool2bool2bool
-            CGe     -> bool2bool2bool
-            CLe     -> bool2bool2bool
-            CGt     -> bool2bool2bool
-            CLt     -> bool2bool2bool
-            CBitCat -> TFun TBits TBits
-            CNot    -> bool2bool
+            CAdd    -> shape JC.add
+            CSub    -> shape undefined
+            CMul    -> shape undefined
+            CDiv    -> shape undefined
+            CMod    -> shape undefined
+            COr     -> shape undefined
+            CAnd    -> shape undefined
+            CEq     -> shape undefined
+            CNe     -> shape undefined
+            CGe     -> shape undefined
+            CLe     -> shape undefined
+            CGt     -> shape undefined
+            CLt     -> shape undefined
+            CBitCat -> shape undefined
+            CNot    -> shape undefined
   unify tv t
   return $ tv :< EConF c
 
@@ -163,7 +164,7 @@ unifier (TIns s t1) t2 = unifier (apply (M.fromList s) t1) t2
 unifier t1 (TIns s t2) = unifier t1 (apply (M.fromList s) t2)
 unifier (TGen _ t1) t2 = unifier t1 t2
 unifier t1 (TGen _ t2) = unifier t1 t2
-unifier (TFun l r) (TFun l' r') = unifyMany [l, r] [l', r']
+unifier (TFun _ l r) (TFun _ l' r') = unifyMany [l, r] [l', r']
 unifier (TVar n) t = bind n t
 unifier t (TVar n) = bind n t
 unifier (TTup ts) (TTup ts') = unifyMany ts ts'
@@ -193,15 +194,6 @@ unifyMany _ _ = error "bleh"
 
 emptyUnifier :: Unifier
 emptyUnifier = (nullSub, [])
-
-int2int2int :: Type
-int2int2int = TFun TInt (TFun TInt TInt)
-
-bool2bool :: Type
-bool2bool = TFun TBool TBool
-
-bool2bool2bool :: Type
-bool2bool2bool = TFun TBool bool2bool
 
 freshTv :: HmInfM Type
 freshTv = do

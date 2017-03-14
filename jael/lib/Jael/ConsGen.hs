@@ -16,8 +16,8 @@ import qualified Data.Text as T
 import qualified Language.Fixpoint.Types as F
 
 import           Jael.Classes
---import           Jael.Constants (intConst, add)
-import           Jael.Types hiding (removeAnn)
+import qualified Jael.Constants as JC
+import           Jael.Types
 import           Jael.Util
 
 type Template = QType
@@ -43,7 +43,7 @@ instance Sortable Template where
           mkSort (_ C.:< TVarF (Token n _)) = F.FVar $ M.findWithDefault errMsg n tvMap
           mkSort (_ C.:< TGenF _ s) = s
           mkSort (_ C.:< TInsF _ s) = s
-          mkSort (_ C.:< TFunF s1 s2) = F.FFunc s1 s2
+          mkSort (_ C.:< TFunF _ s1 s2) = F.FFunc s1 s2
 
           mkSort (_ C.:< TTupF ss)    =
             F.fAppTC (F.symbolFTycon . F.dummyLoc . F.symbol $
@@ -60,6 +60,7 @@ instance Sortable Template where
             assert (r == F.trueReft) subQType (M.fromList su) q
           applyIns q = embed q
 
+          tvMap :: M.Map T.Text Int
           tvMap = M.fromList $ zip (S.toList $ ftv t) [0..]
 
           errMsg = error "Unbound type variable"
@@ -119,10 +120,23 @@ consGen (qt :< EVarF (Token n _)) = do
   t <- tmpltOf n
   return $ t `strengthen` F.symbolReft n `strengthen` qt
 
+consGen (qt :< EAbsF n e) = do
+  tmplt <- freshTmplt (shape qt)
+  mkWfC [tmplt]
+  case tmplt of
+    (_ :< TFunF b t1 t2) -> do
+      assert (n == b) return ()
+      let absBind = (F.symbol b, toSReft t1)
+      tmplt' <- inEnv absBind (consGen e)
+      inEnv absBind $ mkSubC [(tmplt', t2)]
+      return tmplt
+    _ -> error "Abstraction doesn't have function type."
+
 --consGen (qt :< EConF (CInt (Token i _))) =
---  return $ (fmap liftQType $ intConst i) `strengthenT` liftQType qt
---consGen (qt :< EConF CAdd) =
---  return $ add `strengthenT` qt
+--  return $ intConst i `strengthen` qt
+
+consGen (qt :< EConF CAdd) =
+  return $ JC.add `strengthen` qt
 
 consGen _  = undefined
 
@@ -151,13 +165,44 @@ subQType s = cata alg
 
 mkWfC :: [Template] -> CG ()
 mkWfC tmplts = do
-  bindEnv <- asks cgLBinds
-  let srefts = concat $ map splitWs tmplts
-  let ws = concat $ map (\sr -> F.wfC bindEnv sr ()) srefts
+  ws <- liftM concat $ mapM splitWs tmplts
+--  let ws = concat $ map (\sr -> F.wfC bindEnv sr ()) srefts
   tell $ CGCons { wfcs = ws, subcs = [] }
 
-splitWs :: Template -> [F.SortedReft]
-splitWs = undefined
+splitWs :: Template -> CG [F.WfC ()]
+splitWs = para alg
+  where alg :: C.CofreeF TypeF F.Reft (Template, CG [F.WfC ()]) -> (CG [F.WfC ()])
+
+        alg t@(_ C.:< TFunF b (t1, w1) (_, w2)) = do
+          w0 <- bsplitW t
+          w1' <- w1
+          w2' <- inEnv (F.symbol b, toSReft t1) w2
+          return $ w0 ++ w1' ++ w2'
+
+        alg t@(_ C.:< TTupF ts) = do
+          w0 <- bsplitW t
+          ws <- mapM snd ts
+          return $ w0 ++ concat ws
+
+        alg t@(_ C.:< TConF _ ts) = do
+          w0 <- bsplitW t
+          ws <- mapM snd ts
+          return $ w0 ++ concat ws
+
+        alg (_ C.:< TInsF _ _) = error "Shouldn't happen because Ins's get applied"
+
+        alg (_ C.:< TGenF _ (_, x)) = x
+
+        alg t@(_ C.:< TVarF _) = bsplitW t
+
+bsplitW :: C.CofreeF TypeF F.Reft (Template, CG [F.WfC ()]) -> (CG [F.WfC ()])
+bsplitW (r C.:< t) = do
+  let sr = toSReft (r :< fmap fst t)
+  bindEnv <- asks cgLBinds
+  return $ F.wfC bindEnv sr ()
+
+mkSubC :: [(Template, Template)] -> CG ()
+mkSubC cs = undefined
 
 tmpltOf :: T.Text -> CG Template
 tmpltOf n = fromMaybe
@@ -171,9 +216,9 @@ freshTmplt t = cata alg t
         alg (TVarF _) = error "Can we have vars?"
         alg (TGenF _ _) = error "Can we have gen here?"
         alg (TInsF _ _) = error "Can we have ins here?"
-        alg (TFunF q1 q2) = liftM2 (:<) freshKVar (liftM2 TFunF q1 q2)
-        alg (TConF n qs)  = liftM2 (:<) freshKVar (liftM (TConF n) $ sequence qs)
-        alg (TTupF qs)    = liftM2 (:<) freshKVar (liftM  TTupF    $ sequence qs)
+        alg (TFunF b q1 q2) = liftM2 (:<) freshKVar (liftM2 (TFunF b) q1 q2)
+        alg (TConF n qs)    = liftM2 (:<) freshKVar (liftM (TConF n) $ sequence qs)
+        alg (TTupF qs)      = liftM2 (:<) freshKVar (liftM  TTupF    $ sequence qs)
 
 freshKVar :: CG F.Reft
 freshKVar = do

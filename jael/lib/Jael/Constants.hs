@@ -10,11 +10,6 @@ where
 import Jael.Types
 import Jael.Quotes
 
---import qualified Language.Fixpoint.Types as F
-
---var :: T.Text -> F.Symbol
---var = F.symbol
-
 --intConst :: Integer -> QScheme
 --intConst x = Scheme [] $ "v" .: TIntF .| var "v" .= x
 

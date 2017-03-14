@@ -19,7 +19,7 @@ class TIOps a where
 instance TIOps Type where
   ftv = cata alg
     where alg (TVarF v)     = S.singleton (value v)
-          alg (TFunF t1 t2) = t1 `S.union` t2
+          alg (TFunF _ t1 t2) = t1 `S.union` t2
           alg (TTupF ts)    = S.unions ts
           alg (TConF _ ts)  = S.unions ts
           alg (TInsF ss t)  = S.unions $ (t S.\\ S.fromList (map fst ss)) : map snd ss
@@ -30,7 +30,7 @@ instance TIOps Type where
                            apply (s `M.difference` M.fromList ss) t
   apply s (TGen _ t)   = let t' = apply s t in TGen (S.toList $ ftv t') t'
   -- Uninteresting cases
-  apply s (TFun t1 t2) = TFun (apply s t1) (apply s t2)
+  apply s (TFun b t1 t2) = TFun b (apply s t1) (apply s t2)
   apply s (TTup ts)    = TTup $ map (apply s) ts
   apply s (TCon n ts)  = TCon n $ map (apply s) ts
   apply _ _ = error "Why does ghc complain about unmatched patterns?"

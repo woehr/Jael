@@ -21,6 +21,7 @@ import Control.Comonad.Cofree
 --import qualified Data.Map as M
 --import qualified Data.Set as S
 import qualified Data.Text as T
+import qualified Language.Fixpoint.Types as F
 
 iterCofree :: Functor f => (a -> f b -> b) -> Cofree f a -> b
 iterCofree f cfa = uncofree f cfa
@@ -34,6 +35,9 @@ data Token a = Token { value :: a, lineCol :: (Int, Int) }
 
 instance IsString Ident where
   fromString s = Token (T.pack s) dummyLoc
+
+instance F.Symbolic Ident where
+  symbol (Token n _) = F.symbol n
 
 type Ident = Token T.Text
 type IntConst = Token Integer
