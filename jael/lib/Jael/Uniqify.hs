@@ -1,12 +1,11 @@
 {-# Language MultiWayIf #-}
 {-# Language NoImplicitPrelude #-}
 {-# Language RecordWildCards #-}
+{-# Language TupleSections #-}
 
 module Jael.Uniqify
-  ( uniqifyVars
-  , uniqifyReft
-  , UniqifyM
-  , UniqifyS(..)
+  ( uniqifyExpr
+  , uniqifyQType
   )
 where
 
@@ -21,105 +20,113 @@ import           Jael.Types
 import           Jael.Util
 
 -- Make program variables and refinement variables unique. Values for each
--- are drawn from two distinct sets of names so program variables can be
+-- are drawn from distinct sets of names so program variables can be
 -- substituted into refinements without clashing.
 
 data UniqifyS = UniqifyS
-  { pvPool :: [T.Text] -- program var pool
-  , vvPool :: [T.Text] -- value var pool
-  , varMap :: M.Map T.Text T.Text
+  { pvPool :: [T.Text]
+  , vvPool :: [T.Text]
   , subMap :: M.Map T.Text T.Text
   }
 
-initState :: UniqifyS
-initState = UniqifyS
-  { pvPool = concat [map (T.pack . take x . repeat) ['a'..'z'] | x <- [1..]]
-  , vvPool = [T.pack $ "v" ++ show x | x <- [(0::Integer)..]]
-  , varMap = M.empty
+initState :: [T.Text] -> [T.Text] -> UniqifyS
+initState pv vv = UniqifyS
+  { pvPool = pv
+  , vvPool = vv
   , subMap = M.empty
   }
 
-type UniqifyM = State UniqifyS
+data UniqifyR = UniqifyR
+  { binds :: M.Map T.Text T.Text
+  }
 
-uniqifyVars :: TypedExpr -> (M.Map T.Text T.Text, TypedExpr)
-uniqifyVars te = let
-  (v, s) = runState (doUnique te) initState
+initEnv :: M.Map T.Text T.Text -> UniqifyR
+initEnv = UniqifyR
+
+type UniqifyM = ReaderT UniqifyR (State UniqifyS)
+
+uniqifyExpr :: TypedExpr -> (M.Map T.Text T.Text, TypedExpr)
+uniqifyExpr te = let
+  pv = concat [map (T.pack . take x . repeat) ['a'..'z'] | x <- [1..]]
+  (v, s) = flip runState (initState pv $ error "not used")
+         $ flip runReaderT (initEnv M.empty)
+         $ cata uniqifyExprAlg te
   in (subMap s, v)
 
-doUnique :: TypedExpr -> UniqifyM TypedExpr
-doUnique = cata uniqifyAlg
+uniqifyQType :: QType -> M.Map T.Text T.Text -> (M.Map T.Text T.Text, QType)
+uniqifyQType t m = let
+  pv = [T.pack $ "b" ++ show x | x <- [(0::Integer)..]]
+  vv = [T.pack $ "v" ++ show x | x <- [(0::Integer)..]]
+  (v, s) = flip runState (initState pv vv)
+         $ flip runReaderT (initEnv m)
+         $ cata uniqifyQTypeAlg t
+  in (subMap s, v)
 
-uniqifyAlg :: C.CofreeF ExprF QType (UniqifyM TypedExpr) -> (UniqifyM TypedExpr)
+uniqifyExprAlg :: C.CofreeF ExprF QType (UniqifyM TypedExpr)
+                                     -> (UniqifyM TypedExpr)
 
-uniqifyAlg (t C.:< EAppF e1 e2) = do
+uniqifyExprAlg (t C.:< EAppF e1 e2) = do
   e1' <- e1
   e2' <- e2
-  t' <- uniqifyReft t
+  t' <- uniqifyQType' t
   return $ t' :< EAppF e1' e2'
 
-uniqifyAlg (t C.:< EAbsF x e) = do
-  e' <- e
-  x' <- subOrFreshPV (value x)
-  t' <- uniqifyReft t
-  modify $ \s@(UniqifyS{..}) -> s { varMap = M.delete (value x) varMap }
+uniqifyExprAlg (t C.:< EAbsF x e) = do
+  t' <- uniqifyQType' t
+  (x', e') <- inEnv (value x) e
   return $ t' :< EAbsF x{value = x'} e'
 
-uniqifyAlg (t C.:< ELetF x e1 e2) = do
-  e2' <- e2
-  x' <- subOrFreshPV (value x)
-  modify $ \s@(UniqifyS{..}) -> s { varMap = M.delete (value x) varMap }
+uniqifyExprAlg (t C.:< ELetF x e1 e2) = do
+  t' <- uniqifyQType' t
+  (x', e2') <- inEnv (value x) e2
   e1' <- e1
-  t' <- uniqifyReft t
   return $ t' :< ELetF x{value = x'} e1' e2'
 
-
-uniqifyAlg (t C.:< EIteF b e1 e2) = do
+uniqifyExprAlg (t C.:< EIteF b e1 e2) = do
   e1' <- e1
   e2' <- e2
   b' <- b
-  t' <- uniqifyReft t
+  t' <- uniqifyQType' t
   return $ t' :< EIteF b' e1' e2'
 
-uniqifyAlg (t C.:< ETupF es) = do
+uniqifyExprAlg (t C.:< ETupF es) = do
   es' <- sequence es
-  t' <- uniqifyReft t
+  t' <- uniqifyQType' t
   return $ t' :< ETupF es'
 
-uniqifyAlg (t C.:< EVarF v) = do
-  v' <- subVar v
-  t' <- uniqifyReft t
-  return $ t' :< EVarF v'
+uniqifyExprAlg (t C.:< EVarF v) = do
+  -- Vars must be bound so this must succeed
+  m <- asks binds
+  let v' = M.findWithDefault (error $ "Unboud var: " ++ show v) (value v) m
+  t' <- uniqifyQType' t
+  return $ t' :< EVarF v{value=v'}
 
-uniqifyAlg (t C.:< EConF c) = do
-  t' <- uniqifyReft t
+uniqifyExprAlg (t C.:< EConF c) = do
+  t' <- uniqifyQType' t
   return $ t' :< EConF c
 
-uniqifyReft :: QType -> UniqifyM QType
+uniqifyQTypeAlg :: C.CofreeF TypeF F.Reft (UniqifyM QType)
+                                       -> (UniqifyM QType)
 
-uniqifyReft = cata uniqifyReftAlg
+uniqifyQTypeAlg (r C.:< (TFunF b t1 t2)) = do
+    r' <- subReft r
+    t1' <- t1
+    (b', t2') <- inEnv (value b) t2
+    return $ r' :< TFunF b{value=b'} t1' t2'
 
-uniqifyReftAlg :: C.CofreeF TypeF F.Reft (UniqifyM QType) -> (UniqifyM QType)
-
-uniqifyReftAlg (r C.:< (TFunF b t1 t2)) = do
-  t1' <- t1
-  t2' <- t2
-  r' <- subReft r
-  b' <- liftM (fromMaybe $ value b) $ subFor (value b)
-  return $ r' :< TFunF b{value=b'} t1' t2'
-
-uniqifyReftAlg (r C.:< TTupF ts) = do
+uniqifyQTypeAlg (r C.:< TTupF ts) = do
   ts' <- sequence ts
   r' <- subReft r
   return $ r' :< TTupF ts'
 
-uniqifyReftAlg (r C.:< TConF n ts) = do
+uniqifyQTypeAlg (r C.:< TConF n ts) = do
   ts' <- sequence ts
   r' <- subReft r
   return $ r' :< TConF n ts'
 
-uniqifyReftAlg (r C.:< TVarF x) = liftM (:< TVarF x) (subReft r)
+uniqifyQTypeAlg (r C.:< TVarF x) = liftM (:< TVarF x) (subReft r)
 
-uniqifyReftAlg (r C.:< TInsF vsts t) = do
+uniqifyQTypeAlg (r C.:< TInsF vsts t) = do
   let (vs, ts) = unzip vsts
   ts' <- sequence ts
   let vsts' = zip vs ts'
@@ -127,10 +134,23 @@ uniqifyReftAlg (r C.:< TInsF vsts t) = do
   r' <- subReft r
   return $ r' :< TInsF vsts' t'
 
-uniqifyReftAlg (r C.:< TGenF vs t) = do
+uniqifyQTypeAlg (r C.:< TGenF vs t) = do
   t' <- t
   r' <- subReft r
   return $ r' :< TGenF vs t'
+
+inEnv :: T.Text -> UniqifyM a -> UniqifyM (T.Text, a)
+inEnv v x = do
+  v' <- nextPV
+  modify (\s@(UniqifyS{..}) -> s{subMap = M.insert v' v subMap})
+  x' <- local (\(r@UniqifyR{..}) -> r{binds=M.insert v v' (M.delete v binds)}) x
+  return (v', x')
+
+uniqifyQType' :: QType -> UniqifyM QType
+uniqifyQType' t = do
+  (m, t') <- liftM (uniqifyQType t) $ asks binds
+  modify (\(s@UniqifyS{..}) -> s{ subMap = subMap `M.union` m})
+  return t'
 
 subReft :: F.Reft -> UniqifyM F.Reft
 subReft r@(F.Reft (v, e))
@@ -139,13 +159,23 @@ subReft r@(F.Reft (v, e))
       return r
   | otherwise = do
       let vs = S.toList $ F.reftFreeVars r
-      vs' <- mapM (subOrFreshPV . F.symbolText) vs
-      v' <- liftM F.symbol nextVV
+      vs' <- doLookups $ map F.symbolText vs
+      v'  <- liftM F.symbol nextVV
       let su = F.mkSubst $ (v, F.eVar v'):(zip vs $ map F.eVar vs')
       return $ F.Reft (v', F.subst su e)
 
-subVar :: Ident -> UniqifyM Ident
-subVar (Token n p) = subOrFreshPV n >>= return . flip Token p
+doLookups :: [T.Text] -> UniqifyM [T.Text]
+doLookups = mapM f
+  where f v = do
+          m <- asks binds
+          case M.lookup v m of
+            Just v' -> return v'
+            Nothing -> do
+              next <- nextPV
+              modify (\(s@UniqifyS{..}) ->
+                        s{subMap = M.insert next v subMap}
+                     )
+              return next
 
 nextVV :: UniqifyM T.Text
 nextVV = do
@@ -158,17 +188,3 @@ nextPV = do
   (next:pool') <- gets pvPool
   modify (\s@UniqifyS{..} -> s{pvPool=pool'})
   return next
-
-subFor :: T.Text -> UniqifyM (Maybe T.Text)
-subFor v = liftM (M.lookup v) $ gets varMap
-
-subOrFreshPV :: T.Text -> UniqifyM T.Text
-subOrFreshPV v = do
-  ms <- subFor v
-  case ms of
-    Just s -> return s
-    Nothing -> do
-      n <- nextPV
-      modify (\s@(UniqifyS{..}) -> s{varMap = M.insert v n varMap})
-      modify (\s@(UniqifyS{..}) -> s{subMap = M.insert n v subMap})
-      return n

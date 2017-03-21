@@ -17,6 +17,15 @@ spec :: Spec
 spec = do
   describe "Liquid constraint generation" $ do
     it "generates constrains" $ do
+      --let p = "\\(a) { f=\\(b:{v:Int|v>0}){b}; f(~1) }" :: T.Text
+      let p = "\\(a) { f=\\(b){ b:{v:Int|v>0} }; f(~1) }" :: T.Text
+      let te = toTE p
+      let (tmplt, be, cons) = runConsGen te
+      traceM . show $ tmplt
+      traceM . show . F.toFix $ be
+      traceM . show . F.toFix . wfcs $ cons
+      traceM . show . F.toFix . subcs $ cons
+      solve te
       pending
 
   describe "QType -> F.Sort" $ do

@@ -43,9 +43,10 @@ QExprSub. QExpr1 ::= QExpr1 "-" QExpr2 ;
 
 QExprMul. QExpr2 ::= AnyInt "*" QExpr3 ;
 
-QExprInt. QExpr3 ::= AnyInt ;
-QExprVar. QExpr3 ::= LIdent ;
-QExprApp. QExpr3 ::= LIdent "(" [CommaSepQExpr] ")" ;
+QExprInt.  QExpr3 ::= AnyInt ;
+QExprVar.  QExpr3 ::= LIdent ;
+QExprApp.  QExpr3 ::= LIdent "(" [CommaSepQExpr] ")" ;
+QExprVoid. QExpr3 ::= "void" ;
 
 coercions QExpr 3 ;
 

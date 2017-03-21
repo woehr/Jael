@@ -1,6 +1,7 @@
 {-# Language FlexibleInstances #-}
 {-# Language NoImplicitPrelude #-}
 {-# Language TypeSynonymInstances #-}
+{-# Language OverloadedStrings #-}
 
 module Jael.Infer where
 
@@ -83,7 +84,7 @@ doHm ([] C.:< EAppF e1 e2) = do
   tv <- freshTv
   (te1, te2) <- liftM2 (,) e1 e2
   let (t1, t2) = (getType te1, getType te2)
-  unify t1 (TFun (error "unexpected") t2 tv)
+  unify t1 (TFun ("nil") t2 tv)
   return $ tv :< EAppF te1 te2
 
 doHm ([] C.:< EAbsF n@(Token v _) e) = do

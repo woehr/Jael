@@ -8,6 +8,7 @@ No error checking.
 {-# Language MultiParamTypeClasses #-}
 {-# Language NoImplicitPrelude #-}
 {-# Language RecordWildCards #-}
+{-# Language OverloadedStrings #-}
 
 module Jael.Types.Parser where
 
@@ -238,6 +239,9 @@ parseQExpr (G.QExprApp n (a:as)) =
     (F.EApp (F.eVar . value . jaelify $ n) (parseCommaSepQExpr a))
     (map parseCommaSepQExpr as)
 parseQExpr (G.QExprApp _ _) = error "[G.CommaSepQExpr] should always have an element"
+
+parseQExpr (G.QExprVoid) = F.ECon
+  (F.L "void" $ F.FTC . F.symbolFTycon . F.dummyLoc $ "Void")
 
 parseCommaSepQExpr :: G.CommaSepQExpr -> F.Expr
 parseCommaSepQExpr (G.CommaSepQExprQExpr e) = parseQExpr e

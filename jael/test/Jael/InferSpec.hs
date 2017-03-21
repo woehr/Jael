@@ -50,13 +50,13 @@ spec = do
               \{ id = \\(y) {y}\
               \; id(x)+id(1)\
               \}" :: T.Text
-      let (pt :< (EAbsF _ (let_t :< ELetF _ (id_t :< _) (in_t :< _)))) = toTE p
+      let (pt :< (EAbsF x (let_t :< ELetF _ (id_t :< _) (in_t :< _)))) = toTE p
       -- id_t should be a->a
-      let (TGen [v] (TFun (TVar id_t1) (TVar id_t2))) = shape id_t
+      let (TGen [v] (TFun _ (TVar id_t1) (TVar id_t2))) = shape id_t
 --      traceM (show . P.pretty $ pt)
 --      traceM (show . P.pretty $ id_t)
 --      traceM (show . P.pretty $ in_t)
-      shape pt `shouldBe` TFun TInt TInt
+      shape pt `shouldBe` TFun x TInt TInt
       id_t1 `shouldBe` id_t2
       value id_t1 `shouldBe` v
       shape let_t `shouldBe` shape in_t

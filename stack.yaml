@@ -8,6 +8,7 @@ nix:
   - haskellPackages.happy
   - llvm_39
   - ncurses
+  - z3
   - zlib
 extra-package-dbs: []
 packages:
