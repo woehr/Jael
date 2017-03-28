@@ -6,11 +6,11 @@ module Jael.Types.ExprSpec (spec) where
 import           Jael.Prelude
 import           Test.Hspec
 
-import qualified Data.Text as T
+--import qualified Data.Text as T
 
-import qualified Jael.Grammar as G
-import           Jael.Infer
-import           Jael.Types
+--import qualified Jael.Grammar as G
+--import           Jael.Infer
+--import           Jael.Types
 
 spec :: Spec
 spec = do

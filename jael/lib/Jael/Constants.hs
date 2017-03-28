@@ -13,13 +13,13 @@ import Jael.Quotes
 
 import qualified Language.Fixpoint.Types as F
 
-unit :: QType
+unit :: QScheme
 unit = [qtype| {vv:Void | vv == void } |]
 
-intConst :: Integer -> QType
+intConst :: Integer -> QScheme
 intConst x =
   let _fpInt = F.expr x
   in  [qtype| { v:Int | v == h__fpInt } |]
 
-add :: QType
+add :: QScheme
 add = [qtype| x:Int -> y:Int -> {vv:Int | vv == x + y} |]

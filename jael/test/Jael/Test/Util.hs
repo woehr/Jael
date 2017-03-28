@@ -26,4 +26,10 @@ toTE p =
       hme = toHM p
   in  case reQual mte hme of
         Left t -> error (T.unpack t)
-        Right x -> fmap (fmap F.simplify) x
+        Right x -> fmap (fmap (fmap F.simplify)) x
+
+toQT :: T.Text -> QType
+toQT t =
+  case runParser G.pType t of
+        Left e -> error (T.unpack e)
+        Right x -> jaelify x

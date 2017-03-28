@@ -106,8 +106,6 @@ SessVarDual. Session ::= "dual" UIdent ;
 rules LetElem ::= LIdent "=" Expr ;
 terminator   LetElem ";" ;
 
-rules LetExpr ::= [LetElem] Expr ;
-
 rules CommaSepExpr ::= Expr ;
 separator nonempty CommaSepExpr "," ;
 
@@ -151,7 +149,7 @@ ELogNot.    Expr12 ::= "!" Expr12 ;
 
 ----- End operators -----
 
-EIf.           Expr14 ::= "if" Expr "{" LetExpr "}" "else" "{" LetExpr "}" ;
+EIf.           Expr14 ::= "if" Expr "then" Expr "else" Expr ;
 
 rules MaybeType ::= ":" Type ;
 [].    [MaybeType] ::= ;
@@ -160,7 +158,9 @@ rules MaybeType ::= ":" Type ;
 rules LambdaArg ::= LIdent [MaybeType] ;
 separator LambdaArg "," ;
 
-EAbs.          Expr14 ::= "\\" "(" [LambdaArg] ")" [MaybeType] "{" LetExpr "}" ;
+EAbs.          Expr14 ::= "\\" "(" [LambdaArg] ")" [MaybeType] Expr ;
+
+ELet.          Expr14 ::= "{" [LetElem] Expr "}" ;
 
 ETrue.         Expr14 ::= "true" ;
 EFalse.        Expr14 ::= "false" ;
@@ -245,9 +245,9 @@ rules  Global  ::= LIdent "=" Expr ";" ;
 
 -- func myFunction(x: a, y: Something, z: {Int | z >= 0}) -> Int { ... }
 -- func myFunction(x: a, y: Something, z: {Int | z >= 0}) -> {w : Int | w <= 0} { ... }
-rules  Func    ::= "func" LIdent "(" [FuncArg] ")" ":" Type "{" LetExpr "}" ;
---FuncRetType.  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type "{" LetExpr "}" ;
---FuncRetQType. Func    ::= "func" LIdent "(" [FuncArg] ")" "->" QTypeVar "{" LetExpr "}" ;
+rules  Func    ::= "func" LIdent "(" [FuncArg] ")" ":" Type Expr ;
+--FuncRetType.  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type Expr ;
+--FuncRetQType. Func    ::= "func" LIdent "(" [FuncArg] ")" "->" QTypeVar Expr ;
 
 rules ProcDef ::= "proc" LIdent "(" [ProcArg] ")" "{" Proc "}" ;
 

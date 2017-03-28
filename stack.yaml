@@ -16,7 +16,7 @@ packages:
 - location: jael-grammar/
 - location:
     git: https://github.com/ucsd-progsys/liquid-fixpoint
-    commit: cf3d1a35b90eeff48ddfd672bc11ff053dd7a746
+    commit: d84bf9e36bc3888b149a5fc9e8d23c5545070803
   extra-dep: true
 - location:
     git: https://github.com/bscarlet/llvm-general

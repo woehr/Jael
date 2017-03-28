@@ -1,4 +1,6 @@
 {-# Language DeriveFunctor #-}
+{-# Language DeriveFoldable #-}
+{-# Language DeriveTraversable #-}
 {-# Language FlexibleInstances #-}
 {-# Language NoImplicitPrelude #-}
 {-# Language OverloadedStrings #-}
@@ -17,7 +19,7 @@ import qualified Control.Comonad.Trans.Cofree as C
 import           Data.Eq.Deriving (deriveEq1)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import qualified Language.Fixpoint.Types as F
+--import qualified Language.Fixpoint.Types as F
 import           Text.PrettyPrint.Leijen.Text
 import           Text.Show.Deriving (deriveShow1)
 
@@ -77,7 +79,7 @@ data ExprF a = EAppF a a
              | ETupF [a]
              | EVarF Ident
              | EConF Constant
-             deriving (Data, Eq, Functor, Show)
+             deriving (Data, Eq, Foldable, Functor, Show, Traversable)
 
 type Expr = Fix ExprF
 
@@ -85,9 +87,9 @@ instance Pretty Expr where
   pretty = (pretty::MaybeTypedExpr -> Doc) . cata ([] :<)
 
 -- An annotated expression
-type HMTypedExpr     = Ann ExprF Type
+type HMTypedExpr     = Ann ExprF TScheme
 type MaybeTypedExpr  = Ann ExprF [QType]
-type TypedExpr       = Ann ExprF QType
+type TypedExpr       = Ann ExprF QScheme
 
 deriving instance Data a => Data (Ann ExprF a)
 
@@ -200,17 +202,17 @@ infixOps = S.fromList
   [CAdd, CSub, CMul, CDiv, CMod, COr, CAnd
   ,CEq, CNe, CGe, CLe, CGt, CLt, CBitCat]
 
-instance Pretty HMTypedExpr where
-  pretty = pretty . cata alg
-    where
-      alg :: C.CofreeF ExprF Type MaybeTypedExpr -> MaybeTypedExpr
-      alg (t C.:< x) = [noQual t] :< x
+--instance Pretty HMTypedExpr where
+--  pretty = pretty . cata alg
+--    where
+--      alg :: C.CofreeF ExprF Type MaybeTypedExpr -> MaybeTypedExpr
+--      alg (t C.:< x) = [noQual t] :< x
 
-instance Pretty TypedExpr where
-  pretty = pretty . cata alg
-    where
-      alg :: C.CofreeF ExprF QType MaybeTypedExpr -> MaybeTypedExpr
-      alg (t C.:< x) = [t] :< x
+--instance Pretty TypedExpr where
+--  pretty = pretty . cata alg
+--    where
+--      alg :: C.CofreeF ExprF QType MaybeTypedExpr -> MaybeTypedExpr
+--      alg (t C.:< x) = [t] :< x
 
 freeVars :: Expr -> S.Set T.Text
 freeVars = S.map value . cata alg
@@ -223,7 +225,7 @@ freeVars = S.map value . cata alg
           alg _ = S.empty
 
 getType :: HMTypedExpr -> Type
-getType = extract
+getType = schType . extract
 
 -- reQual e1 e2 adds refinements from e1 to e2 while retaining the
 -- types of e2. Both e1 and e2 must have the same structure. As such, serves as
@@ -232,9 +234,13 @@ reQual :: MaybeTypedExpr -> HMTypedExpr -> Either T.Text TypedExpr
 reQual mte hte = do
   (t, es) <- case (mte, hte) of
                (qts :< e1, hmt :< e2) ->
-                 liftA (,(e1,e2)) $ foldM (flip addReftsTo) (noQual hmt) qts
+                 liftA (,(e1,e2)) $ foldM (flip addReftsTo) (noQual $ schType hmt) qts
   q <- matchExprs es
-  return $ t :< q
+  return $ Scheme
+             { schGens = schGens (extract hte)
+             , schIns  = fmap noQual $ schIns  (extract hte)
+             , schType = t }
+           :< q
 
 matchExprs :: (ExprF MaybeTypedExpr, ExprF HMTypedExpr) -> Either T.Text (ExprF TypedExpr)
 matchExprs es =
@@ -267,7 +273,8 @@ matchExprs es =
 -- Appends refinements from the first type to the second as long as the shapes
 -- of the two make sense.
 addReftsTo :: QType -> QType -> Either T.Text QType
-addReftsTo (r :< (TVarF _))  (r' :< t)  = return $ (r `mappend` r') :< t
+--addReftsTo (r :< (TVarF _))  (r' :< t)  = return $ (r `mappend` r') :< t
+addReftsTo (r :< (TVarF _))  (r' :< t@(TVarF _))  = return $ (r `mappend` r') :< t
 
 addReftsTo (_ :< t1) (_ :< t2@(TVarF _)) = error $
   "Can't add quals from " ++ show t1 ++ " to " ++ show t2
@@ -283,21 +290,21 @@ addReftsTo (r :< TTupF ts) (r' :< TTupF ts') =
 addReftsTo (r :< TConF n ts) (r' :< TConF n' ts') = assert (value n==value n') $
   liftA (r `mappend` r' :<) $ liftA (TConF n) $ ts `addReftsList` ts'
 
-addReftsTo (r :< TInsF _ t) t' =
-  assert (r == F.trueReft)
-    addReftsTo t t'
-
-addReftsTo t (r :< TInsF _ t') =
-  assert (r == F.trueReft)
-    addReftsTo t t'
-
-addReftsTo (r :< TGenF _ t) t' =
-  assert (r == F.trueReft)
-    addReftsTo t t'
-
-addReftsTo t (r :< TGenF _ t') =
-  assert (r == F.trueReft)
-    addReftsTo t t'
+--addReftsTo (r :< TInsF _ t) t' =
+--  assert (r == F.trueReft)
+--    addReftsTo t t'
+--
+--addReftsTo t (r :< TInsF _ t') =
+--  assert (r == F.trueReft)
+--    addReftsTo t t'
+--
+--addReftsTo (r :< TGenF _ t) t' =
+--  assert (r == F.trueReft)
+--    addReftsTo t t'
+--
+--addReftsTo t (r :< TGenF _ t') =
+--  assert (r == F.trueReft)
+--    addReftsTo t t'
 
 addReftsTo t t' = trace (show t ++ "\n\n" ++ show t')
   error $
@@ -309,21 +316,21 @@ addReftsTo t t' = trace (show t ++ "\n\n" ++ show t')
 addReftsList :: [QType] -> [QType] -> Either T.Text [QType]
 addReftsList ts ts' = sequenceA $ map (uncurry addReftsTo) (zip ts ts')
 
-dispSubExprs :: TypedExpr -> [String]
-dispSubExprs a = do
-  let b = duplicate a :: Cofree ExprF (Cofree ExprF QType)
-  let f1 te@(t :< _) fb =
-        let x :: [String]
-            x = case fb of
-                  EAppF e1 e2 -> e1 ++ e2
-                  EAbsF _ e -> e
-                  ELetF _ e1 e2 -> e1 ++ e2
-                  EVarF _ -> []
-                  EConF _ -> []
-                  EIteF u v w -> u ++ v ++ w
-                  ETupF xs -> concat xs
-        in  (show (pretty t) ++ "\n" ++ show (pretty $ removeAnn te)) : x
-  iterCofree f1 b
+--dispSubExprs :: TypedExpr -> [String]
+--dispSubExprs a = do
+--  let b = duplicate a :: Cofree ExprF (Cofree ExprF QScheme)
+--  let f1 te@(t :< _) fb =
+--        let x :: [String]
+--            x = case fb of
+--                  EAppF e1 e2 -> e1 ++ e2
+--                  EAbsF _ e -> e
+--                  ELetF _ e1 e2 -> e1 ++ e2
+--                  EVarF _ -> []
+--                  EConF _ -> []
+--                  EIteF u v w -> u ++ v ++ w
+--                  ETupF xs -> concat xs
+--        in  (show (pretty t) ++ "\n" ++ show (pretty $ removeAnn te)) : x
+--  iterCofree f1 b
 
 $(deriveEq1   ''ExprF)
 $(deriveShow1 ''ExprF)

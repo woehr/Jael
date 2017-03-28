@@ -1,6 +1,7 @@
 {-# Language NoImplicitPrelude #-}
 {-# Language TypeSynonymInstances #-}
 {-# Language FlexibleInstances #-}
+{-# Language RecordWildCards #-}
 
 module Jael.Classes.TIOps where
 
@@ -22,13 +23,13 @@ instance TIOps Type where
           alg (TFunF _ t1 t2) = t1 `S.union` t2
           alg (TTupF ts)    = S.unions ts
           alg (TConF _ ts)  = S.unions ts
-          alg (TInsF ss t)  = S.unions $ (t S.\\ S.fromList (map fst ss)) : map snd ss
-          alg (TGenF vs t)  = assert (S.fromList vs == t) t
+--          alg (TInsF ss t)  = S.unions $ (t S.\\ S.fromList (map fst ss)) : map snd ss
+--          alg (TGenF vs t)  = assert (S.fromList vs == t) t
 
   apply s t@(TVar v)   = M.findWithDefault t (value v) s
-  apply s (TIns ss t)  = TIns (map (second $ apply s) ss) $
-                           apply (s `M.difference` M.fromList ss) t
-  apply s (TGen _ t)   = let t' = apply s t in TGen (S.toList $ ftv t') t'
+--  apply s (TIns ss t)  = TIns (map (second $ apply s) ss) $
+--                           apply (s `M.difference` M.fromList ss) t
+--  apply s (TGen _ t)   = let t' = apply s t in TGen (S.toList $ ftv t') t'
   -- Uninteresting cases
   apply s (TFun b t1 t2) = TFun b (apply s t1) (apply s t2)
   apply s (TTup ts)    = TTup $ map (apply s) ts
@@ -40,9 +41,9 @@ instance TIOps (Type, Type) where
   apply s ts = join bimap (apply s) ts
 
 instance TIOps QType where
-  ftv = ftv . shape
+  ftv = ftv . removeAnn
 
-  apply s t = let t' = apply s (shape t)
+  apply s t = let t' = apply s (removeAnn t)
               in  case addReftsTo t (noQual t') of
                     Left e -> error $ show e
                     Right x -> x
@@ -56,8 +57,16 @@ instance TIOps HMTypedExpr where
   apply s = fmap (apply s)
 
 instance TIOps TScheme where
-  ftv (Scheme vs t) = ftv t S.\\ S.fromList vs
-  apply s (Scheme vs t) = Scheme vs $ apply (foldr M.delete s vs) t
+  ftv (Scheme{..}) = (ftv schType `S.union` S.fromList (M.keys schIns))
+                       S.\\ schGens
+  apply s (Scheme{..}) =
+    Scheme
+      { schGens = schGens
+      , schIns  = M.map (apply s) schIns
+      , schType = apply (S.foldr M.delete s
+                           (schGens `S.union` (S.fromList $ M.keys schIns)))
+                        schType
+      }
 
 instance TIOps (M.Map T.Text TScheme) where
   ftv = S.unions . map ftv. M.elems

@@ -53,17 +53,19 @@ uniqifyExpr te = let
          $ cata uniqifyExprAlg te
   in (subMap s, v)
 
-uniqifyQType :: QType -> M.Map T.Text T.Text -> (M.Map T.Text T.Text, QType)
-uniqifyQType t m = let
+uniqifyQType :: QScheme -> M.Map T.Text T.Text -> (M.Map T.Text T.Text, QScheme)
+uniqifyQType (Scheme gen ins t) m = let
   pv = [T.pack $ "b" ++ show x | x <- [(0::Integer)..]]
   vv = [T.pack $ "v" ++ show x | x <- [(0::Integer)..]]
   (v, s) = flip runState (initState pv vv)
          $ flip runReaderT (initEnv m)
-         $ cata uniqifyQTypeAlg t
+         $ do t' <- cata uniqifyQTypeAlg t
+              ins' <- mapM (cata uniqifyQTypeAlg) ins
+              return $ Scheme gen ins' t'
   in (subMap s, v)
 
-uniqifyExprAlg :: C.CofreeF ExprF QType (UniqifyM TypedExpr)
-                                     -> (UniqifyM TypedExpr)
+uniqifyExprAlg :: C.CofreeF ExprF QScheme (UniqifyM TypedExpr)
+                                       -> (UniqifyM TypedExpr)
 
 uniqifyExprAlg (t C.:< EAppF e1 e2) = do
   e1' <- e1
@@ -126,18 +128,18 @@ uniqifyQTypeAlg (r C.:< TConF n ts) = do
 
 uniqifyQTypeAlg (r C.:< TVarF x) = liftM (:< TVarF x) (subReft r)
 
-uniqifyQTypeAlg (r C.:< TInsF vsts t) = do
-  let (vs, ts) = unzip vsts
-  ts' <- sequence ts
-  let vsts' = zip vs ts'
-  t' <- t
-  r' <- subReft r
-  return $ r' :< TInsF vsts' t'
-
-uniqifyQTypeAlg (r C.:< TGenF vs t) = do
-  t' <- t
-  r' <- subReft r
-  return $ r' :< TGenF vs t'
+--uniqifyQTypeAlg (r C.:< TInsF vsts t) = do
+--  let (vs, ts) = unzip vsts
+--  ts' <- sequence ts
+--  let vsts' = zip vs ts'
+--  t' <- t
+--  r' <- subReft r
+--  return $ r' :< TInsF vsts' t'
+--
+--uniqifyQTypeAlg (r C.:< TGenF vs t) = do
+--  t' <- t
+--  r' <- subReft r
+--  return $ r' :< TGenF vs t'
 
 inEnv :: T.Text -> UniqifyM a -> UniqifyM (T.Text, a)
 inEnv v x = do
@@ -146,7 +148,7 @@ inEnv v x = do
   x' <- local (\(r@UniqifyR{..}) -> r{binds=M.insert v v' (M.delete v binds)}) x
   return (v', x')
 
-uniqifyQType' :: QType -> UniqifyM QType
+uniqifyQType' :: QScheme -> UniqifyM QScheme
 uniqifyQType' t = do
   (m, t') <- liftM (uniqifyQType t) $ asks binds
   modify (\(s@UniqifyS{..}) -> s{ subMap = subMap `M.union` m})

@@ -110,6 +110,13 @@ instance Jaelify G.Expr MaybeTypedExpr where
            (MTEVar (jaelify n) [])
            (map parseCommaSepExpr es)
 
+  jaelify (G.ELet ls e) =
+    foldr ((\(n, e1) e2 -> ([] :< ELetF n e1 e2)) . letExpr)
+          (jaelify e)
+          ls
+    where letExpr :: G.LetElem -> (Ident, MaybeTypedExpr)
+          letExpr (G.LetElem1 n e') = (jaelify n, jaelify e')
+
   jaelify (G.EAbs ns ret e) =
     let (xs, _) = unzip args
         ret' = unMaybeType ret
@@ -154,14 +161,6 @@ instance Jaelify G.Expr MaybeTypedExpr where
   jaelify (G.EMod    l r) = mkApp CMod [l, r]
   jaelify (G.EBitCat l r) = mkApp CBitCat [l, r]
   jaelify (G.ELogNot e  ) = mkApp CNot [e]
-
-instance Jaelify G.LetExpr MaybeTypedExpr where
-  jaelify (G.LetExpr1 ls e) =
-    foldr ((\(n, e1) e2 -> ([] :< ELetF n e1 e2)) . letExpr)
-          (jaelify e)
-          ls
-    where letExpr :: G.LetElem -> (Ident, MaybeTypedExpr)
-          letExpr (G.LetElem1 n e') = (jaelify n, jaelify e')
 
 instance Jaelify G.Func FuncExpr where
   jaelify (G.Func1 n as ret e) =

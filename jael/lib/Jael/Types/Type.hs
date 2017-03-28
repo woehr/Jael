@@ -1,4 +1,6 @@
 {-# Language DeriveFunctor #-}
+{-# Language DeriveFoldable #-}
+{-# Language DeriveTraversable #-}
 {-# Language FlexibleInstances #-}
 {-# Language NoImplicitPrelude #-}
 {-# Language OverloadedStrings #-}
@@ -11,12 +13,12 @@
 
 module Jael.Types.Type where
 
-import           BasePrelude hiding ((<>), (<$>), (<+>), empty)
+import           Jael.Prelude hiding ((<>), (<$>), (<+>), empty)
 
-import           Control.Comonad.Cofree
 import qualified Control.Comonad.Trans.Cofree as C
 import           Data.Eq.Deriving (deriveEq1)
-import           Data.Functor.Foldable
+import qualified Data.Map as M
+import qualified Data.Set as S
 import qualified Data.Text as T
 import           Text.Show.Deriving (deriveShow1)
 import           Text.PrettyPrint.Leijen.Text
@@ -31,17 +33,20 @@ data TypeF a = TFunF Ident a a
              | TVarF Ident
              | TTupF [a]
              | TConF Ident [a]
-             | TInsF [(T.Text, a)] a
-             | TGenF [T.Text] a
-             deriving (Data, Eq, Functor, Show)
+--             | TInsF [(T.Text, a)] a
+--             | TGenF [T.Text] a
+             deriving (Data, Eq, Foldable, Functor, Show, Traversable)
 
 type Type = Fix TypeF
 type QType = Ann TypeF F.Reft
 
 deriving instance Data QType
 
-data Scheme a = Scheme [T.Text] a
-  deriving (Data, Eq, Functor, Show)
+data Scheme a = Scheme
+  { schGens :: S.Set T.Text
+  , schIns  :: M.Map T.Text a
+  , schType :: a
+  } deriving (Data, Eq, Functor, Show)
 
 type TScheme = Scheme Type
 type QScheme = Scheme QType
@@ -88,19 +93,19 @@ pattern TTup as = Fix (TTupF as)
 pattern TCon :: Ident -> [Type] -> Type
 pattern TCon a bs = Fix (TConF a bs)
 
-pattern TIns :: [(T.Text, Type)] -> Type -> Type
-pattern TIns subs t = Fix (TInsF subs t)
+--pattern TIns :: [(T.Text, Type)] -> Type -> Type
+--pattern TIns subs t = Fix (TInsF subs t)
 
-pattern TGen :: [T.Text] -> Type -> Type
-pattern TGen as t = Fix (TGenF as t)
+--pattern TGen :: [T.Text] -> Type -> Type
+--pattern TGen as t = Fix (TGenF as t)
 
 instance Pretty Type where
   pretty = cata ppTypeAlg
 
 ppTypeAlg :: TypeF Doc -> Doc
 
-ppTypeAlg (TInsF ss t) = textStrict "ins" <> list (map (\(x,y)->tupled $ [textStrict x, y]) ss) <+> t
-ppTypeAlg (TGenF vs t) = textStrict "gen" <> list (map textStrict vs) <+> t
+--ppTypeAlg (TInsF ss t) = textStrict "ins" <> list (map (\(x,y)->tupled $ [textStrict x, y]) ss) <+> t
+--ppTypeAlg (TGenF vs t) = textStrict "gen" <> list (map textStrict vs) <+> t
 
 ppTypeAlg (TConF (Token n _) ts) =
   textStrict n <>
@@ -124,6 +129,8 @@ instance Pretty QType where
                             else "|" <+> fpPretty e
                            )
           )
+instance Pretty QScheme where
+  pretty s = pretty (schType s)
 
 noQual :: Type -> QType
 noQual = cata alg
@@ -131,8 +138,8 @@ noQual = cata alg
     alg :: TypeF QType -> QType
     alg x = F.trueReft :< x
 
-shape :: QType -> Type
-shape = removeAnn
+shape :: QScheme -> TScheme
+shape (Scheme a b t) = Scheme a (M.map removeAnn b) (removeAnn t)
 
 arityOf :: Type -> Integer
 arityOf (Fix (TFunF _ _ x)) = 1 + arityOf x

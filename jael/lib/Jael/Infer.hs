@@ -41,64 +41,77 @@ initState = HmInfS 0
 
 type HmInfM = RWST HmEnv [Constraint] HmInfS (Except T.Text)
 
+typeToScheme :: S.Set T.Text -> M.Map T.Text Type -> Type -> TScheme
+typeToScheme is su t =
+  let su' = foldr M.delete su (S.toList is)
+      t'  = apply su' t
+      fvs = ftv t' S.\\ is
+      is' = S.toList $ is `S.intersection` ftv t'
+      ins = M.fromList (zip is' $ map (\i -> TVar $ Token i dummyLoc) is')
+  in  Scheme fvs (M.map (apply su) ins) t'
+
 hmInf :: HmEnv -> MaybeTypedExpr -> Either T.Text HMTypedExpr
 hmInf env mTyped =
   let x = runIdentity $ runExceptT $ runRWST (cata doHm mTyped) env initState
   in case x of
        Left e -> Left e
-       Right (typed, _, w) -> do
+       Right ((typed, is), _, w) -> do
          s <- runIdentity $ runExceptT $ unificationSolver (nullSub, w)
-         Right $ apply s typed
+         Right $ fmap (typeToScheme is s) typed
 
-doHm :: C.CofreeF ExprF [QType] (HmInfM HMTypedExpr)
-     -> HmInfM HMTypedExpr
+tvar :: Type -> T.Text
+tvar (TVar (Token n _)) = n
+tvar _ = error "tvar not called on a type variable"
+
+doHm :: C.CofreeF ExprF [QType] (HmInfM (Cofree ExprF Type, S.Set T.Text))
+                              -> HmInfM (Cofree ExprF Type, S.Set T.Text)
 
 doHm ([] C.:< EVarF n) = do
   env <- ask
   case M.lookup (value n) env of
     Nothing -> error $ "unbound variable " ++ show (value n)
-    Just (Scheme tvs t) ->
-      if null tvs
-         then return $ t :< EVarF n
-         else do tvs' <- mapM (const freshTv) tvs
-                 return $ TIns (zip tvs tvs') t :< EVarF n
+    Just (Scheme gen ins t) -> do
+      assert (ins == M.empty) return ()
+      let tvs = S.toList gen
+      tvs' <- mapM (const freshTv) tvs
+      return ( apply (M.fromList $ zip tvs tvs') t :< EVarF n
+             , S.fromList $ map tvar tvs')
 
 doHm ([] C.:< EIteF b t e) = do
-  te1 <- b
-  te2 <- t
-  te3 <- e
-  let (t1, t2, t3) = (getType te1, getType te2, getType te3)
+  (te1, is1) <- b
+  (te2, is2) <- t
+  (te3, is3) <- e
+  let (t1, t2, t3) = (extract te1, extract te2, extract te3)
   unify t1 $ TBool
   unify t2 t3
-  return $ t2 :< EIteF te1 te2 te3
+  return (t2 :< EIteF te1 te2 te3, S.unions [is1, is2, is3])
 
 doHm ([] C.:< ELetF n e1 e2) = do
   env <- ask
-  (t1 :< e1') <- e1
-  let (s, t1') = generalize env t1
-  te2 <- inEnv (value n, s) e2
-  let t2 = getType te2
-  return $ t2 :< ELetF n (t1' :< e1') te2
+  (te1, is1) <- e1
+  let s = generalize env (extract te1)
+  (te2, is2) <- inEnv (value n, s) e2
+  let t2 = extract te2
+  return (t2 :< ELetF n te1 te2, is1 `S.union` is2)
 
 doHm ([] C.:< EAppF e1 e2) = do
   tv <- freshTv
-  (te1, te2) <- liftM2 (,) e1 e2
-  let (t1, t2) = (getType te1, getType te2)
+  ((te1, is1), (te2, is2)) <- liftM2 (,) e1 e2
+  let (t1, t2) = (extract te1, extract te2)
   unify t1 (TFun ("nil") t2 tv)
-  return $ tv :< EAppF te1 te2
+  return (tv :< EAppF te1 te2, is1 `S.union` is2)
 
 doHm ([] C.:< EAbsF n@(Token v _) e) = do
   tv <- freshTv
-  te <- inEnv (v, Scheme [] tv) e
-  return $ (TFun n tv $ getType te) :< EAbsF n te
+  (te, is1) <- inEnv (v, Scheme S.empty M.empty tv) e
+  return (TFun n tv (extract te) :< EAbsF n te, is1)
 
 doHm ([] C.:< ETupF es) = do
-  tes <- sequence es
-  let tvs = map getType tes
+  (tes, is) <- liftM unzip $ sequence es
   tupTv <- freshTv
-  let t = TTup tvs
+  let t = TTup $ map extract tes
   unify tupTv t
-  return $ t :< ETupF tes
+  return (t :< ETupF tes, S.unions is)
 
 doHm ([] C.:< EConF c) = do
   tv <- freshTv
@@ -106,29 +119,29 @@ doHm ([] C.:< EConF c) = do
             CUnit   -> TUnit
             CBool _ -> TBool
             CInt _  -> TInt
-            CAdd    -> shape JC.add
-            CSub    -> shape undefined
-            CMul    -> shape undefined
-            CDiv    -> shape undefined
-            CMod    -> shape undefined
-            COr     -> shape undefined
-            CAnd    -> shape undefined
-            CEq     -> shape undefined
-            CNe     -> shape undefined
-            CGe     -> shape undefined
-            CLe     -> shape undefined
-            CGt     -> shape undefined
-            CLt     -> shape undefined
-            CBitCat -> shape undefined
-            CNot    -> shape undefined
+            CAdd    -> removeAnn (schType JC.add)
+            CSub    -> removeAnn undefined
+            CMul    -> removeAnn undefined
+            CDiv    -> removeAnn undefined
+            CMod    -> removeAnn undefined
+            COr     -> removeAnn undefined
+            CAnd    -> removeAnn undefined
+            CEq     -> removeAnn undefined
+            CNe     -> removeAnn undefined
+            CGe     -> removeAnn undefined
+            CLe     -> removeAnn undefined
+            CGt     -> removeAnn undefined
+            CLt     -> removeAnn undefined
+            CBitCat -> removeAnn undefined
+            CNot    -> removeAnn undefined
   unify tv t
-  return $ tv :< EConF c
+  return (tv :< EConF c, S.empty)
 
 doHm (ts C.:< e) = do
-  te <- doHm $ [] C.:< e
-  let t = getType te
+  (te, is) <- doHm $ [] C.:< e
+  let t = extract te
   mapM_ (unify t . removeAnn) ts
-  return te
+  return (te, is)
 
 inEnv :: (T.Text, TScheme) -> HmInfM a -> HmInfM a
 inEnv (n, s) m = do
@@ -138,14 +151,10 @@ inEnv (n, s) m = do
 unify :: Type -> Type -> HmInfM ()
 unify t1 t2 = tell [(t1, t2)]
 
-generalize :: HmEnv -> Type -> (TScheme, Type)
+generalize :: HmEnv -> Type -> TScheme
 generalize env t =
   let fvs = ftv t S.\\ ftv env
-      t' = if null fvs
-              then t
-              else TGen (S.toList fvs) t
-      s = Scheme (S.toList fvs) t'
-  in (s, t')
+  in  Scheme fvs M.empty t
 
 type Constraint = (Type, Type)
 type Unifier = (TypeSub, [Constraint])
@@ -161,10 +170,10 @@ unificationSolver (s, cs) =
 
 unifier :: Type -> Type -> SolveM TypeSub
 unifier t1 t2 | t1 == t2 = return nullSub
-unifier (TIns s t1) t2 = unifier (apply (M.fromList s) t1) t2
-unifier t1 (TIns s t2) = unifier t1 (apply (M.fromList s) t2)
-unifier (TGen _ t1) t2 = unifier t1 t2
-unifier t1 (TGen _ t2) = unifier t1 t2
+--unifier (TIns s t1) t2 = unifier (apply (M.fromList s) t1) t2
+--unifier t1 (TIns s t2) = unifier t1 (apply (M.fromList s) t2)
+--unifier (TGen _ t1) t2 = unifier t1 t2
+--unifier t1 (TGen _ t2) = unifier t1 t2
 unifier (TFun _ l r) (TFun _ l' r') = unifyMany [l, r] [l', r']
 unifier (TVar n) t = bind n t
 unifier t (TVar n) = bind n t

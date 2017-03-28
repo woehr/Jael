@@ -14,6 +14,7 @@ import           Language.Haskell.TH.Quote
 import qualified Language.Haskell.TH.Syntax as S
 import qualified Text.PrettyPrint.Leijen.Text as P
 
+import           Jael.Classes.TIOps
 import qualified Jael.Grammar as G
 import           Jael.Types
 import qualified Jael.Uniqify as U
@@ -26,7 +27,7 @@ qtype = QuasiQuoter
         Left e -> fail $ T.unpack e
         Right x -> return x
       let t = jaelify gt
-      let (m, ut) = U.uniqifyQType t M.empty
+      let (m, ut) = U.uniqifyQType (Scheme (ftv t) M.empty t) M.empty
       traceM (show . P.pretty $ t)
       traceM (show . P.pretty $ ut)
       dataToExpQ (liftText `extQ` (subVar m)) ut
