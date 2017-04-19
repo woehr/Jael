@@ -1,27 +1,10 @@
-{ nixpkgs ? import ../nix/pkgs.nix {}, compiler ? "default" }:
-
+{ nixpkgs ? import ../nix {}, compiler ? "ghc802" }:
 let
-
-  inherit (nixpkgs) pkgs;
-
-  f = { mkDerivation, alex, array, base, BNFC, happy, mtl, stdenv
-      }:
-      mkDerivation {
-        pname = "jael-grammar";
-        version = "0.1.0.0";
-        src = ./.;
-        libraryHaskellDepends = [ array base mtl ];
-        buildDepends = [ alex BNFC happy ];
-        description = "Grammar library for Jael";
-        license = stdenv.lib.licenses.gpl2;
-      };
-
-  haskellPackages = if compiler == "default"
-                       then pkgs.haskellPackages
-                       else pkgs.haskell.packages.${compiler};
-
-  drv = haskellPackages.callPackage f {};
-
+  env = nixpkgs.haskell.packages.${compiler}.jael-grammar.env;
 in
-
-  if pkgs.lib.inNixShell then drv.env else drv
+  nixpkgs.lib.overrideDerivation env (old: {
+    buildInputs = old.buildInputs ++
+      (with nixpkgs.haskell.packages.${compiler}; [
+        ghc-mod apply-refact hlint stylish-haskell hasktags
+      ]);
+  })

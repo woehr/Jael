@@ -1,30 +1,30 @@
-self: super: {
+self: super:
+let
+
+  inherit (super.pkgs) fetchFromGitHub;
+
+  liquid-fixpoint-src = fetchFromGitHub {
+    owner  = "ucsd-progsys";
+    repo   = "liquid-fixpoint";
+    rev    = "e43aed1ccf3944597d5512738875dc037d4c25ff";
+    sha256 = "1a2ppn34iiz756d1jzcv6hgir74y84y9wg6i97v3fax7rnqi9fhb";
+  };
+
+in {
   haskell = super.haskell // {
     packages = super.haskell.packages // {
-      ghc7103 = super.haskell.packages.ghc7103.override {
+      ghc802 = super.haskell.packages.ghc802.override {
         overrides = hself: hsuper: {
-          tasty-ant-xml = hself.callPackage ./tasty-ant-xml-1.0.2.nix {};
-          llvm-general-pure = hself.callPackage ./llvm-general-pure.nix {};
-          llvm-general = hself.callPackage ./llvm-general.nix { llvm-config = self.llvm_39; };
 
-          liquid-fixpoint = hself.callPackage ./liquid-fixpoint.nix {};
+          ghc =  hsuper.ghc // { withPackages = hsuper.ghc.withHoogle; };
+          ghcWithPackages = hself.ghc.withPackages;
 
-          jael-grammar = hself.callPackage ./jael-grammar.nix {};
-          jael = hself.callPackage ./jael.nix {};
+          liquid-fixpoint = super.haskell.lib.dontCheck (
+            hself.callCabal2nix "liquid-fixpoint" liquid-fixpoint-src {}
+          );
 
-          liquiddesugar = hself.callPackage ./liquiddesugar.nix {};
-          liquidhaskell = hself.callPackage ./liquidhaskell.nix {};
-        };
-      };
-      ghc801 = super.haskell.packages.ghc801.override {
-        overrides = hself: hsuper: {
-          llvm-general-pure = hself.callPackage ./llvm-general-pure.nix {};
-          llvm-general = hself.callPackage ./llvm-general.nix { llvm-config = self.llvm_39; };
-
-          liquid-fixpoint = hself.callPackage ./liquid-fixpoint.nix {};
-
-          jael-grammar = hself.callPackage ./jael-grammar.nix {};
-          jael = hself.callPackage ./jael.nix {};
+          jael = hself.callCabal2nix "jael" ../jael {};
+          jael-grammar = hself.callCabal2nix "jael-grammar" ../jael-grammar {};
         };
       };
     };

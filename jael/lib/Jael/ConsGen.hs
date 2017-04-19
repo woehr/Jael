@@ -212,7 +212,7 @@ consGen (qt :< EVarF (Token n _)) = do
 consGen (qt :< EAbsF n e) = do
   mkWfC [qt]
 
-  tmplt <- (freshTmplt $ shape qt)
+  tmplt <- freshTmplt $ shape qt
   mkWfC [tmplt]
   mkSubC [(tmplt, qt)]
 
@@ -234,8 +234,8 @@ consGen (qt :< EAppF e1 e2) = do
 
   case tmpltize tmplt1 of
     (_, TFunF b t1 t2) -> do
-      mkSubC [(tmplt2, t1)]
       mkSubC [(t2, qt)]
+      mkSubC [(tmplt2, t1)]
       return $ subExpr (b, e2) t2
       --return $ pendingSub (b, e2) t2 `strengthen` qt
     _ -> error "First expression in an application must have a function type"
