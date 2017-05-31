@@ -19,6 +19,12 @@ in {
           ghc =  hsuper.ghc // { withPackages = hsuper.ghc.withHoogle; };
           ghcWithPackages = hself.ghc.withPackages;
 
+          mkDerivation = args: hsuper.mkDerivation (args // {
+#            doCheck = false;
+            enableLibraryProfiling = true;
+#            enableExecutableProfiling = true;
+          });
+
           liquid-fixpoint = super.haskell.lib.dontCheck (
             hself.callCabal2nix "liquid-fixpoint" liquid-fixpoint-src {}
           );

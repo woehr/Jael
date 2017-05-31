@@ -1,9 +1,6 @@
-{-# Language NoImplicitPrelude #-}
 {-# Language TemplateHaskell #-}
 
 module Jael.Quotes where
-
-import           Jael.Prelude
 
 import           Data.Generics (extQ)
 import qualified Data.Map as M
@@ -19,8 +16,8 @@ import qualified Jael.Grammar as G
 import           Jael.Types
 import qualified Jael.Uniqify as U
 
-qtype :: QuasiQuoter
-qtype = QuasiQuoter
+rtype :: QuasiQuoter
+rtype = QuasiQuoter
   { quoteExp  = \s -> do
       let et = runParser G.pType (T.pack s)
       gt <- case et of
@@ -30,7 +27,7 @@ qtype = QuasiQuoter
       let (m, ut) = U.uniqifyQType (Scheme (ftv t) M.empty t) M.empty
       traceM (show . P.pretty $ t)
       traceM (show . P.pretty $ ut)
-      dataToExpQ (liftText `extQ` (subVar m)) ut
+      dataToExpQ (liftText `extQ` subVar m) ut
   , quotePat  = undefined
   , quoteType = undefined
   , quoteDec  = undefined

@@ -16,12 +16,12 @@ source-repository head
   location: git://github.com/woehr/jael
 
 library
-  exposed-modules:     Jael.Classes
+  exposed-modules:     Prelude
+                       Jael.Classes
                        Jael.Classes.TIOps
                        Jael.ConsGen
                        Jael.Constants
                        Jael.Infer
-                       Jael.Prelude
                        Jael.Pretty
                        Jael.Quotes
                        Jael.Types
@@ -34,7 +34,7 @@ library
                        Jael.Uniqify
                        Jael.Util
 
-  build-depends:       base >=4.8 && <5,
+  build-depends:       base-noprelude,
                        array,
                        base-prelude,
                        comonad,
@@ -57,6 +57,7 @@ library
   hs-source-dirs:      lib
   default-language:    Haskell2010
   ghc-options:         -Wall
+                       -fno-ignore-asserts
                        -fwarn-incomplete-uni-patterns
                        -fwarn-incomplete-record-updates
                        -fwarn-monomorphism-restriction
@@ -65,14 +66,14 @@ library
 executable jael
   main-is:             Main.hs
 
-  build-depends:       base >=4.8 && <5,
-                       base-prelude,
+  build-depends:       base-noprelude,
                        jael
 
   hs-source-dirs:      src
   default-language:    Haskell2010
   ghc-options:         -threaded
                        -Wall
+                       -fno-ignore-asserts
                        -fwarn-incomplete-uni-patterns
                        -fwarn-incomplete-record-updates
                        -fwarn-monomorphism-restriction
@@ -90,8 +91,7 @@ test-suite test-jael
                        Jael.Types.ExprSpec
                        Jael.Types.ParserSpec
 
-  build-depends:       base          >=4.8 && <5,
-                       base-prelude,
+  build-depends:       base-noprelude,
                        jael,
                        jael-grammar,
                        free,
@@ -106,6 +106,7 @@ test-suite test-jael
   default-language:    Haskell2010
   ghc-options:         -threaded
                        -Wall
+                       -fno-ignore-asserts
                        -fwarn-incomplete-uni-patterns
                        -fwarn-incomplete-record-updates
                        -fwarn-monomorphism-restriction

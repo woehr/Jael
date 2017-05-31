@@ -2,7 +2,6 @@
 {-# Language DeriveFoldable #-}
 {-# Language DeriveTraversable #-}
 {-# Language FlexibleInstances #-}
-{-# Language NoImplicitPrelude #-}
 {-# Language OverloadedStrings #-}
 {-# Language PatternSynonyms #-}
 {-# Language TemplateHaskell #-}
@@ -13,7 +12,7 @@
 
 module Jael.Types.Type where
 
-import           Jael.Prelude hiding ((<>), (<$>), (<+>), empty)
+import           Prelude hiding ((<>), (<$>), (<+>), empty)
 
 import qualified Control.Comonad.Trans.Cofree as C
 import           Data.Eq.Deriving (deriveEq1)
@@ -33,12 +32,11 @@ data TypeF a = TFunF Ident a a
              | TVarF Ident
              | TTupF [a]
              | TConF Ident [a]
---             | TInsF [(T.Text, a)] a
---             | TGenF [T.Text] a
              deriving (Data, Eq, Foldable, Functor, Show, Traversable)
 
-type Type = Fix TypeF
-type QType = Ann TypeF F.Reft
+type Type  = Fix TypeF
+type QType = Cofree TypeF (Maybe F.Reft)
+type RType = Cofree TypeF F.Reft
 
 deriving instance Data QType
 
@@ -50,6 +48,8 @@ data Scheme a = Scheme
 
 type TScheme = Scheme Type
 type QScheme = Scheme QType
+type Template = Scheme RType
+
 
 pattern TUnitF :: TypeF a
 pattern TUnitF = TConF "Unit" []
@@ -109,7 +109,7 @@ ppTypeAlg :: TypeF Doc -> Doc
 
 ppTypeAlg (TConF (Token n _) ts) =
   textStrict n <>
-  if length ts == 0 then empty else tupled ts
+  if null ts then empty else tupled ts
 
 ppTypeAlg (TVarF (Token n _)) = textStrict n
 ppTypeAlg (TTupF ts) = tupled ts
@@ -119,8 +119,8 @@ ppTypeAlg (TFunF b t1 t2) =
 instance Pretty QType where
   pretty = cata alg
     where
-      alg :: C.CofreeF TypeF F.Reft Doc -> Doc
-      alg ((F.Reft (n, e)) C.:< t) =
+      alg :: C.CofreeF TypeF (Maybe F.Reft) Doc -> Doc
+      alg (Just (F.Reft (n, e)) C.:< t) =
         braces $
           (textStrict (F.symbolText n) <+>
            colon <+>
@@ -129,14 +129,24 @@ instance Pretty QType where
                             else "|" <+> fpPretty e
                            )
           )
+      alg (Nothing C.:< t) = alg (Just F.trueReft C.:< t)
+
 instance Pretty QScheme where
   pretty s = pretty (schType s)
 
 noQual :: Type -> QType
-noQual = cata alg
-  where
-    alg :: TypeF QType -> QType
-    alg x = F.trueReft :< x
+noQual = cata (Nothing :<)
+--noQual (TFun b t1 t2) = F.trueReft :< TFunF b (contra t1) (co t2)
+--
+--  where contra :: Type -> QType
+--        contra (TFun c u1 u2) = F.falseReft :< TFunF c (co u1) (contra u2)
+--        contra x = cata (F.falseReft :<) x
+--
+--        co :: Type -> QType
+--        co (TFun c v1 v2) = F.trueReft :< TFunF c (contra v1) (co v2)
+--        co x = cata (F.trueReft :<) x
+--
+--noQual x = cata (F.trueReft :<) x
 
 shape :: QScheme -> TScheme
 shape (Scheme a b t) = Scheme a (M.map removeAnn b) (removeAnn t)

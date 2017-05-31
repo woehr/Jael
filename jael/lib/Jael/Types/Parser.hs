@@ -6,14 +6,12 @@ No error checking.
 {-# Language FlexibleInstances #-}
 {-# Language FunctionalDependencies #-}
 {-# Language MultiParamTypeClasses #-}
-{-# Language NoImplicitPrelude #-}
-{-# Language RecordWildCards #-}
 {-# Language OverloadedStrings #-}
 
 module Jael.Types.Parser where
 
-import           Jael.Prelude
 import qualified Control.Comonad.Trans.Cofree as C
+import qualified Data.HashMap.Lazy as HM
 import qualified Data.Map as M
 import qualified Data.Text as T
 import qualified Language.Fixpoint.Types as F
@@ -42,8 +40,8 @@ instance Jaelify G.UIdent Ident where
 instance Jaelify G.LIdent Ident where
   jaelify (G.LIdent (x, n)) = Token (T.pack n) x
 
-instance Jaelify G.LScopedIdent Ident where
-  jaelify (G.LScopedIdent (x, n)) = Token (T.pack n) x
+-- instance Jaelify G.LScopedIdent Ident where
+--   jaelify (G.LScopedIdent (x, n)) = Token (T.pack n) x
 
 instance Jaelify G.DecInt IntConst where
   jaelify (G.DecInt (x, s)) = Token (parseDecInt s) x
@@ -105,10 +103,10 @@ instance Jaelify G.Expr MaybeTypedExpr where
            (MTEVar (jaelify n) [])
            (map parseCommaSepExpr es)
 
-  jaelify (G.EAppScoped n es) =
-    foldl' (\acc e -> [] :< EAppF acc e)
-           (MTEVar (jaelify n) [])
-           (map parseCommaSepExpr es)
+  -- jaelify (G.EAppScoped n es) =
+  --   foldl' (\acc e -> [] :< EAppF acc e)
+  --          (MTEVar (jaelify n) [])
+  --          (map parseCommaSepExpr es)
 
   jaelify (G.ELet ls e) =
     foldr ((\(n, e1) e2 -> ([] :< ELetF n e1 e2)) . letExpr)
@@ -146,6 +144,8 @@ instance Jaelify G.Expr MaybeTypedExpr where
     in  (jaelify t:ts) :< e'
 
   jaelify (G.EIf b t e) = ([] :<) $ EIteF (jaelify b) (jaelify t) (jaelify e)
+  jaelify (G.EIff    l r) = mkApp CIff [l, r]
+  jaelify (G.EImp    l r) = mkApp CImp [l, r]
   jaelify (G.ELogOr  l r) = mkApp COr  [l, r]
   jaelify (G.ELogAnd l r) = mkApp CAnd [l, r]
   jaelify (G.EEq     l r) = mkApp CEq  [l, r]
@@ -161,6 +161,57 @@ instance Jaelify G.Expr MaybeTypedExpr where
   jaelify (G.EMod    l r) = mkApp CMod [l, r]
   jaelify (G.EBitCat l r) = mkApp CBitCat [l, r]
   jaelify (G.ELogNot e  ) = mkApp CNot [e]
+
+newtype GrammarPred = GrammarPred G.Expr
+
+instance F.Expression GrammarPred where
+  expr (GrammarPred g) = toFExpr g
+
+type SubMap = HM.HashMap F.Symbol F.Expr
+
+toFExpr :: G.Expr -> F.Expr
+toFExpr (G.EInt i  )    = F.ECon . F.I . value . jaelify $ i
+toFExpr G.ETrue         = F.PTrue
+toFExpr G.EFalse        = F.PFalse
+toFExpr G.EUnit         = F.ECon (F.L "void" $ F.FTC . F.symbolFTycon . F.dummyLoc . F.symbol $ ("Void"::T.Text))
+toFExpr (G.EVar i)      = toFEVar i
+--toFExpr (G.ETup e1 es)  = undefined
+
+toFExpr (G.EApp n es)   =
+  F.eApps (toFEVar n) (flip map es $ \(G.CommaSepExprExpr e) -> toFExpr e)
+
+toFExpr (G.ELet ls e)   =
+  flip F.subst (toFExpr e) $ F.Su $ foldl' mkSubs HM.empty ls
+
+  where mkSubs :: SubMap -> G.LetElem -> SubMap
+        mkSubs acc (G.LetElem1 (G.LIdent (_, s)) e') =
+          flip (HM.insert $ F.symbol s) acc $ F.subst (F.Su acc) (toFExpr e')
+
+toFExpr (G.EIf b t e)   = F.EIte (toFExpr b) (toFExpr t) (toFExpr e)
+toFExpr (G.EIff    l r) = F.PIff (toFExpr l) (toFExpr r)
+toFExpr (G.EImp    l r) = F.PImp (toFExpr l) (toFExpr r)
+toFExpr (G.ELogOr  l r) = F.POr  [toFExpr l,  toFExpr r]
+toFExpr (G.ELogAnd l r) = F.PAnd [toFExpr l,  toFExpr r]
+
+toFExpr (G.EEq     l r) = F.PAtom F.Eq (toFExpr l) (toFExpr r)
+toFExpr (G.ENotEq  l r) = F.PAtom F.Ne (toFExpr l) (toFExpr r)
+toFExpr (G.EGtEq   l r) = F.PAtom F.Ge (toFExpr l) (toFExpr r)
+toFExpr (G.ELtEq   l r) = F.PAtom F.Le (toFExpr l) (toFExpr r)
+toFExpr (G.EGt     l r) = F.PAtom F.Gt (toFExpr l) (toFExpr r)
+toFExpr (G.ELt     l r) = F.PAtom F.Lt (toFExpr l) (toFExpr r)
+
+toFExpr (G.EPlus   l r) = F.EBin F.Plus  (toFExpr l) (toFExpr r)
+toFExpr (G.EMinus  l r) = F.EBin F.Minus (toFExpr l) (toFExpr r)
+toFExpr (G.ETimes  l r) = F.EBin F.Times (toFExpr l) (toFExpr r)
+toFExpr (G.EDiv    l r) = F.EBin F.Div   (toFExpr l) (toFExpr r)
+toFExpr (G.EMod    l r) = F.EBin F.Mod   (toFExpr l) (toFExpr r)
+toFExpr (G.ELogNot e  ) = F.PNot (toFExpr e)
+--toFExpr (G.EBitCat l r) = undefined
+
+toFExpr _ = error "Unsupported expression in predicate"
+
+toFEVar :: G.LIdent -> F.Expr
+toFEVar = F.EVar . F.symbol . value . jaelify
 
 instance Jaelify G.Func FuncExpr where
   jaelify (G.Func1 n as ret e) =
@@ -185,73 +236,42 @@ instance Jaelify G.Prog (Program [Type] [GlobExpr] [FuncExpr]) where
 
 instance Jaelify G.BaseType QType where
   jaelify (G.BaseTypeQType t) = jaelify t
-  jaelify (G.BaseTypeUnqualType t) = F.trueReft :< jaelify t
+  jaelify (G.BaseTypeUnqualType t) = Nothing :< jaelify t
 
 instance Jaelify G.QType QType where
-  jaelify (G.QTypeVar n t p) =
-    F.reft (F.symbol . value . jaelify $ n) (parseQPred p) :< jaelify t
-  jaelify (G.QTypeNoVar t p) =
-    F.reft F.vv_ (parseQPred p) :< jaelify t
+  jaelify (G.QTypeUnqual n t p) =
+    Just (F.reft (F.symbol . value . jaelify $ n)
+                 (F.expr $ GrammarPred p)
+         ) :< jaelify t
+
+  jaelify (G.QTypeNamed n t p) =
+    Just (F.reft (F.symbol . value . jaelify $ n)
+                 (F.expr $ GrammarPred p)
+         ) :< TConF (jaelify t) []
 
 instance Jaelify G.UnqualType (TypeF QType) where
-  jaelify (G.UnqualTypeTypeA (G.TypeNamed n))  =
-    TConF (jaelify n) []
-  jaelify (G.UnqualTypeTypeB (G.TypeNamedParams n ts)) =
+  jaelify (G.TypeNamedParams n ts) =
     TConF (jaelify n) $ map unCommaSeparate ts
+  jaelify (G.TypeBuiltin G.TUnit) = TUnitF
+  jaelify (G.TypeBuiltin G.TBool) = TBoolF
+  jaelify (G.TypeBuiltin G.TInt)  = TIntF
+  jaelify (G.TypeBuiltin G.TBit)  = TBitsF
+  jaelify (G.TypeBuiltin (G.TBuffer t)) = TBufferF (jaelify t)
+  jaelify (G.TypeVar  n)          = TVarF (jaelify n)
+  jaelify (G.TypeTup t ts)        = TTupF $ map unCommaSeparate (t:ts)
 
-  jaelify (G.UnqualTypeTypeB (G.TypeVar  n))       = TVarF (jaelify n)
-  jaelify (G.UnqualTypeTypeB (G.TypeBuiltin G.TUnit)) = TUnitF
-  jaelify (G.UnqualTypeTypeB (G.TypeBuiltin G.TBool)) = TBoolF
-  jaelify (G.UnqualTypeTypeB (G.TypeBuiltin G.TInt))  = TIntF
-  jaelify (G.UnqualTypeTypeB (G.TypeBuiltin G.TBit))  = TBitsF
-  jaelify (G.UnqualTypeTypeB (G.TypeBuiltin (G.TBuffer t))) = TBufferF (jaelify t)
-  jaelify (G.UnqualTypeTypeB (G.TypeTup t ts)) =
-    TTupF $ map unCommaSeparate (t:ts)
+instance Jaelify G.TypeNoUIdent QType where
+  jaelify (G.TypeFun i t1 t2) =
+    Nothing :< TFunF (jaelify i) (jaelify t1) (jaelify t2)
+  jaelify (G.TypeBase t) = jaelify t
 
 instance Jaelify G.Type QType where
-  jaelify (G.TypeBase t) = jaelify t
-  jaelify (G.TypeFun i t1 t2) =
-    F.trueReft :< TFunF (jaelify i) (jaelify t1) (jaelify t2)
+  jaelify (G.TypeTypeNoUIdent t) = jaelify t
+  jaelify (G.TypeUIdent i) = Nothing :< TConF (jaelify i) []
+
 
 unCommaSeparate :: G.CommaSepType -> QType
-unCommaSeparate (G.CommaSepTypeType t) = jaelify t
-
-parseQPred :: G.QPred -> F.Expr
-parseQPred (G.QPredIff l r) = F.PIff (parseQPred l) (parseQPred r)
-parseQPred (G.QPredImp l r) = F.PImp (parseQPred l) (parseQPred r)
-parseQPred (G.QPredOr  l r) = F.POr  (map parseQPred [l, r])
-parseQPred (G.QPredAnd l r) = F.PAnd (map parseQPred [l, r])
-parseQPred (G.QPredNot p)   = F.PNot (parseQPred p)
-parseQPred G.QPredTrue      = F.prop True
-parseQPred G.QPredFalse     = F.prop False
-parseQPred (G.QPredAtom l op r) = F.PAtom (parseQRel op) (parseQExpr l) (parseQExpr r)
-
-parseQExpr :: G.QExpr -> F.Expr
-parseQExpr (G.QExprAdd l r)  = F.EBin F.Plus (parseQExpr l) (parseQExpr r)
-parseQExpr (G.QExprSub l r)  = F.EBin F.Minus (parseQExpr l) (parseQExpr r)
-parseQExpr (G.QExprMul c e)  = F.EBin F.Times (F.expr . value $ jaelify c) (parseQExpr e)
-parseQExpr (G.QExprInt i)    = F.expr . value $ jaelify i
-parseQExpr (G.QExprVar n)    = F.eVar . value $ jaelify n
-parseQExpr (G.QExprApp n (a:as)) =
-  foldl'
-    F.EApp
-    (F.EApp (F.eVar . value . jaelify $ n) (parseCommaSepQExpr a))
-    (map parseCommaSepQExpr as)
-parseQExpr (G.QExprApp _ _) = error "[G.CommaSepQExpr] should always have an element"
-
-parseQExpr (G.QExprVoid) = F.ECon
-  (F.L "void" $ F.FTC . F.symbolFTycon . F.dummyLoc $ "Void")
-
-parseCommaSepQExpr :: G.CommaSepQExpr -> F.Expr
-parseCommaSepQExpr (G.CommaSepQExprQExpr e) = parseQExpr e
-
-parseQRel :: G.QRel -> F.Brel
-parseQRel G.QRelEq = F.Eq
-parseQRel G.QRelNe = F.Ne
-parseQRel G.QRelGe = F.Ge
-parseQRel G.QRelLe = F.Le
-parseQRel G.QRelGt = F.Gt
-parseQRel G.QRelLt = F.Lt
+unCommaSeparate (G.CommaSepTypeTypeNoUIdent t) = jaelify t
 
 parseCommaSepExpr :: G.CommaSepExpr -> MaybeTypedExpr
 parseCommaSepExpr (G.CommaSepExprExpr e) = jaelify e
@@ -266,6 +286,6 @@ mkApp f as = foldl' (\acc e -> [] :< EAppF acc e)
                     (map jaelify as)
 
 gListToMaybe :: Jaelify a b => [a] -> Maybe b
-gListToMaybe [] = Nothing
-gListToMaybe (x:[]) = Just $ jaelify x
-gListToMaybe _ = error "Expected grammar to only allow lists of 0 or 1 elements"
+gListToMaybe []  = Nothing
+gListToMaybe [x] = Just $ jaelify x
+gListToMaybe _   = error "Expected grammar to only allow lists of 0 or 1 elements"

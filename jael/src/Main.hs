@@ -1,6 +1,3 @@
-{-# Language NoImplicitPrelude #-}
-
-import Jael.Prelude
 --import Jael.Expr
 --import Text.PrettyPrint.Leijen.Text
 

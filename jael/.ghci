@@ -3,12 +3,5 @@
 :set -fwarn-incomplete-record-updates
 :set -fwarn-monomorphism-restriction
 :set -fwarn-identities
-:set -XDeriveFunctor
-:set -XGADTs
-:set -XRecordWildCards
-:set -XTemplateHaskell
-:set -XTupleSections
-:set -XTypeFamilies
-:set -XOverloadedStrings
 :set -ilib
-
+:set -itest

@@ -2,7 +2,7 @@
 
 position token UIdent (upper (letter | digit | '_')*) ;
 position token LIdent (lower (letter | digit | '_')*) ;
-position token LScopedIdent (lower (letter | digit | '_' | {"::"})*) ;
+--position token LScopedIdent (lower (letter | digit | '_' | {"::"})*) ;
 position token DecInt ('0' | ('~'? ["123456789"] digit*)) ;
 position token HexInt ({"0x"} ["0123456789abcdefABCDEF"]+) ;
 position token OctInt ({"0o"} ["01234567"]+) ;
@@ -15,91 +15,50 @@ rules AnyInt ::= DecInt | HexInt | OctInt | BinInt ;
 -- and the definition of Expr at
 -- https://github.com/ucsd-progsys/liquid-fixpoint/blob/master/src/Language/Fixpoint/Types/Refinements.hs
 
-QPredIff. QPred1 ::= QPred2 "<->" QPred2 ;
-
-QPredImp. QPred2 ::= QPred3 "->" QPred3 ;
-
-QPredOr.  QPred3 ::= QPred4 "||" QPred4 ;
-
-QPredAnd. QPred4 ::= QPred5 "&&" QPred5 ;
-
-QPredNot. QPred5 ::= "!" QPred6 ;
-
-QPredTrue.  QPred6 ::= "true" ;
-QPredFalse. QPred6 ::= "false" ;
-QPredAtom.  QPred6 ::= QExpr QRel QExpr ;
-
-coercions QPred 6 ;
-
-QRelEq. QRel ::= "==" ;
-QRelNe. QRel ::= "!=" ;
-QRelGe. QRel ::= ">=" ;
-QRelLe. QRel ::= "<=" ;
-QRelGt. QRel ::= ">" ;
-QRelLt. QRel ::= "<" ;
-
-QExprAdd. QExpr1 ::= QExpr1 "+" QExpr2 ;
-QExprSub. QExpr1 ::= QExpr1 "-" QExpr2 ;
-
-QExprMul. QExpr2 ::= AnyInt "*" QExpr3 ;
-
-QExprInt.  QExpr3 ::= AnyInt ;
-QExprVar.  QExpr3 ::= LIdent ;
-QExprApp.  QExpr3 ::= LIdent "(" [CommaSepQExpr] ")" ;
-QExprVoid. QExpr3 ::= "void" ;
-
-coercions QExpr 3 ;
-
-rules CommaSepQExpr ::= QExpr ;
-separator nonempty CommaSepQExpr "," ;
-
 TBit.       BType ::= "Bits" ;
 TBool.      BType ::= "Bool" ;
 TInt.       BType ::= "Int" ;
 TUnit.      BType ::= "Void" ;
 TBuffer.    BType ::= "Buffer" "(" Type ")" ;
 
-QTypeVar.   QType ::= "{" LIdent ":" UnqualType "|" QPred "}" ;
-QTypeNoVar. QType ::= "{"            UnqualType "|" QPred "}" ;
+QTypeUnqual.  QType ::= "{" LIdent ":" UnqualType "|" Expr "}" ;
+QTypeNamed.   QType ::= "{" LIdent ":" UIdent     "|" Expr "}" ;
 
-rules CommaSepType ::= Type ;
+rules CommaSepType ::= TypeNoUIdent ;
 separator nonempty CommaSepType "," ;
 
--- Type is split into TypeA and TypeB. TypeB is used in sessions where
--- TypeNamed would introduce a shift/reduce conflict.
-TypeNamed.       TypeA ::= UIdent ;
-TypeNamedParams. TypeB ::= UIdent "(" [CommaSepType] ")" ;
-TypeBuiltin.     TypeB ::= BType ;
-TypeVar.         TypeB ::= LIdent ;
-TypeTup.         TypeB ::= "(" CommaSepType "," [CommaSepType] ")" ;
+TypeNamedParams. UnqualType ::= UIdent "(" [CommaSepType] ")" ;
+TypeBuiltin.     UnqualType ::= BType ;
+TypeVar.         UnqualType ::= LIdent ;
+TypeTup.         UnqualType ::= "(" CommaSepType "," [CommaSepType] ")" ;
 
-rules UnqualType ::= TypeA | TypeB ;
 rules BaseType   ::= QType | UnqualType ;
 
-TypeFun.  Type1 ::= LIdent ":" Type2 "->" Type ;
-TypeBase. Type2 ::= BaseType ;
+TypeFun.   TypeNoUIdent ::= LIdent ":" Type "->" Type ;
+TypeBase.  TypeNoUIdent ::= BaseType ;
 
-coercions Type 2 ;
+rules Type ::= TypeNoUIdent | UIdent ;
 
 -- Session Types
 
 rules SessChoice ::= LIdent "=>" Session ;
 separator nonempty SessChoice "," ;
 
-SessType.  SessOrTy ::= TypeB ;
-SessQType. SessOrTy ::= QType ;
-SessSess.  SessOrTy ::= Session ;
+SessRec.     SessionNoUIdent ::= "rec" UIdent "." Session ;
 
-SessRec.     Session ::= "rec" UIdent "." Session ;
+SessGet.     SessionNoUIdent ::= "?" "[" SessOrTy "]" Session ;
+SessPut.     SessionNoUIdent ::= "!" "[" SessOrTy "]" Session ;
+SessSel.     SessionNoUIdent ::= "+" "[" [SessChoice] "]" ;
+SessCho.     SessionNoUIdent ::= "&" "[" [SessChoice] "]" ;
 
-SessGet.     Session ::= "?" "[" SessOrTy "]" Session ;
-SessPut.     Session ::= "!" "[" SessOrTy "]" Session ;
-SessSel.     Session ::= "+" "[" [SessChoice] "]" ;
-SessCho.     Session ::= "&" "[" [SessChoice] "]" ;
+SessEnd.     SessionNoUIdent ::= ;
+SessVarDual. SessionNoUIdent ::= "dual" UIdent ;
 
-SessEnd.     Session ::= ;
-SessVar.     Session ::= UIdent ;
-SessVarDual. Session ::= "dual" UIdent ;
+rules Session ::= SessionNoUIdent | UIdent ;
+
+SessType.    SessOrTy ::= TypeNoUIdent ;
+SessSess.    SessOrTy ::= SessionNoUIdent ;
+SessUIdent.  SessOrTy ::= UIdent ;
 
 -- Expressions
 
@@ -109,48 +68,6 @@ terminator   LetElem ";" ;
 rules CommaSepExpr ::= Expr ;
 separator nonempty CommaSepExpr "," ;
 
------ Begin operators -----
-
--- Haskell precedence 2
-ELogOr.     Expr3 ::= Expr4 "||" Expr3 ;
-
--- Haskell precedence 3
-ELogAnd.    Expr4 ::= Expr5 "&&" Expr4 ;
-
--- Haskell precedence 4
-EEq.        Expr5 ::= Expr6 "==" Expr6 ;
-ENotEq.     Expr5 ::= Expr6 "!=" Expr6 ;
-EGtEq.      Expr5 ::= Expr6 ">=" Expr6 ;
-ELtEq.      Expr5 ::= Expr6 "<=" Expr6 ;
-EGt.        Expr5 ::= Expr6 ">"  Expr6 ;
-ELt.        Expr5 ::= Expr6 "<"  Expr6 ;
--- elem, notElem
-
--- Haskell precedence 5
--- cons, append
-
--- Haskell precedence 6
-EPlus.      Expr7 ::= Expr7 "+" Expr8 ;
-EMinus.     Expr7 ::= Expr7 "-" Expr8 ;
-
--- Haskell precedence 7
-ETimes.     Expr8 ::= Expr8 "*" Expr9 ;
-EDiv.       Expr8 ::= Expr8 "/" Expr9 ;
-EMod.       Expr8 ::= Expr8 "%" Expr9 ;
--- rem, quot, div
-
--- Haskell precedence 8
--- Power operators
-EBitCat.    Expr9  ::= Expr10 "#" Expr9 ;
-
--- Haskell precedence 9
-
-ELogNot.    Expr12 ::= "!" Expr12 ;
-
------ End operators -----
-
-EIf.           Expr14 ::= "if" Expr "then" Expr "else" Expr ;
-
 rules MaybeType ::= ":" Type ;
 [].    [MaybeType] ::= ;
 (:[]). [MaybeType] ::= MaybeType ;
@@ -158,30 +75,75 @@ rules MaybeType ::= ":" Type ;
 rules LambdaArg ::= LIdent [MaybeType] ;
 separator LambdaArg "," ;
 
-EAbs.          Expr14 ::= "\\" "(" [LambdaArg] ")" [MaybeType] Expr ;
+EAbs.          Expr1 ::= "\\" "(" [LambdaArg] ")" [MaybeType] "->"  Expr1 ;
 
-ELet.          Expr14 ::= "{" [LetElem] Expr "}" ;
+EIf.           Expr2 ::= "if" Expr3 "then" Expr1 "else" Expr1 ;
 
-ETrue.         Expr14 ::= "true" ;
-EFalse.        Expr14 ::= "false" ;
-EInt.          Expr14 ::= DecInt ;
-EUnit.         Expr14 ::= "void" ;
-ETup.          Expr14 ::= "(" CommaSepExpr "," [CommaSepExpr] ")" ;
-EApp.          Expr14 ::= LIdent       "(" [CommaSepExpr] ")" ;
-EAppScoped.    Expr14 ::= LScopedIdent "(" [CommaSepExpr] ")" ;
-EVar.          Expr14 ::= LIdent ;
+ELet.          Expr3 ::= "{" [LetElem] Expr "}" ;
 
-EAnn.          Expr15 ::= Expr14 ":" Type ;
---EAnnQual.      Expr15 ::= Expr14 ":" QTypeVar ;
---EAnnQualNoVar. Expr15 ::= Expr14 ":" QTypeNoVar ;
+----- Begin operators -----
 
-coercions   Expr 15 ;
+EIff.       Expr4 ::= Expr5 "<->" Expr5 ;
+EImp.       Expr5 ::= Expr6 "-->" Expr6 ;
+
+-- Haskell precedence 2
+ELogOr.     Expr6 ::= Expr7 "||" Expr6 ;
+
+-- Haskell precedence 3
+ELogAnd.    Expr7 ::= Expr8 "&&" Expr7 ;
+
+-- Haskell precedence 4
+EEq.        Expr8 ::= Expr9 "==" Expr9 ;
+ENotEq.     Expr8 ::= Expr9 "!=" Expr9 ;
+EGtEq.      Expr8 ::= Expr9 ">=" Expr9 ;
+ELtEq.      Expr8 ::= Expr9 "<=" Expr9 ;
+EGt.        Expr8 ::= Expr9 ">"  Expr9 ;
+ELt.        Expr8 ::= Expr9 "<"  Expr9 ;
+-- elem, notElem
+
+-- Haskell precedence 5
+-- cons, append
+
+-- Haskell precedence 6
+EPlus.      Expr9 ::= Expr9 "+" Expr10 ;
+EMinus.     Expr9 ::= Expr9 "-" Expr10 ;
+
+-- Haskell precedence 7
+ETimes.     Expr10 ::= Expr10 "*" Expr11 ;
+EDiv.       Expr10 ::= Expr10 "/" Expr11 ;
+EMod.       Expr10 ::= Expr10 "%" Expr11 ;
+-- rem, quot, div
+
+-- Haskell precedence 8
+-- Power operators
+EBitCat.    Expr11  ::= Expr12 "#" Expr11 ;
+
+-- Haskell precedence 9
+
+ELogNot.    Expr12 ::= "!" Expr12 ;
+
+----- End operators -----
+
+ETrue.         Expr17 ::= "true" ;
+EFalse.        Expr17 ::= "false" ;
+EInt.          Expr17 ::= AnyInt ;
+EUnit.         Expr17 ::= "void" ;
+ETup.          Expr17 ::= "(" CommaSepExpr "," [CommaSepExpr] ")" ;
+EApp.          Expr17 ::= LIdent       "(" [CommaSepExpr] ")" ;
+--EAppScoped.    Expr17 ::= LScopedIdent "(" [CommaSepExpr] ")" ;
+EVar.          Expr17 ::= LIdent ;
+
+EAnn.          Expr18 ::= "(" Expr17 ":" Type ")" ;
+
+coercions   Expr 18 ;
 
 -- Process grammar
 
+rules Chan ::= "^" LIdent ;
+
 -- Builtin channels can have "::" in their name
-ChanNotScoped. Chan ::= "^" LIdent ;
-ChanScoped.    Chan ::= "^" LScopedIdent ;
+--ChanNotScoped. Chan ::= "^" LIdent ;
+--ChanScoped.    Chan ::= "^" LScopedIdent ;
 
 ProcNew.     Proc1 ::= "new" "(" "^" LIdent "," "^" LIdent ")"
   ":" Session   ";" Proc1 ;
@@ -232,22 +194,17 @@ TDefProto.  TypeDef ::= "protocol" UIdent ":" Session ";" ;
 -- TDefArea.   TypeDef ::= "area"     UIdent "@" AnyInt ":" UIdent ";" ;
 
 rules FuncArg ::= LIdent ":" Type ;
---FuncArgType.  FuncArg ::= LIdent ":" UnqualType ;
---FuncArgQType. FuncArg ::= LIdent ":" QTypeNoVar ;
 separator nonempty FuncArg "," ;
 
 ProcArgSess.  ProcArg ::= "^" LIdent ":" Session ;
 ProcArgType.  ProcArg ::=     LIdent ":" Type ;
---ProcArgQType. ProcArg ::=     LIdent ":" QTypeNoVar ;
 separator ProcArg "," ;
 
 rules  Global  ::= LIdent "=" Expr ";" ;
 
--- func myFunction(x: a, y: Something, z: {Int | z >= 0}) -> Int { ... }
--- func myFunction(x: a, y: Something, z: {Int | z >= 0}) -> {w : Int | w <= 0} { ... }
-rules  Func    ::= "func" LIdent "(" [FuncArg] ")" ":" Type Expr ;
---FuncRetType.  Func    ::= "func" LIdent "(" [FuncArg] ")" "->" Type Expr ;
---FuncRetQType. Func    ::= "func" LIdent "(" [FuncArg] ")" "->" QTypeVar Expr ;
+-- func myFunction(x: a, y: Something, z: {Int | z >= 0}) : Int = { ... }
+-- func myFunction(x: a, y: Something, z: {Int | z >= 0}) : {w : Int | w <= 0} = { ... }
+rules  Func    ::= "func" LIdent "(" [FuncArg] ")" ":" Type "=" Expr ;
 
 rules ProcDef ::= "proc" LIdent "(" [ProcArg] ")" "{" Proc "}" ;
 

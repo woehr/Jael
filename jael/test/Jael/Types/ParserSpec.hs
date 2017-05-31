@@ -1,9 +1,7 @@
-{-# Language NoImplicitPrelude #-}
 {-# Language OverloadedStrings #-}
 
 module Jael.Types.ParserSpec (spec) where
 
-import Jael.Prelude
 import Test.Hspec
 
 import qualified Data.Text as T
@@ -48,16 +46,16 @@ spec = do
     describe "associativity" $ do
       it "should bind * and / more strongly than + and -" $ do
         parseExpr "1*2*3+1/2-~1" `shouldBe`
-          (G.EMinus (G.EPlus (G.ETimes (G.ETimes (G.EInt (G.DecInt ((1,1), "1")))
-                                                 (G.EInt (G.DecInt ((1,3), "2")))
+          (G.EMinus (G.EPlus (G.ETimes (G.ETimes (G.EInt (G.AnyIntDecInt $ G.DecInt ((1,1), "1")))
+                                                 (G.EInt (G.AnyIntDecInt $ G.DecInt ((1,3), "2")))
                                        )
-                                       (G.EInt (G.DecInt ((1,5), "3")))
+                                       (G.EInt (G.AnyIntDecInt $ G.DecInt ((1,5), "3")))
                              )
-                             (G.EDiv   (G.EInt (G.DecInt ((1,7), "1")))
-                                       (G.EInt (G.DecInt ((1,9), "2")))
+                             (G.EDiv   (G.EInt (G.AnyIntDecInt $ G.DecInt ((1,7), "1")))
+                                       (G.EInt (G.AnyIntDecInt $ G.DecInt ((1,9), "2")))
                              )
                     )
-                    (G.EInt (G.DecInt ((1,11), "~1")))
+                    (G.EInt (G.AnyIntDecInt $ G.DecInt ((1,11), "~1")))
           )
 
   describe "integer parsers" $ do
@@ -86,9 +84,9 @@ spec = do
         )
     it "transforms types" $ do
       (jaelify . parseType) "A({x:Int|x>0})" `shouldBe`
-        (F.trueReft :<
+        (Nothing :<
            TConF (Token "A" (1,1))
-                   [F.reft (F.symbol ("x"::T.Text)) (F.PAtom F.Gt (F.EVar "x") (F.ECon (F.I 0)))
+                   [Just (F.reft (F.symbol ("x"::T.Text)) (F.PAtom F.Gt (F.EVar "x") (F.ECon (F.I 0))))
                     :< TIntF
                    ]
         )

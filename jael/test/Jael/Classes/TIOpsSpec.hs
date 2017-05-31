@@ -1,9 +1,7 @@
-{-# Language NoImplicitPrelude #-}
 {-# Language OverloadedStrings #-}
 
 module Jael.Classes.TIOpsSpec (spec) where
 
-import           Jael.Prelude
 import           Jael.Test.Util
 import           Test.Hspec
 

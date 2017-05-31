@@ -1,8 +1,5 @@
-{-# Language NoImplicitPrelude #-}
-
 module Jael.Types.Ann where
 
-import Jael.Prelude
 import Jael.Util
 
 type Ann f a = Cofree f a

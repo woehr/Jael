@@ -2,7 +2,6 @@
 {-# Language DeriveFoldable #-}
 {-# Language DeriveTraversable #-}
 {-# Language FlexibleInstances #-}
-{-# Language NoImplicitPrelude #-}
 {-# Language OverloadedStrings #-}
 {-# Language PatternSynonyms #-}
 {-# Language TemplateHaskell #-}
@@ -14,13 +13,14 @@
 
 module Jael.Types.Expr where
 
-import           Jael.Prelude hiding ((<>), (<+>), (<$>))
+import           Prelude --hiding ((<+>), (<$>))
 import qualified Control.Comonad.Trans.Cofree as C
 import           Data.Eq.Deriving (deriveEq1)
+--import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 --import qualified Language.Fixpoint.Types as F
-import           Text.PrettyPrint.Leijen.Text
+import qualified Text.PrettyPrint.Leijen.Text as P
 import           Text.Show.Deriving (deriveShow1)
 
 import           Jael.Types.Ann
@@ -43,34 +43,38 @@ data Constant = CUnit
               | CLe
               | CGt
               | CLt
+              | CIff
+              | CImp
               | CBitCat
               | CNot
               deriving (Data, Eq, Ord, Show)
 
-instance Pretty Constant where
+instance P.Pretty Constant where
   pretty CUnit = "void"
   pretty (CBool True) = "true"
   pretty (CBool False) = "false"
   pretty (CInt (Token i _)) =
-    let i' = textStrict . T.pack . show . abs $ i
+    let i' = P.textStrict . T.pack . show . abs $ i
     in  if i >= 0
           then i'
-          else text "~" <> i'
-  pretty CAdd    = text "+"
-  pretty CSub    = text "-"
-  pretty CMul    = text "*"
-  pretty CDiv    = text "/"
-  pretty CMod    = text "%"
-  pretty COr     = text "||"
-  pretty CAnd    = text "&&"
-  pretty CEq     = text "=="
-  pretty CNe     = text "!="
-  pretty CGe     = text ">="
-  pretty CLe     = text "<="
-  pretty CGt     = text "<"
-  pretty CLt     = text ">"
-  pretty CBitCat = text "#"
-  pretty CNot    = text "!"
+          else P.text "~" <> i'
+  pretty CAdd    = P.text "+"
+  pretty CSub    = P.text "-"
+  pretty CMul    = P.text "*"
+  pretty CDiv    = P.text "/"
+  pretty CMod    = P.text "%"
+  pretty COr     = P.text "||"
+  pretty CAnd    = P.text "&&"
+  pretty CEq     = P.text "=="
+  pretty CNe     = P.text "!="
+  pretty CGe     = P.text ">="
+  pretty CLe     = P.text "<="
+  pretty CGt     = P.text "<"
+  pretty CLt     = P.text ">"
+  pretty CIff    = P.text "-->"
+  pretty CImp    = P.text "<->"
+  pretty CBitCat = P.text "#"
+  pretty CNot    = P.text "!"
 
 data ExprF a = EAppF a a
              | EAbsF Ident a
@@ -83,8 +87,8 @@ data ExprF a = EAppF a a
 
 type Expr = Fix ExprF
 
-instance Pretty Expr where
-  pretty = (pretty::MaybeTypedExpr -> Doc) . cata ([] :<)
+instance P.Pretty Expr where
+  pretty = (P.pretty::MaybeTypedExpr -> P.Doc) . cata ([] :<)
 
 -- An annotated expression
 type HMTypedExpr     = Ann ExprF TScheme
@@ -135,7 +139,7 @@ pattern PVar a     = Fix (PVarF a)
 pattern PCon :: (Constant, [QType]) -> PExpr
 pattern PCon a     = Fix (PConF a)
 
-instance Pretty MaybeTypedExpr where
+instance P.Pretty MaybeTypedExpr where
   pretty = combinePExpr . cata alg
     where
       alg :: C.CofreeF ExprF [QType] PExpr -> PExpr
@@ -158,44 +162,44 @@ instance Pretty MaybeTypedExpr where
       alg (mt C.:< (EVarF (Token v _))) = PVar (v, mt)
       alg (mt C.:< (EConF c))           = PCon (c, mt)
 
-      combinePExpr :: PExpr -> Doc
+      combinePExpr :: PExpr -> P.Doc
       combinePExpr = cata alg'
 
-      alg' :: PExprF Doc -> Doc
+      alg' :: PExprF P.Doc -> P.Doc
       alg' (PAppF f as)
         | PVar (_, [_]) <- f
-        = parens (combinePExpr f) <> tupled as
+        = P.parens (combinePExpr f) <> P.tupled as
 
       alg' (PAppF f as)
         | PCon (c, _) <- f
         , [a1, a2] <- as
         , c `S.member` infixOps
-        = parens $ a1 <+> pretty c <+> a2
+        = P.parens $ a1 P.<+> P.pretty c P.<+> a2
 
-      alg' (PAppF f as) = (combinePExpr f) <> tupled as
+      alg' (PAppF f as) = (combinePExpr f) <> P.tupled as
 
-      alg' (PLetF xs e) = semiBraces $
-        map (\(n,d)->textStrict n <+> equals <+> d) xs ++ [e]
+      alg' (PLetF xs e) = P.semiBraces $
+        map (\(n,d) -> P.textStrict n P.<+> P.equals P.<+> d) xs ++ [e]
 
-      alg' (PAbsF as e) = backslash <> tupled as' <$> indent 2 e
-        where as' = map textStrict as
+      alg' (PAbsF as e) = P.backslash <> P.tupled as' P.<$> P.indent 2 e
+        where as' = map P.textStrict as
 
-      alg' (PIteF b t e) = text "if" <+> b
-                                 <$> indent 2 t
-                                 <$> text "else"
-                                 <$> indent 2 e
+      alg' (PIteF b t e) = P.text "if" P.<+> b
+                                 P.<$> P.indent 2 t
+                                 P.<$> P.text "else"
+                                 P.<$> P.indent 2 e
 
-      alg' (PTupF es)   = tupled es
+      alg' (PTupF es)   = P.tupled es
 
       alg' (PVarF (n, mt)) = case mt of
-        [] -> textStrict n
-        ts -> foldr (\t acc-> acc <+> colon <+> pretty t)
-                    (textStrict n) ts
+        [] -> P.textStrict n
+        ts -> foldr (\t acc-> acc P.<+> P.colon P.<+> P.pretty t)
+                    (P.textStrict n) ts
 
       alg' (PConF (c, mt)) = case mt of
-        [] -> pretty c
-        ts -> foldr (\t acc-> acc <+> colon <+> pretty t)
-                    (pretty c) ts
+        [] -> P.pretty c
+        ts -> foldr (\t acc-> acc P.<+> P.colon P.<+> P.pretty t)
+                    (P.pretty c) ts
 
 infixOps :: S.Set Constant
 infixOps = S.fromList
@@ -227,94 +231,60 @@ freeVars = S.map value . cata alg
 getType :: HMTypedExpr -> Type
 getType = schType . extract
 
--- reQual e1 e2 adds refinements from e1 to e2 while retaining the
--- types of e2. Both e1 and e2 must have the same structure. As such, serves as
--- a sanity check of hm inference.
-reQual :: MaybeTypedExpr -> HMTypedExpr -> Either T.Text TypedExpr
-reQual mte hte = do
-  (t, es) <- case (mte, hte) of
-               (qts :< e1, hmt :< e2) ->
-                 liftA (,(e1,e2)) $ foldM (flip addReftsTo) (noQual $ schType hmt) qts
-  q <- matchExprs es
-  return $ Scheme
-             { schGens = schGens (extract hte)
-             , schIns  = fmap noQual $ schIns  (extract hte)
-             , schType = t }
-           :< q
+-- -- reQual e1 e2 adds refinements from e1 to e2 while retaining the
+-- -- types of e2. Both e1 and e2 must have the same structure. As such, serves as
+-- -- a sanity check of hm inference.
+-- reQual :: MaybeTypedExpr -> HMTypedExpr -> Either T.Text TypedExpr
+-- reQual mte hte = return $ joinExprs addQuals mte hte
 
-matchExprs :: (ExprF MaybeTypedExpr, ExprF HMTypedExpr) -> Either T.Text (ExprF TypedExpr)
-matchExprs es =
-  case es of
-    (EAppF x y,   EAppF x' y')    -> liftA2 EAppF (reQual x x')
-                                                  (reQual y y')
+-- addQuals :: [QType] -> TScheme -> QScheme
+-- addQuals qs s = foldr addQuals' (fmap noQual s) qs
 
-    (EAbsF n e,   EAbsF n' e')    -> assert (n==n') $
-                                     liftA (EAbsF n) (reQual e e')
+-- addQuals' :: QType -> QScheme -> QScheme
+-- addQuals' x s = let (Scheme gs is y) = asdf x s
+--                 in Scheme gs is $ joinTypes (<>) x y
 
-    (ELetF n x y, ELetF n' x' y') -> assert (n==n') $
-                                     liftA2 (ELetF n) (reQual x x')
-                                                      (reQual y y')
+-- -- Instantiate a type variable in s when that type is known in t
+-- asdf :: QType -> QScheme -> QScheme
+-- asdf t (Scheme gs is s) = Scheme gs is $ asdf' is t s
 
-    (EIteF b x y, EIteF b' x' y') -> liftA3 EIteF (reQual b b')
-                                                  (reQual x x')
-                                                  (reQual y y')
+-- asdf' :: M.Map T.Text QType -> QType -> QType -> QType
+-- asdf' sub x@(_:< x') (r :< TVarF i) =
+--   assert (removeAnn (M.findWithDefault undefined (value i) sub) == removeAnn x)
+--     $ r :< x'
+-- asdf' sub (_ :< TFunF _ t u) (r :< TFunF b' t' u') =
+--   r :< TFunF b' (asdf' sub t t') (asdf' sub u u')
+-- asdf' _ _ x = x
 
-    (ETupF xs,    ETupF xs')      -> liftA ETupF $ sequenceA $
-                                     map (uncurry reQual) (zip xs xs')
+joinTypes :: (Show a, Show b) => (a -> b -> c) -> Cofree TypeF a -> Cofree TypeF b -> Cofree TypeF c
+joinTypes f tA tB = case (tA, tB) of
+  (r :< TVarF i, r' :< TVarF i') ->
+    assert (i == i') $ f r r' :< TVarF i
+  (r :< TFunF b t u, r' :< TFunF b' t' u') ->
+    assert (b == b') $ f r r' :< TFunF b (joinTypes f t t') (joinTypes f u u')
+  (r :< TConF i ts, r' :< TConF i' ts') ->
+    assert (i == i') $ f r r' :< TConF i (zipWith (joinTypes f) ts ts')
+  (r :< TTupF ts, r' :< TTupF ts') ->
+    f r r' :< TTupF (zipWith (joinTypes f) ts ts')
+  (t1, t2) -> error $ "Types' structures don't match\n" ++ show t1 ++ "\n" ++ show t2
 
-    (EVarF n,     EVarF n')       -> assert (n==n') $ pure $ EVarF n
-    (EConF c,     EConF c')       -> assert (c==c') $ pure $ EConF c
-
-    (e1,          e2)             -> error $ errMsg e1 e2
-
-  where errMsg e1 e2 = "Structure of expressions not match\n\n" ++
-          show e1 ++ "\n\n" ++ show e2
-
--- Appends refinements from the first type to the second as long as the shapes
--- of the two make sense.
-addReftsTo :: QType -> QType -> Either T.Text QType
---addReftsTo (r :< (TVarF _))  (r' :< t)  = return $ (r `mappend` r') :< t
-addReftsTo (r :< (TVarF _))  (r' :< t@(TVarF _))  = return $ (r `mappend` r') :< t
-
-addReftsTo (_ :< t1) (_ :< t2@(TVarF _)) = error $
-  "Can't add quals from " ++ show t1 ++ " to " ++ show t2
-
-addReftsTo (r :< TFunF b1 t1 t2) (r' :< TFunF b2 t1' t2') =
-  assert (b1 == b2)
-  liftA (r `mappend` r' :<) $
-  liftA2 (TFunF b1) (t1 `addReftsTo` t1') (t2 `addReftsTo` t2')
-
-addReftsTo (r :< TTupF ts) (r' :< TTupF ts') =
-  liftA (r `mappend` r' :<) $ liftA TTupF $ ts `addReftsList` ts'
-
-addReftsTo (r :< TConF n ts) (r' :< TConF n' ts') = assert (value n==value n') $
-  liftA (r `mappend` r' :<) $ liftA (TConF n) $ ts `addReftsList` ts'
-
---addReftsTo (r :< TInsF _ t) t' =
---  assert (r == F.trueReft)
---    addReftsTo t t'
---
---addReftsTo t (r :< TInsF _ t') =
---  assert (r == F.trueReft)
---    addReftsTo t t'
---
---addReftsTo (r :< TGenF _ t) t' =
---  assert (r == F.trueReft)
---    addReftsTo t t'
---
---addReftsTo t (r :< TGenF _ t') =
---  assert (r == F.trueReft)
---    addReftsTo t t'
-
-addReftsTo t t' = trace (show t ++ "\n\n" ++ show t')
-  error $
-  "Doesn't make sense to add refinements from "
-    ++ show (pretty t)
-    ++ " to "
-    ++ show (pretty t')
-
-addReftsList :: [QType] -> [QType] -> Either T.Text [QType]
-addReftsList ts ts' = sequenceA $ map (uncurry addReftsTo) (zip ts ts')
+joinExprs :: (a -> b -> c) -> Cofree ExprF a -> Cofree ExprF b -> Cofree ExprF c
+joinExprs f exA exB = case (exA, exB) of
+  (x :< EAppF a b, y :< EAppF a' b') ->
+    f x y :< EAppF (joinExprs f a a') (joinExprs f b b')
+  (x :< EAbsF i a, y :< EAbsF i' a') ->
+    assert (i == i') $ f x y :< EAbsF i (joinExprs f a a')
+  (x :< ELetF i a b, y :< ELetF i' a' b') ->
+    assert (i == i') $ f x y :< ELetF i (joinExprs f a a') (joinExprs f b b')
+  (x :< EIteF a b c, y :< EIteF a' b' c') ->
+    f x y :< EIteF (joinExprs f a a') (joinExprs f b b') (joinExprs f c c')
+  (x :< ETupF as, y :< ETupF as') ->
+    f x y :< ETupF (zipWith (joinExprs f) as as')
+  (x :< EVarF i, y :< EVarF i') ->
+    assert (i == i') $ f x y :< EVarF i
+  (x :< EConF c, y :< EConF c') ->
+    assert (c == c') $ f x y :< EConF c
+  (_, _) -> error "Expressions' structures don't match"
 
 --dispSubExprs :: TypedExpr -> [String]
 --dispSubExprs a = do

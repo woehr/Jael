@@ -1,9 +1,7 @@
-{-# Language NoImplicitPrelude #-}
 {-# Language OverloadedStrings #-}
 
 module Jael.Types.ExprSpec (spec) where
 
-import           Jael.Prelude
 import           Test.Hspec
 
 --import qualified Data.Text as T

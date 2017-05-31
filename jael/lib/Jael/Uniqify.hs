@@ -1,5 +1,4 @@
 {-# Language MultiWayIf #-}
-{-# Language NoImplicitPrelude #-}
 {-# Language RecordWildCards #-}
 {-# Language TupleSections #-}
 
@@ -9,7 +8,6 @@ module Jael.Uniqify
   )
 where
 
-import           Jael.Prelude
 import qualified Control.Comonad.Trans.Cofree as C
 import qualified Data.HashSet as S
 import qualified Data.Map as M
@@ -107,8 +105,8 @@ uniqifyExprAlg (t C.:< EConF c) = do
   t' <- uniqifyQType' t
   return $ t' :< EConF c
 
-uniqifyQTypeAlg :: C.CofreeF TypeF F.Reft (UniqifyM QType)
-                                       -> (UniqifyM QType)
+uniqifyQTypeAlg :: C.CofreeF TypeF (Maybe F.Reft) (UniqifyM QType)
+                                               -> (UniqifyM QType)
 
 uniqifyQTypeAlg (r C.:< (TFunF b t1 t2)) = do
     r' <- subReft r
@@ -128,19 +126,6 @@ uniqifyQTypeAlg (r C.:< TConF n ts) = do
 
 uniqifyQTypeAlg (r C.:< TVarF x) = liftM (:< TVarF x) (subReft r)
 
---uniqifyQTypeAlg (r C.:< TInsF vsts t) = do
---  let (vs, ts) = unzip vsts
---  ts' <- sequence ts
---  let vsts' = zip vs ts'
---  t' <- t
---  r' <- subReft r
---  return $ r' :< TInsF vsts' t'
---
---uniqifyQTypeAlg (r C.:< TGenF vs t) = do
---  t' <- t
---  r' <- subReft r
---  return $ r' :< TGenF vs t'
-
 inEnv :: T.Text -> UniqifyM a -> UniqifyM (T.Text, a)
 inEnv v x = do
   v' <- nextPV
@@ -154,17 +139,18 @@ uniqifyQType' t = do
   modify (\(s@UniqifyS{..}) -> s{ subMap = subMap `M.union` m})
   return t'
 
-subReft :: F.Reft -> UniqifyM F.Reft
-subReft r@(F.Reft (v, e))
+subReft :: Maybe F.Reft -> UniqifyM (Maybe F.Reft)
+subReft (Just r@(F.Reft (v, e)))
   -- Only uniqify interesting refinements
   | r == F.trueReft =
-      return r
+      return $ Just r
   | otherwise = do
       let vs = S.toList $ F.reftFreeVars r
       vs' <- doLookups $ map F.symbolText vs
       v'  <- liftM F.symbol nextVV
       let su = F.mkSubst $ (v, F.eVar v'):(zip vs $ map F.eVar vs')
-      return $ F.Reft (v', F.subst su e)
+      return . Just $ F.Reft (v', F.subst su e)
+subReft Nothing = return Nothing
 
 doLookups :: [T.Text] -> UniqifyM [T.Text]
 doLookups = mapM f

@@ -1,17 +1,15 @@
 {-# Language FlexibleInstances #-}
-{-# Language NoImplicitPrelude #-}
 {-# Language TypeSynonymInstances #-}
 {-# Language OverloadedStrings #-}
 
 module Jael.Infer where
 
-import           Jael.Prelude
 import qualified Control.Comonad.Trans.Cofree as C
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
 
-import qualified Jael.Constants as JC
+import           Jael.Constants
 import           Jael.Classes
 import           Jael.Types
 import           Jael.Util
@@ -82,7 +80,7 @@ doHm ([] C.:< EIteF b t e) = do
   (te2, is2) <- t
   (te3, is3) <- e
   let (t1, t2, t3) = (extract te1, extract te2, extract te3)
-  unify t1 $ TBool
+  unify t1 TBool
   unify t2 t3
   return (t2 :< EIteF te1 te2 te3, S.unions [is1, is2, is3])
 
@@ -115,26 +113,7 @@ doHm ([] C.:< ETupF es) = do
 
 doHm ([] C.:< EConF c) = do
   tv <- freshTv
-  let t = case c of
-            CUnit   -> TUnit
-            CBool _ -> TBool
-            CInt _  -> TInt
-            CAdd    -> removeAnn (schType JC.add)
-            CSub    -> removeAnn undefined
-            CMul    -> removeAnn undefined
-            CDiv    -> removeAnn undefined
-            CMod    -> removeAnn undefined
-            COr     -> removeAnn undefined
-            CAnd    -> removeAnn undefined
-            CEq     -> removeAnn undefined
-            CNe     -> removeAnn undefined
-            CGe     -> removeAnn undefined
-            CLe     -> removeAnn undefined
-            CGt     -> removeAnn undefined
-            CLt     -> removeAnn undefined
-            CBitCat -> removeAnn undefined
-            CNot    -> removeAnn undefined
-  unify tv t
+  unify tv $ constantType c
   return (tv :< EConF c, S.empty)
 
 doHm (ts C.:< e) = do
@@ -170,10 +149,6 @@ unificationSolver (s, cs) =
 
 unifier :: Type -> Type -> SolveM TypeSub
 unifier t1 t2 | t1 == t2 = return nullSub
---unifier (TIns s t1) t2 = unifier (apply (M.fromList s) t1) t2
---unifier t1 (TIns s t2) = unifier t1 (apply (M.fromList s) t2)
---unifier (TGen _ t1) t2 = unifier t1 t2
---unifier t1 (TGen _ t2) = unifier t1 t2
 unifier (TFun _ l r) (TFun _ l' r') = unifyMany [l, r] [l', r']
 unifier (TVar n) t = bind n t
 unifier t (TVar n) = bind n t

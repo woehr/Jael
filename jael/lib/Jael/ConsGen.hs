@@ -1,12 +1,10 @@
-{-# Language NoImplicitPrelude #-}
-{-# Language TypeSynonymInstances #-}
 {-# Language FlexibleInstances #-}
-{-# Language RecordWildCards #-}
 {-# Language OverloadedStrings #-}
+{-# Language RecordWildCards #-}
+{-# Language TupleSections #-}
+{-# Language TypeSynonymInstances #-}
 
 module Jael.ConsGen where
-
-import           Jael.Prelude
 
 import qualified Control.Comonad.Trans.Cofree as C
 import qualified Data.HashMap.Strict as HM
@@ -20,11 +18,9 @@ import qualified Language.Fixpoint.Solver as F
 import qualified Language.Fixpoint.Types as F
 
 import           Jael.Classes
-import qualified Jael.Constants as JC
+import           Jael.Constants
 import           Jael.Types
 import           Jael.Util
-
-type Template = QScheme
 
 -- Use Fixpoint's Reftable?
 class Reftable a where
@@ -39,32 +35,46 @@ instance Reftable F.Reft where
 class Sortable a where
   toSort :: a -> F.Sort
 
+instance Sortable QType where
+  toSort t = toSort (Scheme S.empty M.empty $ removeAnn t)
+
 instance Sortable Template where
+  toSort (Scheme gs is t) = toSort (Scheme gs (M.map removeAnn is) (removeAnn t))
+
+instance Sortable QScheme where
+  toSort (Scheme gs is t) = toSort (Scheme gs (M.map removeAnn is) (removeAnn t))
+
+instance Sortable TScheme where
   toSort t = foldr F.FAbs (mkSort t) (M.elems tvMap)
 
-    where mkSort :: Template -> F.Sort
-          mkSort (Scheme{..}) =
-            cata alg (apply (M.map removeAnn schIns) schType)
+    where mkSort :: TScheme -> F.Sort
+          mkSort Scheme{..} =
+            cata alg (apply schIns schType)
 
-          alg :: C.CofreeF TypeF F.Reft F.Sort -> F.Sort
-          alg (_ C.:< TVarF (Token n _)) =
+          alg :: TypeF F.Sort -> F.Sort
+          alg (TVarF (Token n _)) =
             F.FVar $ M.findWithDefault
               (error $ "unbound " ++ show n ++ " in " ++ show t)
               n tvMap
-          alg (_ C.:< TFunF _ s1 s2) = F.FFunc s1 s2
+          alg (TFunF _ s1 s2) = F.FFunc s1 s2
 
-          alg (_ C.:< TTupF ss)    =
+          alg (TTupF ss)    =
             F.fAppTC (F.symbolFTycon . F.dummyLoc . F.symbol $
                       "Tup" ++ show (length ss)) ss
 
-          alg (_ C.:< TConF n ss) =
-            if value n == "Int"
-              then F.FInt
-              else F.fAppTC
-                     (F.symbolFTycon . F.dummyLoc . F.symbol . value $ n) ss
+          alg (TConF n ss)
+            | value n == "Int"
+            = F.intSort
+            | value n == "Bool"
+            = F.boolSort
+            | otherwise =F.fAppTC
+                (F.symbolFTycon . F.dummyLoc . F.symbol . value $ n) ss
 
           tvMap :: M.Map T.Text Int
           tvMap = M.fromList $ zip (S.toList $ schGens t) [0..]
+
+instance Sortable Constant where
+  toSort = toSort . constantScheme
 
 class SortedReftable a where
   toSReft :: a -> F.SortedReft
@@ -87,9 +97,9 @@ instance SortedReftable Template where
 --   -> [Triggered Expr]
 --   -> GInfo SubC a
 
-solve :: TypedExpr -> IO ()
+solve :: (HMTypedExpr, MaybeTypedExpr) -> IO (F.FixResult (Integer, ()), F.FixSolution)
 solve te = do
-  let (_, env, cs) = runConsGen te
+  let (_, env, cs, bindMap) = runConsGen te
 
   let fi = F.fi
              (subcs cs)
@@ -98,38 +108,37 @@ solve te = do
              F.emptySEnv
              F.emptySEnv
              (kuts cs)
---            []
-             (map (\q -> F.mkQual
+             (
+--             map (\q -> F.mkQual
+--                 (F.symbol ("CmpZ" :: String))
+--                 [(F.symbol ("v"::String), F.FTC $ F.symbolFTycon "a")]
+--                 (F.PAtom q (F.eVar ("v"::String)) (F.ECon $ F.I 0) )
+--                 (F.dummyPos "")
+--               ) [F.Gt, F.Ge, F.Lt, F.Le, F.Eq, F.Ne]
+--          ++ map (\q -> F.mkQual
+--                 (F.symbol ("Cmp" :: String))
+--                 [ (F.symbol ("v"::String), F.FTC $ F.symbolFTycon "a")
+--                 , (F.symbol ("x"::String), F.FTC $ F.symbolFTycon "a")
+--                 ]
+--                 (F.PAtom q (F.eVar ("v"::String)) (F.eVar ("x"::String)))
+--                 (F.dummyPos "")
+--               ) [F.Gt, F.Ge, F.Lt, F.Le, F.Eq, F.Ne]
+             map (\q -> F.mkQual
                  (F.symbol ("CmpZ" :: String))
-                 [(F.symbol ("v"::String), F.FTC $ F.symbolFTycon "a")]
+                 [(F.symbol ("v"::String), F.FVar 0)]
                  (F.PAtom q (F.eVar ("v"::String)) (F.ECon $ F.I 0) )
                  (F.dummyPos "")
                ) [F.Gt, F.Ge, F.Lt, F.Le, F.Eq, F.Ne]
           ++ map (\q -> F.mkQual
                  (F.symbol ("Cmp" :: String))
-                 [ (F.symbol ("v"::String), F.FTC $ F.symbolFTycon "a")
-                 , (F.symbol ("x"::String), F.FTC $ F.symbolFTycon "a")
+                 [ (F.symbol ("v"::String), F.FVar 0)
+                 , (F.symbol ("x"::String), F.FVar 0)
                  ]
                  (F.PAtom q (F.eVar ("v"::String)) (F.eVar ("x"::String)))
                  (F.dummyPos "")
                ) [F.Gt, F.Ge, F.Lt, F.Le, F.Eq, F.Ne]
---          ++ map (\q -> F.mkQual
---                 (F.symbol ("Cmp2" :: String))
---                 [ (F.symbol ("x"::String), F.FTC $ F.symbolFTycon "a")
---                 , (F.symbol ("v"::String), F.FTC $ F.symbolFTycon "a")
---                 ]
---                 (F.PAtom q (F.eVar ("v"::String)) (F.eVar ("x"::String)))
---                 (F.dummyPos "")
---               ) [F.Gt, F.Ge, F.Lt, F.Le, F.Eq, F.Ne]
---          ++ map (\q -> F.mkQual
---                 (F.symbol ("Bot" :: String))
---                 [ (F.symbol ("v"::String), q)
---                 ]
---                 (F.PAtom F.Eq (F.ECon $ F.I 0) (F.ECon $ F.I 1))
---                 (F.dummyPos "")
---               ) [F.FVar 0, F.FObj "obj", F.FTC $ F.symbolFTycon "a", F.boolSort, F.intSort]
              )
-             mempty
+             bindMap
              False
              False
              []
@@ -137,18 +146,18 @@ solve te = do
   let cfg = F.defConfig
         { F.save = True
 --        , F.stats = True
-        , F.eliminate = F.None
-        , F.elimStats = True
+--        , F.eliminate = F.None
+--        , F.elimStats = True
 --        , F.parts = True
 --        , F.metadata = True
         }
 
-  F.writeFInfo cfg fi "fi.out"
+--  F.writeFInfo cfg fi "fi.out"
 
   F.Result res sol _ <- F.solve cfg fi
-  putStrLn $ show res
+  print res
   putStrLn $ show sol ++ "\n"
-  return ()
+  return (res, sol)
 
 data CGEnv = CGEnv
   { cgSymMap :: M.Map T.Text Template
@@ -177,44 +186,106 @@ instance Monoid (CGCons a) where
 data CGState = CGState
   { kIndex   :: Integer
   , cgGBinds :: F.BindEnv
+  , cgBindInfo :: F.BindMap ()
   }
 
 initState :: CGState
 initState = CGState
   { kIndex   = 0
   , cgGBinds = F.emptyBindEnv
+  , cgBindInfo = HM.empty
   }
 
 type CG = RWST CGEnv (CGCons ()) CGState (Except T.Text)
 
-runConsGen :: TypedExpr -> (Template, F.BindEnv, CGCons ())
-runConsGen te = case runExcept $ runRWST (act te) emptyEnv initState of
+runConsGen :: (HMTypedExpr, MaybeTypedExpr)
+           -> (Template, F.BindEnv, CGCons (), F.BindMap ())
+runConsGen (hte, mte) = case runExcept $ runRWST act emptyEnv initState of
   Left e -> error $ T.unpack e
-  Right (a, b, c) -> (a, cgGBinds b, c)
-  where act e = do
-          e' <- sequence $ fmap instTmplt e
-          consGen e'
+  Right (a, b, c) -> (a, cgGBinds b, c, cgBindInfo b)
 
-consGen :: TypedExpr -> CG Template
+  where
+    act :: CG Template
+    act = consGen te'
 
-consGen (qt :< EVarF (Token n _)) = do
-  mkWfC [qt]
+    te' :: Cofree ExprF (TScheme, [QType])
+    te' = joinExprs (,) hte mte
+
+-- -- Use on the inferred type to get an hm type and a template
+-- -- specifying additional constraints which are used in consGen
+-- freshFromQScheme :: QScheme -> CG (TScheme, Template)
+-- freshFromQScheme qs@(Scheme gs is qt) = do
+--   -- should hit one day
+--   assert (null is) return ()
+--   -- The uninstantiated hm type
+--   let ts = Scheme gs (M.map removeAnn is) (removeAnn qt)
+--   -- Uninstantiated constraint template
+--   ct <- qschemeToTemplate qs
+--   -- Instantiated constraint template
+--   ct' <- instTmplt ct
+--   return (ts, ct')
+
+-- Replace Nothings with a fresh KVar to get an RType
+nothingToKvar :: QType -> CG RType
+nothingToKvar = sequence . fmap (maybe freshKVar return)
+
+-- Essentially, the function nothingToKvar over a QScheme
+-- No instantiation, no well-formedness constraints
+-- Use if you need to turn a QScheme into a Template for instantiation
+-- (on constants' types or inferred types)
+qschemeToTemplate :: QScheme -> CG Template
+qschemeToTemplate (Scheme gs is qt) = do
+  rtype <- nothingToKvar qt
+  -- QType becomes RType, nothings become fresh kvars
+  is' <- sequence $ M.map nothingToKvar is
+  return $ Scheme gs is' rtype
+
+-- Make well-formedness constraints and substitute instantiations
+instTmplt :: Template -> CG Template
+instTmplt (Scheme gs is t) = do
+  assert (S.empty == S.intersection gs (S.fromList $ M.keys is)) return ()
+  mkWfCsFromMap $ M.map (Scheme gs M.empty) is
+--  mkWfC [Scheme gs is t]
+  return $ Scheme gs M.empty (subRType is t)
+
+-- One day RType should be an instance of TIOps
+subRType :: M.Map T.Text RType -> RType -> RType
+subRType su = cata alg
+  where
+    alg :: C.CofreeF TypeF F.Reft RType -> RType
+    alg (varRef C.:< TVarF n) = do
+      let subRef :< qt = M.findWithDefault (varRef :< TVarF n) (value n) su
+      varRef <> subRef :< qt
+    alg (r C.:< t) = r :< t
+
+-------------------------------------------------------------------------------
+
+consGenEpilogue :: Template -> [QType] -> CG Template
+consGenEpilogue tmplt qs = do
+  tmplt' <- instTmplt tmplt
+  qs' <- mapM (\q -> qschemeToTemplate $ Scheme (ftv q) M.empty q) qs
+  mkSubC $ map (tmplt',) qs'
+  return tmplt'
+
+-- consGen takes as an input an expression annotated with a plain
+-- *uninstantiated* type and an instantiated template. The first should be used
+-- as the type determined by standard Hindley-Milner type inference. The second
+-- represents additional constraints on the the particular expression.
+consGen :: Cofree ExprF (TScheme, [QType]) -> CG Template
+consGen ((_, qs) :< EVarF (Token n _)) = do
+  traceM "\nconsGen: Var"
 
   t <- tmpltOf n
 
-  traceM $ "qt:\n\t" ++ show qt ++ "\nt:\n\t" ++ show t
---  e <- asks cgLBinds
---  traceM $ "consGen EVar, looking up " ++ show n ++ "which is:\n\t" ++ show t ++"\nwith environment" ++ show (F.toFix e)
   let t' = t `strengthen` F.symbolReft n
-  mkSubC [(t', qt)]
-  return t'
 
-consGen (qt :< EAbsF n e) = do
-  mkWfC [qt]
+  consGenEpilogue t' qs
 
-  tmplt <- freshTmplt $ shape qt
+consGen ((hmt, qs) :< EAbsF n e) = do
+  traceM "\nconsGen: Abs"
+  tmplt <- freshTmplt hmt
+  traceM $ "freshTmplt: " ++ show tmplt
   mkWfC [tmplt]
-  mkSubC [(tmplt, qt)]
 
   r <- case tmpltize tmplt of
     (_, TFunF b t1 t2) -> do
@@ -224,78 +295,74 @@ consGen (qt :< EAbsF n e) = do
         mkSubC [(tmplt', t2)]
       return tmplt
     _ -> error "Abstraction doesn't have function type."
-  return r
 
-consGen (qt :< EAppF e1 e2) = do
-  mkWfC [qt]
+  consGenEpilogue r qs
+
+consGen ((_, qs) :< EAppF e1 e2) = do
+  traceM "\nconsGen: App"
 
   tmplt1 <- consGen e1
   tmplt2 <- consGen e2
 
-  case tmpltize tmplt1 of
+  r <- case tmpltize tmplt1 of
     (_, TFunF b t1 t2) -> do
-      mkSubC [(t2, qt)]
       mkSubC [(tmplt2, t1)]
       return $ subExpr (b, e2) t2
       --return $ pendingSub (b, e2) t2 `strengthen` qt
     _ -> error "First expression in an application must have a function type"
 
-consGen (qt :< EConF (CInt (Token i _))) = do
-  mkWfC [qt]
+  consGenEpilogue r qs
 
-  let rt = JC.intConst i
-  mkSubC [(rt, qt)]
-  return rt
+consGen ((hmt, qs) :< ELetF x e1 e2) = do
+  traceM "\nconsGen: Let"
 
-consGen (qt :< EConF CAdd) = do
-  mkWfC [qt]
+  f <- freshTmplt hmt
+  traceM $ "freshTmplt: " ++ show f
 
-  let rt = JC.add
-  mkSubC [(rt, qt)]
-  return rt
-
-consGen (qt :< ELetF x e1 e2) = do
-  mkWfC [qt]
-
-  f <- freshTmplt $ shape qt
   mkWfC [f]
-  mkSubC [(f, qt)]
 
   f1 <- consGen e1
   inEnv (x, f1) $ do
     f2 <- consGen e2
     mkSubC [(f2, f)]
 
-  return f
+  consGenEpilogue f qs
 
--- TODO: This needs a better name.
-tmpltize :: Template -> (F.Reft, TypeF Template)
-tmpltize (Scheme gen ins t) =
-  let (r :< ft) = t
-  in  (r, fmap (Scheme gen ins) ft)
+consGen ((_, qs) :< EConF c) = do
+  traceM "\nconsGen: EConF"
 
-subExpr :: F.Expression a => (Ident, a) -> Template -> Template
-subExpr (n, e) = fmap $ fmap (`F.subst1` (F.symbol n, F.expr e))
+  t <- qschemeToTemplate (constantScheme c)
+  consGenEpilogue t qs
 
-instance F.Expression TypedExpr where
+consGen x = error $ "Unhandled case for:\n" ++ show x
+
+instance (Show a) => F.Expression (Cofree ExprF a) where
   expr (_ :< EVarF n) = F.EVar $ F.symbol n
 
-  expr (_ :< EConF CUnit) = F.ECon $ F.L "void" (toSort JC.unit)
+  expr (_ :< EConF CUnit) = F.ECon $ F.L "void" (toSort CUnit)
   expr (_ :< EConF (CBool b)) = if b then F.PTrue else F.PFalse
   expr (_ :< EConF (CInt (Token i _))) = F.ECon (F.I i)
   expr (_ :< ELetF x e1 e2) = F.expr e2 `F.subst1` (F.symbol x, F.expr e1)
+  expr (_ :< EAppF (_ :< EConF CNot) e2) = F.PNot $ F.expr e2
   expr (_ :< EAppF e1 e2) = F.EApp (F.expr e1) (F.expr e2)
+  expr x = error $ "Unhandled case for:\n" ++ show x
+
+-------------------------------------------------------------------------------
 
 mkWfC :: [Template] -> CG ()
-mkWfC tmplts = do
-  ws <- liftM concat $ mapM splitWs tmplts
-  tell $ CGCons { wfcs = ws, subcs = [], kuts = mempty }
+mkWfC qs = do
+  ws <- concat <$> mapM splitWs qs
+  tell CGCons { wfcs = ws, subcs = [], kuts = mempty }
+
+-- Helper for generating well-formedness constraints on a map of RTypes
+mkWfCsFromMap :: M.Map T.Text Template -> CG ()
+mkWfCsFromMap = mkWfC . map snd . M.toList
 
 splitWs :: Template -> CG [F.WfC ()]
 splitWs (Scheme gen ins qt) = para alg (fmap (Scheme gen ins) . duplicate $ qt)
-  where alg :: C.CofreeF TypeF (Template)
-               (Cofree TypeF Template, CG [F.WfC ()])
-                                   -> (CG [F.WfC ()])
+  where --alg :: C.CofreeF TypeF QScheme
+        --       (Cofree TypeF QScheme, CG [F.WfC ()])
+        --                          -> (CG [F.WfC ()])
 
         alg (t C.:< TFunF b (t1 :< _, w1) (_, w2)) = do
           w0 <- bsplitW t
@@ -320,10 +387,12 @@ bsplitW t = do
   bindEnv <- asks cgLBinds
   return $ F.wfC bindEnv (toSReft t) ()
 
+-------------------------------------------------------------------------------
+
 mkSubC :: [(Template, Template)] -> CG ()
 mkSubC tmplts = do
-  cs <- liftM concat $ mapM splitSs tmplts
-  tell $ CGCons { wfcs = [], subcs = cs, kuts = mempty }
+  cs <- concat <$> mapM splitSs tmplts
+  tell CGCons { wfcs = [], subcs = cs, kuts = mempty }
 
 splitSs :: (Template, Template) -> CG [F.SubC ()]
 splitSs (f1, f2) = do
@@ -336,7 +405,7 @@ splitSs' :: (F.Reft, TypeF Template)
          -> CG [F.SubC ()]
 
 splitSs' f1@(_, TFunF b1 t1 t1') f2@(_, TFunF b2 t2 t2') = do
-  traceM $ "splitSs' TFunF:\nf1:\n\t" ++ show f1 ++ "\nf2:\n\t" ++ show f2
+--  traceM $ "splitSs' TFunF:\nf1:\n\t" ++ show f1 ++ "\nf2:\n\t" ++ show f2
 --  let b1_b2 = (F.symbol b1, F.eVar b2)
 --  cs0 <- bsplitS (r1 `F.subst1` b1_b2 :< TFunF b1 t1 t1', f2)
 
@@ -345,13 +414,14 @@ splitSs' f1@(_, TFunF b1 t1 t1') f2@(_, TFunF b2 t2 t2') = do
   cs2 <- inEnv (b2, t2) $ do
     let t1'' = subExpr (b1, F.eVar b2) t1'
     splitSs (t1'', t2')
+
   return $ cs1 ++ cs2
 
 splitSs' (_, TConF n1 t1s) (_, TConF n2 t2s) = do
   assert (value n1 == value n2) return ()
-  liftM concat $ mapM splitSs (zip t1s t2s)
+  concat <$> mapM splitSs (zip t1s t2s)
 
-splitSs' (_, TVarF n1) (_, TVarF n2) = do
+splitSs' (_, TVarF n1) (_, TVarF n2) =
   assert (value n1 == value n2) return []
 
 splitSs' x y = do
@@ -366,42 +436,50 @@ bsplitS (t1, t2) = do
   let sr2 = toSReft t2
   return $ F.subC env sr1 sr2 Nothing [0] ()
 
+-------------------------------------------------------------------------------
+
+-- TODO: This needs a better name.
+tmpltize :: Template -> (F.Reft, TypeF Template)
+tmpltize (Scheme gen ins t) =
+  let (r :< ft) = t
+  in  (r, fmap (Scheme gen ins) ft)
+
+subExpr :: F.Expression a => (Ident, a) -> Template -> Template
+subExpr (n, e) = fmap $ fmap (`F.subst1` (F.symbol n, F.expr e))
+
+-------------------------------------------------------------------------------
+
 tmpltOf :: T.Text -> CG Template
-tmpltOf n = fromMaybe
-              (error "At this point HM inference was successful so we should \
-                     \always have what we lookup in our environment")
-              <$> (M.lookup n <$> asks cgSymMap)
+tmpltOf n = do
+  env <- asks cgSymMap
+  return $
+    fromMaybe (error $ "At this point HM inference was successful so we should \
+                       \always have what we lookup in our environment\n" ++
+                       show env
+              )
+              (M.lookup n env)
 
+-------------------------------------------------------------------------------
+
+-- Create fresh kvars as the refinements of the input scheme. This includes
+-- creating fresh kvars for the types in the instantiation map. No
+-- well-formedness are created. For that, use instTmplt.
 freshTmplt :: TScheme -> CG Template
-freshTmplt (Scheme gen ins t) = do
-  assert (ins == M.empty) return ()
-  liftM (Scheme gen M.empty) (freshQType t)
+freshTmplt (Scheme gs is t) =
+  Scheme gs <$> sequence (M.map freshRType is) <*> freshRType t
 
-instTmplt :: Template -> CG Template
-instTmplt (Scheme gen ins t) = do
-  assert (S.empty == S.intersection gen (S.fromList $ M.keys ins)) return ()
-  let ins' = (M.map (freshQType . removeAnn) ins)
-  liftM (Scheme gen M.empty) (subQType ins' t)
+-- Like freshTmplt but works on types instead of schemes
+freshRType :: Type -> CG RType
+freshRType = sequence . cata (freshKVar :<)
 
-subQType :: M.Map T.Text (CG QType) -> QType -> CG QType
-subQType su = cata alg
-  where
-    alg :: C.CofreeF TypeF F.Reft (CG QType) -> CG QType
-    alg t@(varRef C.:< TVarF n) = do
-      let cgQ = M.findWithDefault (return $ varRef :< TVarF n) (value n) su
-      (subRef :< qt) <- cgQ
-      return (varRef <> subRef :< qt)
-    alg qt = do
-      (r C.:< t) <- sequence qt
-      return $ r :< t
+--  liftM (Scheme gs M.empty) (cata alg t)
+--   where alg :: TypeF (CG RType) -> CG RType
+--         alg (TVarF n)       = liftM  (:< TVarF n) freshKVar
+--         alg (TFunF b q1 q2) = liftM2 (:<) freshKVar (liftM2 (TFunF b) q1 q2)
+--         alg (TConF n qs)    = liftM2 (:<) freshKVar (liftM  (TConF n) $ sequence qs)
+--         alg (TTupF qs)      = liftM2 (:<) freshKVar (liftM   TTupF    $ sequence qs)
 
-freshQType :: Type -> CG QType
-freshQType = cata alg
-  where alg :: TypeF (CG QType) -> CG QType
-        alg (TVarF n)  = liftM (:< TVarF n) freshKVar
-        alg (TFunF b q1 q2) = liftM2 (:<) freshKVar (liftM2 (TFunF b) q1 q2)
-        alg (TConF n qs)    = liftM2 (:<) freshKVar (liftM (TConF n) $ sequence qs)
-        alg (TTupF qs)      = liftM2 (:<) freshKVar (liftM  TTupF    $ sequence qs)
+-------------------------------------------------------------------------------
 
 freshKVar :: CG F.Reft
 freshKVar = do
@@ -423,5 +501,7 @@ inEnv (t, tmplt) x = do
   let (bid, be') = F.insertBindEnv s sr be
   let ibe' = F.insertsIBindEnv [bid] ibe
   let sbe' = M.insert (value t) tmplt sbe
-  modify (\(e@CGState{..}) -> e { cgGBinds = be' })
+  modify (\(e@CGState{..}) -> e { cgGBinds = be'
+                                , cgBindInfo = HM.insert bid () cgBindInfo }
+         )
   local  (\(e@CGEnv{..})   -> e { cgLBinds = ibe', cgSymMap = sbe' }) x

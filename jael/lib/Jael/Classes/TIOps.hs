@@ -1,11 +1,9 @@
-{-# Language NoImplicitPrelude #-}
 {-# Language TypeSynonymInstances #-}
 {-# Language FlexibleInstances #-}
 {-# Language RecordWildCards #-}
 
 module Jael.Classes.TIOps where
 
-import           Jael.Prelude
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -44,9 +42,7 @@ instance TIOps QType where
   ftv = ftv . removeAnn
 
   apply s t = let t' = apply s (removeAnn t)
-              in  case addReftsTo t (noQual t') of
-                    Left e -> error $ show e
-                    Right x -> x
+              in undefined -- joinTypes (<>) t (noQual t')
 
 instance TIOps a => TIOps [a] where
   ftv = S.unions . map ftv

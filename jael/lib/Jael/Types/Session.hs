@@ -1,11 +1,9 @@
 {-# Language DeriveFunctor #-}
-{-# Language NoImplicitPrelude #-}
 {-# Language RecordWildCards #-}
 {-# Language TypeFamilies #-}
 
 module Jael.Types.Session where
 
-import Jael.Prelude
 import qualified Data.Functor.Foldable as F
 import qualified Data.Map as M
 import qualified Data.Set as S
