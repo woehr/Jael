@@ -41,6 +41,7 @@ library
                        containers,
                        deriving-compat >= 0.3,
                        free,
+                       Grempa,
                        jael-grammar,
                        liquid-fixpoint,
                        llvm-hs,

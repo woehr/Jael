@@ -3,6 +3,15 @@ let
 
   inherit (super.pkgs) fetchFromGitHub;
 
+  compiler = "ghc802";
+
+  grempa-src = fetchFromGitHub {
+    owner = "ollef";
+    repo  = "Grempa";
+    rev   = "1cb98486b9fbd7ea4e54060cad0e5f80ff6e8984";
+    sha256 = "1kjc5gc7dyqvnx3j5b1sxjbw0swiay7g7yr26xfxc7cvhvr6lza3";
+  };
+
   liquid-fixpoint-src = fetchFromGitHub {
     owner  = "ucsd-progsys";
     repo   = "liquid-fixpoint";
@@ -13,7 +22,7 @@ let
 in {
   haskell = super.haskell // {
     packages = super.haskell.packages // {
-      ghc802 = super.haskell.packages.ghc802.override {
+      "${compiler}" = super.haskell.packages.${compiler}.override {
         overrides = hself: hsuper: {
 
           ghc =  hsuper.ghc // { withPackages = hsuper.ghc.withHoogle; };
@@ -25,9 +34,13 @@ in {
 #            enableExecutableProfiling = true;
           });
 
+          Grempa = hself.callCabal2nix "Grempa" grempa-src {};
+
           liquid-fixpoint = super.haskell.lib.dontCheck (
             hself.callCabal2nix "liquid-fixpoint" liquid-fixpoint-src {}
           );
+
+          llvm-hs-pure = hself.llvm-hs-pure_4_1_0_0;
 
           jael = hself.callCabal2nix "jael" ../jael {};
           jael-grammar = hself.callCabal2nix "jael-grammar" ../jael-grammar {};
