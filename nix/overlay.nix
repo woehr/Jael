@@ -5,13 +5,6 @@ let
 
   compiler = "ghc802";
 
-  grempa-src = fetchFromGitHub {
-    owner = "ollef";
-    repo  = "Grempa";
-    rev   = "1cb98486b9fbd7ea4e54060cad0e5f80ff6e8984";
-    sha256 = "1kjc5gc7dyqvnx3j5b1sxjbw0swiay7g7yr26xfxc7cvhvr6lza3";
-  };
-
   liquid-fixpoint-src = fetchFromGitHub {
     owner  = "ucsd-progsys";
     repo   = "liquid-fixpoint";
@@ -30,16 +23,16 @@ in {
 
           mkDerivation = args: hsuper.mkDerivation (args // {
 #            doCheck = false;
-            enableLibraryProfiling = true;
+#            enableLibraryProfiling = true;
 #            enableExecutableProfiling = true;
           });
-
-          Grempa = hself.callCabal2nix "Grempa" grempa-src {};
 
           liquid-fixpoint = super.haskell.lib.dontCheck (
             hself.callCabal2nix "liquid-fixpoint" liquid-fixpoint-src {}
           );
 
+          ghc-exactprint = super.haskell.lib.dontCheck hsuper.ghc-exactprint;
+          llvm-hs = super.haskell.lib.dontCheck hsuper.llvm-hs;
           llvm-hs-pure = hself.llvm-hs-pure_4_1_0_0;
 
           jael = hself.callCabal2nix "jael" ../jael {};

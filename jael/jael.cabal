@@ -17,43 +17,29 @@ source-repository head
 
 library
   exposed-modules:     Prelude
-                       Jael.Classes
-                       Jael.Classes.TIOps
-                       Jael.ConsGen
-                       Jael.Constants
-                       Jael.Infer
-                       Jael.Pretty
-                       Jael.Quotes
-                       Jael.Types
-                       Jael.Types.Ann
-                       Jael.Types.Expr
-                       Jael.Types.Parser
-                       Jael.Types.Prog
-                       Jael.Types.Session
-                       Jael.Types.Type
-                       Jael.Uniqify
-                       Jael.Util
+                       Jael.New.Expr
+                       Jael.New.Parser
+                       Jael.New.Types
 
   build-depends:       base-noprelude,
+                       ansi-wl-pprint,
                        array,
                        base-prelude,
                        comonad,
                        containers,
                        deriving-compat >= 0.3,
                        free,
-                       Grempa,
-                       jael-grammar,
                        liquid-fixpoint,
                        llvm-hs,
                        llvm-hs-pure,
                        mtl-prelude,
+                       parsers,
                        placeholders,
                        recursion-schemes >= 5.0.1,
-                       syb,
                        template-haskell,
                        text,
-                       unordered-containers,
-                       wl-pprint-text >= 1.1.1.0
+                       trifecta,
+                       unordered-containers
 
   hs-source-dirs:      lib
   default-language:    Haskell2010
@@ -85,23 +71,13 @@ test-suite test-jael
   main-is:             Test.hs
 
   other-modules:       Jael.Test.Util
-                       Jael.Classes.TIOpsSpec
-                       Jael.ConsGenSpec
-                       Jael.InferSpec
-                       Jael.UniqifySpec
-                       Jael.Types.ExprSpec
-                       Jael.Types.ParserSpec
+                       Jael.New.ParserSpec
 
   build-depends:       base-noprelude,
                        jael,
-                       jael-grammar,
-                       free,
-                       hspec         == 2.*,
+                       hspec,
                        liquid-fixpoint,
-                       recursion-schemes >= 5,
-                       text,
-                       array, containers, comonad, wl-pprint-text >= 1.1.1.0,
-                       mtl-prelude, deriving-compat, unordered-containers
+                       trifecta
 
   hs-source-dirs:      test
   default-language:    Haskell2010
