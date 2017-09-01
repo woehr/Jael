@@ -16,8 +16,10 @@ braced = encloseSep lbrace rbrace comma
 
 data TypeF a = TAllF [T.Text] a
              | TFunF a a
-             | TConF (Maybe T.Text) [a]
+             | TConF T.Text [a]
+             | TTupF [a]
              | TRecF [(T.Text, a)]
+             | TArrF a Integer
              | TVarF T.Text
              deriving (Eq, Functor, Show)
 
@@ -32,11 +34,17 @@ pattern TAll a b = Fix (TAllF a b)
 pattern TFun :: Type -> Type -> Type
 pattern TFun a b = Fix (TFunF a b)
 
-pattern TCon :: (Maybe T.Text) -> [Type] -> Type
+pattern TCon :: T.Text -> [Type] -> Type
 pattern TCon a b = Fix (TConF a b)
+
+pattern TTup :: [Type] -> Type
+pattern TTup xs = Fix (TTupF xs)
 
 pattern TRec :: [(T.Text, Type)] -> Type
 pattern TRec xs = Fix (TRecF xs)
+
+pattern TArr :: Type -> Integer -> Type
+pattern TArr t n = Fix (TArrF t n)
 
 pattern TVar :: T.Text -> Type
 pattern TVar a = Fix (TVarF a)
@@ -47,8 +55,10 @@ class Prec a where
 instance Prec (TypeF a) where
   prec (TAllF _ _) = 0
   prec (TFunF _ _) = 1
-  prec (TRecF _)   = 2
   prec (TConF _ _) = 2
+  prec (TRecF _)   = 2
+  prec (TTupF _)   = 2
+  prec (TArrF _ _) = 2
   prec (TVarF _)   = 2
 
 instance Prec Type where
@@ -77,16 +87,16 @@ instance (Prec a, Pretty a) => Pretty (TypeF a) where
     P.<+> string "->"
     P.<+> precGt x b
 
-  pretty (TConF n as) =
-    let as' = if null as then P.empty else tupled $ map pretty as
-    in case n of
-         Just n' ->      pretty (T.unpack n')
-                    P.<> as'
+  pretty (TConF n xs) =
+    let xs' = if null xs then P.empty else tupled $ map pretty xs
+    in  pretty (T.unpack n) P.<> xs'
 
-         Nothing ->      as'
+  pretty (TTupF xs) = tupled $ map pretty xs
 
   pretty r@(TRecF xs) = braced $ flip map xs
     (\(l, t) -> pretty (T.unpack l) P.<+> colon P.<+> precGt r t)
+
+  pretty (TArrF t n) = P.brackets $ pretty t P.<> semi P.<+> pretty n
 
   pretty (TVarF x) = string (T.unpack x)
 

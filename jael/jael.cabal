@@ -18,13 +18,16 @@ source-repository head
 library
   exposed-modules:     Prelude
                        Jael.New.Expr
+                       --Jael.New.HMInfer
                        Jael.New.Parser
                        Jael.New.Types
+                       Jael.New.QType
 
   build-depends:       base-noprelude,
                        ansi-wl-pprint,
                        array,
                        base-prelude,
+                       bytestring,
                        comonad,
                        containers,
                        deriving-compat >= 0.3,
