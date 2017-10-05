@@ -5,3 +5,4 @@
 :set -fwarn-identities
 :set -ilib
 :set -itest
+:set -XOverloadedStrings

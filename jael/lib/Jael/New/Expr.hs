@@ -1,16 +1,14 @@
 {-# Language DeriveFunctor #-}
+{-# Language DeriveTraversable #-}
 {-# Language OverloadedStrings #-}
 {-# Language PatternSynonyms #-}
 {-# Language TemplateHaskell #-}
+{-# Language TupleSections #-}
 {-# Language RankNTypes #-}
 
-module Jael.New.Expr
-where
+module Jael.New.Expr where
 
 import qualified Data.Text as T
-
-import Jael.New.Types
-import Jael.New.QType
 
 data IntFormat = BinInt | OctInt | HexInt | DecInt
                deriving (Eq, Show)
@@ -62,84 +60,51 @@ data PatternF p = PPatF T.Text [p]    -- Constructed with sub-patterns
                 | PConstF Constant    -- Ints, Chars
                 | PWildF              -- Single wildcard : _
                 | PMultiWildF         -- Multi wildcard  : ...
-                deriving (Eq, Functor, Show)
+                deriving (Eq, Foldable, Functor, Show, Traversable)
 
 type Pattern = Fix PatternF
 
 $(deriveEq1   ''PatternF)
 $(deriveShow1 ''PatternF)
 
-data CaseAlt e = CaseAlt Pattern (Maybe (QType e)) e
-  deriving (Eq, Functor, Show)
-
-$(deriveEq1   ''CaseAlt)
-$(deriveShow1 ''CaseAlt)
-
-data LetBind e = LetBind Pattern (Maybe (QType e)) e
-  deriving (Eq, Functor, Show)
-
-$(deriveEq1   ''LetBind)
-$(deriveShow1 ''LetBind)
-
-data AbsBind e = AbsBind Pattern (Maybe (QType e))
-  deriving (Eq, Functor, Show)
-
-$(deriveEq1   ''AbsBind)
-$(deriveShow1 ''AbsBind)
-
 data Guarded e = Guarded e e
-  deriving (Eq, Functor, Show)
+  deriving (Eq, Foldable, Functor, Show, Traversable)
 
 $(deriveEq1   ''Guarded)
 $(deriveShow1 ''Guarded)
 
 type Label     = T.Text
 
-data ExprF e = EAbsF [AbsBind e] e
-             | ELamCaseF [CaseAlt e]
+data ExprF t p e = ETAbsF T.Text e
+                 | ETAppF e t
+                 | EAbsF [p] e
+                 | ELamCaseF [(p, e)]
 
-             | EAppF e [e]
-             | ETupF   [e]
+                 | EAppF e [e]
+                 | ETupF   [e]
 
---             | ETAbsF T.Text e
---             | ETAppF e Type
---             | ETAnnF e (QType e)
+                 | ELetF [(p, e)] e
 
-             | ELetF [LetBind e] e
+                 | ERecF    [(Label, e)]   -- Record construction
+                 | ERecUpF  [(Label, e)] e -- Record update
+                 | ERecExtF e e -- Extend second record with fields of first
+                 | ERecResF e Label -- Remove label from record
+                 | ERecSelF e Label -- Select label from record
 
-             | ERecF    [(Label, e)]   -- Record construction
-             | ERecUpF  [(Label, e)] e -- Record update
-             | ERecExtF e e           -- Extend second record with fields of first
-             | ERecResF e Label       -- Remove label from record
-             | ERecSelF e Label       -- Select label from record
+                 | ECaseF e [(p, e)]
+                 | EIfF e e e
+                 | EMultiIfF [Guarded e] (Maybe e)
 
-             | ECaseF e [CaseAlt e]
-             | EIfF e e e
-             | EMultiIfF [Guarded e] (Maybe e)
+                 | EVarF T.Text
+                 | EConstF Constant
+                 | EUnaryOpF UnaryOp
+                 | EBinOpF BinOp
+                 deriving (Eq, Foldable, Functor, Show, Traversable)
 
-             | EVarF T.Text
-             | EConstF Constant
-             | EUnaryOpF UnaryOp
-             | EBinOpF BinOp
-             deriving (Eq, Functor, Show)
-
-type Expr = Fix ExprF
+type Expr t p = Fix (ExprF t p)
 
 $(deriveEq1   ''ExprF)
 $(deriveShow1 ''ExprF)
-
-data CoreF c = CAbsF T.Text Type c
-             | CLetF T.Text Type c c
-             | CAppF c c
-             | CCseF
-             | CVarF T.Text
-             | CCstF
-             deriving (Eq, Functor, Show)
-
-type Core = Fix CoreF
-
-$(deriveEq1   ''CoreF)
-$(deriveShow1 ''CoreF)
 
 -- Patterns for PatternF
 pattern PPat :: T.Text -> [Pattern] -> Pattern
@@ -170,66 +135,72 @@ pattern PMultiWild :: Pattern
 pattern PMultiWild = Fix PMultiWildF
 
 -- Patterns for ExprF
-pattern EAbs :: [AbsBind Expr] -> Expr -> Expr -- Pattern -> QType Expr -> Expr -> Expr
+pattern ETAbs :: T.Text -> Expr t p -> Expr t p
+pattern ETAbs t e = Fix (ETAbsF t e)
+
+pattern ETApp :: Expr t p -> t -> Expr t p
+pattern ETApp e t = Fix (ETAppF e t)
+
+pattern EAbs :: [p] -> Expr t p -> Expr t p
 pattern EAbs bs e = Fix (EAbsF bs e)
 
-pattern ELamCase :: [CaseAlt Expr] -> Expr -- [(Pattern, QType Expr, Expr)] -> Expr
+pattern ELamCase :: [(p, Expr t p)] -> Expr t p
 pattern ELamCase alts = Fix (ELamCaseF alts)
 
-pattern EApp :: Expr -> [Expr] -> Expr
+pattern EApp :: Expr t p -> [Expr t p] -> Expr t p
 pattern EApp f as = Fix (EAppF f as)
 
-pattern ETup :: [Expr] -> Expr
+pattern ETup :: [Expr t p] -> Expr t p
 pattern ETup es = Fix (ETupF es)
 
-pattern ERec :: [(T.Text, Expr)] -> Expr
+pattern ERec :: [(T.Text, Expr t p)] -> Expr t p
 pattern ERec ls = Fix (ERecF ls)
 
-pattern ERecUp :: [(Label, Expr)] -> Expr -> Expr
+pattern ERecUp :: [(Label, Expr t p)] -> Expr t p -> Expr t p
 pattern ERecUp ls r = Fix (ERecUpF ls r)
 
-pattern ERecExt :: Expr -> Expr -> Expr
+pattern ERecExt :: Expr t p -> Expr t p -> Expr t p
 pattern ERecExt r1 r2 = Fix (ERecExtF r1 r2)
 
-pattern ERecRes :: Expr -> Label -> Expr
+pattern ERecRes :: Expr t p -> Label -> Expr t p
 pattern ERecRes e l = Fix (ERecResF e l)
 
-pattern ERecSel :: Expr -> Label -> Expr
+pattern ERecSel :: Expr t p -> Label -> Expr t p
 pattern ERecSel e l = Fix (ERecSelF e l)
 
-pattern ECase :: Expr -> [CaseAlt Expr] -> Expr -- [(Pattern, Expr)] -> Expr
+pattern ECase :: Expr t p -> [(p, Expr t p)] -> Expr t p
 pattern ECase e ps = Fix (ECaseF e ps)
 
-pattern EIf :: Expr -> Expr -> Expr -> Expr
+pattern EIf :: Expr t p -> Expr t p -> Expr t p -> Expr t p
 pattern EIf b t e = Fix (EIfF b t e)
 
-pattern EMultiIf :: [Guarded Expr] -> Maybe Expr -> Expr
+pattern EMultiIf :: [Guarded (Expr t p)] -> Maybe (Expr t p) -> Expr t p
 pattern EMultiIf xs me = Fix (EMultiIfF xs me)
 
-pattern ELet :: [LetBind Expr] -> Expr -> Expr -- [(Pattern, Expr)] -> Expr -> Expr
+pattern ELet :: [(p, Expr t p)] -> Expr t p -> Expr t p
 pattern ELet es e = Fix (ELetF es e)
 
-pattern EVar :: T.Text -> Expr
+pattern EVar :: T.Text -> Expr t p
 pattern EVar x = Fix (EVarF x)
 
-pattern EConst :: Constant -> Expr
+pattern EConst :: Constant -> Expr t p
 pattern EConst x = Fix (EConstF x)
 
-pattern EUnaryOp :: UnaryOp -> Expr
+pattern EUnaryOp :: UnaryOp -> Expr t p
 pattern EUnaryOp x = Fix (EUnaryOpF x)
 
-pattern EBinOp :: BinOp -> Expr
+pattern EBinOp :: BinOp -> Expr t p
 pattern EBinOp x = Fix (EBinOpF x)
 
-pattern EInt :: JInt -> Expr
+pattern EInt :: JInt -> Expr t p
 pattern EInt x = EConst (CInt x)
 
-pattern EChar :: Char -> Expr
+pattern EChar :: Char -> Expr t p
 pattern EChar x = EConst (CChar x)
 
 class HasSymbol a where
   symbolOf :: a -> String
-  exprConstructor :: forall b. a -> ExprF b
+  exprConstructor :: forall t p b. a -> ExprF t p b
 
 instance HasSymbol UnaryOp where
   symbolOf OpNot = "#"
@@ -253,3 +224,25 @@ instance HasSymbol BinOp where
   symbolOf OpMod   = "%"
 
   exprConstructor = EBinOpF
+
+exprMap :: (t -> t') -> (p -> p') -> Fix (ExprF t p) -> Fix (ExprF t' p')
+exprMap f g = cata alg where
+  alg (ETAbsF t e) = ETAbs t e
+  alg (ETAppF e t) = ETApp e (f t)
+  alg (EAbsF ps e) = EAbs (map g ps) e
+  alg (ELamCaseF alts) = ELamCase $ map (first g) alts
+  alg (EAppF e es) = EApp e es
+  alg (ETupF es) = ETup es
+  alg (ELetF es e) = ELet (map (first g) es) e
+  alg (ERecF fs) = ERec fs
+  alg (ERecUpF fs e) = ERecUp fs e
+  alg (ERecExtF top bot) = ERecExt top bot
+  alg (ERecResF e l) = ERecRes e l
+  alg (ERecSelF e l) = ERecSel e l
+  alg (ECaseF e alts) = ECase e $ map (first g) alts
+  alg (EIfF b t e) = EIf b t e
+  alg (EMultiIfF gs me) = EMultiIf gs me
+  alg (EVarF t) = EVar t
+  alg (EConstF c) = EConst c
+  alg (EUnaryOpF o) = EUnaryOp o
+  alg (EBinOpF o) = EBinOp o

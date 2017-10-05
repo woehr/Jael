@@ -1,18 +1,16 @@
 {-# Language DeriveFunctor #-}
+{-# Language DeriveTraversable #-}
 {-# Language FlexibleInstances #-}
 {-# Language PatternSynonyms #-}
 {-# Language TemplateHaskell #-}
 {-# Language TypeSynonymInstances #-}
 
-module Jael.New.Types where
+module Jael.New.Type where
 
 import qualified Data.Text as T
 import           Text.PrettyPrint.ANSI.Leijen as P
 import           Data.Eq.Deriving (deriveEq1)
 import           Text.Show.Deriving (deriveShow1)
-
-braced :: [Doc] -> Doc
-braced = encloseSep lbrace rbrace comma
 
 data TypeF a = TAllF [T.Text] a
              | TFunF a a
@@ -21,7 +19,7 @@ data TypeF a = TAllF [T.Text] a
              | TRecF [(T.Text, a)]
              | TArrF a Integer
              | TVarF T.Text
-             deriving (Eq, Functor, Show)
+             deriving (Eq, Foldable, Functor, Show, Traversable)
 
 type Type = Fix TypeF
 
@@ -63,6 +61,9 @@ instance Prec (TypeF a) where
 
 instance Prec Type where
   prec (Fix x) = prec x
+
+braced :: [Doc] -> Doc
+braced = encloseSep lbrace rbrace comma
 
 checkPrec :: (Prec a, Prec b, Pretty b) => (Integer -> Integer -> Bool) -> a -> b -> Doc
 checkPrec f x y =

@@ -1,31 +1,46 @@
+{-# Language OverloadedStrings #-}
+{-# Language TemplateHaskell #-}
+
 module Jael.Test.Util where
 
+import qualified Control.Comonad.Trans.Cofree as C
 import qualified Data.Text as T
---import qualified Language.Fixpoint.Types as F
-import qualified Jael.Grammar as G
-import           Jael.Infer
-import           Jael.Types
 
-toMTE :: T.Text -> MaybeTypedExpr
-toMTE p = case runParser G.pExpr p of
-  Left t -> error (T.unpack t)
-  Right x -> jaelify x
+import Text.Trifecta
+import Text.Trifecta.Delta
 
-toHM :: T.Text -> HMTypedExpr
-toHM p = case hmInf emptyEnv (toMTE p) of
-  Left t -> error (T.unpack t)
-  Right x -> x
+import Jael.New.Expr
+import Jael.New.DataDecl
+import Jael.New.Misc
+import Jael.New.Parser
+import Jael.New.QType
+import Jael.New.Type
 
--- toTE :: T.Text -> TypedExpr
--- toTE p =
---   let mte = toMTE p
---       hme = toHM p
---   in  case reQual mte hme of
---         Left t -> error (T.unpack t)
---         Right x -> fmap (fmap (fmap F.simplify)) x
+$(deriveEq1   ''C.CofreeF)
+$(deriveShow1 ''C.CofreeF)
 
-toQT :: T.Text -> QType
-toQT t =
-  case runParser G.pType t of
-        Left e -> error (T.unpack e)
-        Right x -> jaelify x
+parseThrow :: Parser a -> String -> a
+parseThrow p t = case parseString (p <* eof) (Directed "test" 0 0 0 0) t of
+                   Failure e -> error . show . _errDoc $ e
+                   Success x -> x
+
+unSpanQType :: T -> QType (Expr () P)
+unSpanQType = cata alg . removeAnn where
+  alg :: C.CofreeF TypeF (Refinement E) (QType (Expr () P))
+      -> QType (Expr () P)
+  alg (r C.:< t) = Fix $ fmap (fmap removeAnn) r C.:< t
+
+parseQType :: String -> QType (Expr () P)
+parseQType =  unSpanQType . parseThrow pType0
+
+parseType :: String -> Type
+parseType = unQType . parseQType where
+
+parseData :: String -> (T.Text, DataDecl (QType (Expr () P)))
+parseData = fmap (fmap unSpanQType) . parseThrow pData where
+
+parseExpr :: String -> Expr () Pattern
+parseExpr = exprMap id removeAnn . removeAnn . parseThrow pExpr0
+
+parsePattern :: String -> P
+parsePattern = parseThrow pPattern0

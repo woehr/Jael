@@ -1,25 +1,29 @@
-{-# Language OverloadedStrings #-}
 {-# Language DeriveFunctor #-}
+{-# Language LambdaCase #-}
+{-# Language OverloadedStrings #-}
 {-# Language RecordWildCards #-}
 
-module Jael.New.Parser
-where
+module Jael.New.Parser where
 
 import Prelude hiding (try)
---import qualified Data.ByteString as B
+import qualified Control.Comonad.Trans.Cofree as C
 import qualified Data.HashSet as H
+import qualified Data.Map as M
 import qualified Data.Text as T
 import Text.Trifecta
---import Text.Trifecta.Delta
 import Text.Parser.Token.Highlight
 
-import Jael.New.Types
-import Jael.New.QType
+import Jael.New.DataDecl
 import Jael.New.Expr
+import Jael.New.Misc
+import Jael.New.Type
+import Jael.New.QType
 
 -- The type of expressions parsed from a source file
---type E = Expr
-type E = Cofree ExprF Span
+--type P = Cofree PatternF Span
+type P = PTree PatternF
+type E = PTree (ExprF () P)
+type T = PTree (QTypeF E)
 
 identifierStyle :: TokenParsing m => String -> m Char -> IdentifierStyle m
 identifierStyle name p = IdentifierStyle
@@ -141,6 +145,13 @@ ifGtOne f mxs = mxs >>= \xs -> case xs of
   (x:[]) -> pure x
   _      -> pure $ f xs
 
+ifGtOne' :: DeltaParsing m
+         => ([PTree f] -> f (PTree f))
+         -> m [PTree f] -> m (PTree f)
+ifGtOne' f pxs = flip fmap (spanned pxs) $ \case
+  ([x] :~ _) -> x
+  (xs  :~ s) -> s :< f xs
+
 {-
   s := decInt (oneOf "bBKM")
      | sizeof(ident)
@@ -159,6 +170,10 @@ optionalList = fmap concat . optional
 commaSep2 :: Parser a -> Parser [a]
 commaSep2 p = (:) <$> p <* comma <*> commaSep1 p
 
+spannit :: (DeltaParsing p, Functor f)
+        => p (f (PTree f)) -> p (PTree f)
+spannit p = flip fmap (spanned p) $ \(x :~ s) -> s :< x
+
 {-
   t1 := l
       | u
@@ -168,25 +183,33 @@ commaSep2 p = (:) <$> p <* comma <*> commaSep1 p
       | (t0,+ t0)
       | (t0)
 -}
-pBaseType :: Parser (TypeF (QType E))
-pBaseType =   TVarF <$> lident
-          <|> TConF <$> uident <*> optionalList (parens $ commaSep1 pType1)
-          <|> brackets (TArrF <$> pType1 <* semi <*> (intValue <$> anyint))
-          <|> (braces $ TRecF <$> commaSep ((,) <$> lident <* colon <*> pType1))
-          <|> try (parens $ pType1 >>= \t -> TTupF . (t:) <$> some (comma *> pType1))
-          <|> try (parens pBaseType)
+pBaseType :: Parser (TypeF T)
+pBaseType =
+  (     TVarF <$> lident
+    <|> TConF <$> uident <*> optionalList (parens $ commaSep1 pType1)
+    <|> brackets (TArrF <$> pType1 <* semi <*> (intValue <$> anyint))
+    <|> (braces $ TRecF <$> commaSep ((,) <$> lident <* colon <*> pType1))
+    <|> try (parens $ pType1 >>= \t -> TTupF . (t:) <$> some (comma *> pType1))
+  )
+  <|> try (parens pBaseType)
 
-pType0 :: Parser (QType E)
-pType0 =  UQAll <$> between forall dot (some lident) <*> pType1
+pType0 :: Parser T
+pType0 =  spannit (UQAllF <$> between forall dot (some lident) <*> pType1)
       <|> pType1
 
-pType1 :: Parser (QType E)
-pType1 =  chainr1 pType2 (UQFun <$ rArrow)
+pType1 :: Parser T
+pType1 =  chainr1 pType2 (pSpanBinary $ UQFunF <$ rArrow)
       <|> pType2
 
-pType2 :: Parser (QType E)
-pType2 =  try (braces $ (\l t e -> Just (l,e) :< t) <$> lident <* colon <*> pBaseType <* bar <*> pExpr0)
-      <|> (Nothing :<) <$> pBaseType
+pType2 :: Parser T
+pType2 = spannit (try (braces $
+           (\l t e -> Just (l,e) C.:< t) <$> lident
+                                         <*  colon
+                                         <*> pBaseType
+                                         <*  bar
+                                         <*> pExpr0
+         ))
+      <|> spannit ((Nothing C.:<) <$> pBaseType)
       <|> parens pType1
 
 {-
@@ -203,53 +226,61 @@ pType2 =  try (braces $ (\l t e -> Just (l,e) :< t) <$> lident <* colon <*> pBas
       | (p,+ p)
       | (p0)
 -}
-pPattern0 :: Parser Pattern
-pPattern0 =  ifGtOne POr $ pPattern1 `sepBy1` bar
 
-pPattern1 :: Parser Pattern
+--ifGtOne :: Monad m => ([a] -> a) -> m [a] -> m a
+--pPattern0 =  ifGtOne POrF $ spanned (pPattern1 `sepBy1` bar)
+pPattern0 :: Parser P
+pPattern0 =  ifGtOne' POrF (pPattern1 `sepBy1` bar)
+
+pPattern1 :: Parser P
 pPattern1 =
-  let labelledPattern :: Parser (T.Text, Pattern)
+  let labelledPattern :: Parser (T.Text, P)
       labelledPattern = (,) <$> lident <* symbolic '=' <*> pPattern0
-  in      PWild      <$ symbolic '_'
-      <|> PMultiWild <$  symbol "..."
-      <|> PConst     <$> pConstant
-      <|> PRec       <$> braces   (commaSep  labelledPattern)
-      <|> PArr       <$> brackets (commaSep  pPattern0)
-      <|> PBind      <$  symbolic '$' <*> lident
-                                      <*> optional (symbolic '@' *> parens pPattern0)
-      <|> PPat       <$> lident <*> optionalList (parens $ commaSep1 pPattern0)
-      <|> parens (ifGtOne PTup $ pPattern0 `sepBy1` symbolic ',')
+   in spannit
+        (    PWildF      <$  symbolic '_'
+         <|> PMultiWildF <$  symbol "..."
+         <|> PConstF     <$> pConstant
+         <|> PRecF       <$> braces   (commaSep  labelledPattern)
+         <|> PArrF       <$> brackets (commaSep  pPattern0)
+         <|> PBindF      <$  symbolic '$'
+                               <*> lident
+                               <*> optional (symbolic '@' *> parens pPattern0)
+         <|> PPatF       <$> lident
+                               <*> optionalList (parens $ commaSep1 pPattern0)
+        )
+      <|> parens (ifGtOne' PTupF $ pPattern0 `sepBy1` symbolic ',')
 
-caseBody :: Parser [CaseAlt E]
-caseBody = let alt = CaseAlt <$> pPattern0
-                             <*> optional (colon *> pType0)
-                             <*  symbol "->"
-                             <*> pExpr0
+caseBody :: Parser [(P, E)]
+caseBody = let alt = (,) <$> pPattern0
+                         <*  symbol "->"
+                         <*> pExpr0
            in  braces (semiSep1 alt)
 
-spannit :: Parser (ExprF E) -> Parser E
-spannit p = spannit' <$> spanned p
-
-spannit' :: Spanned (ExprF E) -> E
-spannit' (e :~ s) = s :< e
-
 pOp :: HasSymbol a => a -> Parser E
-pOp x = spannit $ exprConstructor x <$ (try $ symbol (symbolOf x) <* notFollowedBy (oneOf opChars))
+pOp x = spannit $ exprConstructor x <$
+  (try $ symbol (symbolOf x) <* notFollowedBy (oneOf opChars))
 
 pOpOf :: HasSymbol a => [a] -> Parser E
 pOpOf = foldr (\f p -> pOp f <|> p) empty
 
-binApp :: E -> E -> E -> ExprF E
+pSpanBinary :: Parser (PTree f -> PTree g -> f (PTree f))
+            -> Parser (PTree f -> PTree g -> PTree f)
+pSpanBinary pBinOp = do
+  op <- pBinOp
+  return $ \l@(ls :< _) r@(rs :< _) ->
+    ls <> rs :< op l r
+
+-- Left fold with span
+spanLeft :: (PTree f -> a -> f (PTree f))
+         -> PTree f -> [Spanned a] -> PTree f
+spanLeft f = foldl' f' where
+  f' (l@(ls :< _)) (r :~ rs) = ls <> rs :< f l r
+
+binApp :: E -> E -> E -> ExprF () P E
 binApp l op r = EAppF op [l, r]
 
 pBinApp :: Parser E -> Parser (E -> E -> E)
-pBinApp op = pBinApp' $ flip binApp <$> op
-
-pBinApp' :: Parser (a -> b -> ExprF E) -> Parser (a -> b -> E)
-pBinApp' op = spanned op >>= \(f :~ s) -> pure (\l r -> spannit' (f l r :~ s))
-
-chainl' :: Monad m => m (a -> b -> a) -> m a -> m [b] -> m a
-chainl' op x ys = foldl' <$> op <*> x <*> ys
+pBinApp pBinOp = pSpanBinary $ flip binApp <$> pBinOp
 
 noAssoc :: Parser E -> [BinOp] -> Parser E
 noAssoc p fs = p >>= \x -> (spannit $ binApp x <$> pOpOf fs <*> p) <|> pure x
@@ -266,7 +297,7 @@ leftAssoc p fs = p `chainl1` pBinApp (pOpOf fs)
 pExpr0 :: Parser E
 pExpr0 =
       spannit (symbolic '\\' *> (
-            EAbsF <$> parens (commaSep1 $ AbsBind <$> pPattern0 <*> pure Nothing) -- optional (colon *> pType0))
+            EAbsF <$> parens (commaSep1 pPattern0)
                   <*  symbol "->"
                   <*> pExpr0
         <|> ELamCaseF <$  reserved "case"
@@ -313,8 +344,7 @@ pExpr2 =
   case x of {1 -> x; _ -> impossible}
 -}
 pExpr3 :: Parser E
-pExpr3 =  let letbind = LetBind <$> pPattern0
-                                <*> optional (colon *> pType0)
+pExpr3 =  let letbind = (,) <$> pPattern0
                                 <*  symbolic '='
                                 <*> pExpr0
                                 <*  semi
@@ -358,11 +388,11 @@ pExpr10 :: Parser E
 pExpr10 = leftAssoc pExpr11 [OpTimes, OpDiv, OpMod]
 
 pExpr11 :: Parser E
-pExpr11 = pExpr12 `chainl1` pBinApp' (ERecExtF <$ symbol "++")
+pExpr11 = pExpr12 `chainl1` (pSpanBinary $ ERecExtF <$ symbol "++")
 
 pExpr12 :: Parser E
 pExpr12 = pExpr13 >>= \e ->
-      foldl' <$> (pBinApp' $ pure ERecResF) <*> pure e <*> some (symbol "--" *> label)
+      spanLeft ERecResF e <$> some (spanned $ symbol "--" *> label)
   <|> pure e
 
 pExpr13 :: Parser E
@@ -371,7 +401,7 @@ pExpr13 =  (spannit $ EAppF <$> pOp OpNot <*> ((:[]) <$> pExpr14))
 
 pExpr14 :: Parser E
 pExpr14 = pExpr99 >>= \e ->
-      foldl' <$> (pBinApp' $ pure ERecSelF) <*> pure e <*> some (dot *> label)
+      spanLeft ERecSelF e <$> some (spanned $ dot *> label)
   <|> pure e
 
 {-
@@ -400,39 +430,34 @@ pExpr99 =
        <|> spannit (ETupF  <$> try (parens $ commaSep2 pExpr0))
        <|> parens pExpr0
 
-data DataCon e = DataCon  T.Text [QType e]
-               deriving (Eq, Functor, Show)
-
-data DataDecl e = DataDecl T.Text [T.Text] [DataCon e]
-                deriving (Eq, Functor, Show)
-
 {-
   con := l (t0,* t0)?
 -}
-pDataCon :: Parser (DataCon E)
-pDataCon = DataCon
+pDataCon :: Parser (T.Text, [T])
+pDataCon = (,)
         <$> lident
         <*> optionalList (parens $ commaSep1 pType0)
 
 {-
   data := "data" u (l,* l)? { con;* con }
 -}
-pData :: Parser (DataDecl E)
+pData :: Parser (T.Text, DataDecl T)
 pData = reserved "data"
-      $> DataDecl
+      $> (,)
      <*> uident
-     <*> optionalList (parens $ commaSep1 lident)
-     <*> braces (semiSep1 pDataCon)
+     <*> (DataDecl <$> optionalList (parens $ commaSep1 lident)
+                   <*> (M.fromList <$> braces (semiSep1 pDataCon))
+         )
 
 data BitCons = BitConIdent T.Text
              | BitConInt JInt
              | BitConWild
              deriving (Eq, Show)
 
-data BitCase = BitCase Pattern [(BitCons, Maybe SizeSpec)]
+data BitCase p = BitCase p [(BitCons, Maybe SizeSpec)]
              deriving (Eq, Show)
 
-data BitRep = BitRep T.Text [T.Text] (Maybe SizeSpec) [BitCase]
+data BitRep p = BitRep T.Text [T.Text] (Maybe SizeSpec) [BitCase p]
             deriving (Eq, Show)
 
 {-
@@ -445,7 +470,7 @@ pBitCons =  (,)
 {-
   bitcase := p = bitcon#* bitcon
 -}
-pBitCase :: Parser BitCase
+pBitCase :: Parser (BitCase P)
 pBitCase =  BitCase
         <$> pPattern0
         <*  symbolic '='
@@ -454,7 +479,7 @@ pBitCase =  BitCase
 {-
   bitrep := "bitrep" u (l,* l)? <sizespec> { bitcase;* bitcase }
 -}
-pBitRep :: Parser BitRep
+pBitRep :: Parser (BitRep P)
 pBitRep = reserved "bitrep"
         $> BitRep
        <*> uident

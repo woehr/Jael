@@ -1,49 +1,30 @@
+{-# Language LambdaCase #-}
 {-# Language OverloadedStrings #-}
+{-# Language RankNTypes #-}
 
 module Jael.New.ParserSpec (spec) where
 
 import Test.Hspec
 
-import Text.Trifecta
-import Text.Trifecta.Delta
+import qualified Data.Map as M
 
+import Jael.Test.Util
 import Jael.New.Expr
-import Jael.New.Types
+import Jael.New.DataDecl
+import Jael.New.Type
 import Jael.New.QType
 import Jael.New.Parser
+import Jael.New.Misc
 
-iterCofree :: Functor f => (a -> f b -> b) -> Cofree f a -> b
-iterCofree f cfa = uncofree f cfa
-  where uncofree fn x = fn (extract x) $ fmap (uncofree fn) $ unwrap x
+parseBitRep :: String -> BitRep Pattern
+parseBitRep = removePatternParseInfo . parseThrow pBitRep
 
-removeAnn :: Functor f => Cofree f a -> Fix f
-removeAnn = iterCofree (\_ f -> Fix f)
+removePatternParseInfo :: BitRep P -> BitRep Pattern
+removePatternParseInfo (BitRep x y z alts) = BitRep x y z (map f alts) where
+  f (BitCase p cs) = BitCase (removeAnn p) cs
 
-parseThrow :: Parser a -> String -> a
-parseThrow p t = case parseString (p <* eof) (Directed "" 0 0 0 0) t of
-                   Failure e -> error . show . _errDoc $ e
-                   Success x -> x
-
-parseScheme :: String -> Type
-parseScheme = removeAnn . parseThrow pType0
-
-parseType :: String -> Type
-parseType = removeAnn . parseThrow pType1
-
-parseQType :: String -> QType Expr
-parseQType = (fmap (fmap (fmap removeAnn))) . parseThrow pType1
-
-parseData :: String -> DataDecl Expr
-parseData = fmap removeAnn . parseThrow pData
-
-parseBitRep :: String -> BitRep
-parseBitRep = parseThrow pBitRep
-
-parsePattern :: String -> Pattern
-parsePattern = parseThrow pPattern0
-
-parseExpr :: String -> Expr
-parseExpr = removeAnn . parseThrow pExpr0
+parsePattern' :: String -> Pattern
+parsePattern' = removeAnn . parsePattern
 
 spec :: Spec
 spec = do
@@ -53,24 +34,24 @@ spec = do
     it "should type (record)" $ do
       parseType "{foo: a, bar: Int}" `shouldBe` TRec [("foo", TVar "a"), ("bar", TCon "Int" [])]
     it "should scheme" $ do
-      parseScheme "forall a. a" `shouldBe` (TAll ["a"] $ TVar "a")
+      parseType "forall a. a" `shouldBe` (TAll ["a"] $ TVar "a")
     it "should pattern" $ do
-      parsePattern "con(a, b)" `shouldBe` PPat "con" [PPat "a" [], PPat "b" []]
+      parsePattern' "con(a, b)" `shouldBe` PPat "con" [PPat "a" [], PPat "b" []]
     it "should pattern (tuple)" $ do
-      parsePattern "(a, b)" `shouldBe` PTup [PPat "a" [], PPat "b" []]
+      parsePattern' "(a, b)" `shouldBe` PTup [PPat "a" [], PPat "b" []]
     it "should pattern (rec)" $ do
-      parsePattern "{x=1, y=_, z=z}" `shouldBe`
+      parsePattern' "{x=1, y=_, z=z}" `shouldBe`
         PRec [("x", PConst (CInt $ JInt DecInt 1 1)), ("y", PWild), ("z", PPat "z" [])]
     it "should pattern (arr)" $ do
-      parsePattern "[1, x, ...]" `shouldBe` PArr [PConst (CInt $ JInt DecInt 1 1), PPat "x" [], PMultiWild]
+      parsePattern' "[1, x, ...]" `shouldBe` PArr [PConst (CInt $ JInt DecInt 1 1), PPat "x" [], PMultiWild]
     it "should pattern (or)" $ do
-      parsePattern "con(1|x|_)" `shouldBe` PPat "con" [POr [PConst $ (CInt $ JInt DecInt 1 1), PPat "x" [], PWild]]
+      parsePattern' "con(1|x|_)" `shouldBe` PPat "con" [POr [PConst $ (CInt $ JInt DecInt 1 1), PPat "x" [], PWild]]
     it "should expr (abs)" $ do
-      parseExpr "\\(x) -> true" `shouldBe` EAbs [AbsBind (PPat "x" []) Nothing] (EVar "true")
+      parseExpr "\\(x) -> true" `shouldBe` EAbs [PPat "x" []] (EVar "true")
     it "should expr (lamcase)" $ do
       parseExpr "\\case { c -> x; c(1) -> x }" `shouldBe`
-        ELamCase [ CaseAlt (PPat "c" []) Nothing (EVar "x")
-                 , CaseAlt (PPat "c" [PConst $ CInt $ JInt DecInt 1 1]) Nothing (EVar "x")
+        ELamCase [ (PPat "c" [], EVar "x")
+                 , (PPat "c" [PConst $ CInt $ JInt DecInt 1 1], EVar "x")
                  ]
     it "should expr (rec)" $ do
       parseExpr "{}" `shouldBe` ERec []
@@ -80,21 +61,25 @@ spec = do
       parseExpr "{x=1,y=z|r}" `shouldBe` ERecUp [("x", EConst $ CInt $ JInt DecInt 1 1), ("y", EVar "z")] (EVar "r")
       parseExpr "{}--1--a" `shouldBe` ERecRes (ERecRes (ERec []) "1") "a"
     it "should expr (let with patterns)" $ do
-      parseExpr "{x|_=1;x}"   `shouldBe` ELet [ LetBind (POr [ PPat "x" []
-                                                             , PWild
-                                                             ])
-                                                        Nothing
-                                                        (EConst $ CInt $ JInt DecInt 1 1)
-                                               ] (EVar "x")
-      parseExpr "{0b1|02=x;x}" `shouldBe` ELet [ LetBind (POr [ PConst (CInt $ JInt BinInt 1 1)
-                                                              , PConst (CInt $ JInt DecInt 2 2)
-                                                              ])
-                                                         Nothing
-                                                         (EVar "x")] (EVar "x")
+      parseExpr "{x|_=1;x}"   `shouldBe`
+        ELet [ ( POr [ PPat "x" []
+                     , PWild
+                     ]
+                , EConst $ CInt $ JInt DecInt 1 1)
+             ]
+             (EVar "x")
+      parseExpr "{0b1|02=x;x}" `shouldBe`
+        ELet [ ( POr [ PConst (CInt $ JInt BinInt 1 1)
+                     , PConst (CInt $ JInt DecInt 2 2)
+                     ]
+               , EVar "x")
+             ]
+             (EVar "x")
       parseExpr "{{y=1, z=z} = x; z}" `shouldBe`
-        ELet [ LetBind (PRec [ ("y", PConst $ CInt $ JInt DecInt 1 1)
-                             , ("z", PPat "z" [])])
-                       Nothing (EVar "x")
+        ELet [ ( PRec [ ("y", PConst $ CInt $ JInt DecInt 1 1)
+                      , ("z", PPat "z" [])
+                      ]
+               , EVar "x")
              ]
              (EVar "z")
     it "should expr (if, multiIf)" $ do
@@ -107,10 +92,10 @@ spec = do
                          -- Whether the first case is a PPat or a PBind depends
                          -- what data constructors are defined and must be
                          -- resolved in a separate step
-                         [ CaseAlt (PPat "p" []) Nothing (EVar "a")
-                         , CaseAlt (PPat "p" [ PPat "p" []]) Nothing (EVar "b")
-                         , CaseAlt (PTup [PPat "x" [], PPat "y" []]) Nothing (EVar "c")
-                         , CaseAlt PWild Nothing (EVar "d")
+                         [ (PPat "p" [], EVar "a")
+                         , (PPat "p" [ PPat "p" []], EVar "b")
+                         , (PTup [PPat "x" [], PPat "y" []], EVar "c")
+                         , (PWild, EVar "d")
                          ]
 
     -- Sums of products
@@ -119,16 +104,18 @@ spec = do
     it "should data" $ do
       parseData "data Foo(a) { foo1 \
                 \            ; foo2(a, Int, {x:a, y:Int}) \
-                \            }" `shouldBe` DataDecl "Foo" ["a"]
-                                             [ DataCon "foo1" []
-                                             , DataCon "foo2"
+                \            }" `shouldBe` ("Foo", DataDecl ["a"] $ M.fromList
+                                             [ ("foo1", [])
+                                             , ("foo2",
                                                  [ UQVar "a"
                                                  , UQCon "Int" []
                                                  , UQRec [ ("x", UQVar "a")
                                                          , ("y", UQCon "Int" [])
                                                          ]
                                                  ]
+                                               )
                                              ]
+                                           )
 
     it "should bitrep" $ do
       parseBitRep "bitrep Foo(a) <5b> { foo1 = 0b011#_; foo2(x, {l1=y}) = 1<3b>#x#y<3B> }"

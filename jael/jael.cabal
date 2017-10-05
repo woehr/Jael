@@ -17,16 +17,22 @@ source-repository head
 
 library
   exposed-modules:     Prelude
+                       Jael.Data.MultiMap
+                       Jael.New.Check
+                       Jael.New.Core
+                       Jael.New.DataDecl
                        Jael.New.Expr
-                       --Jael.New.HMInfer
+                       Jael.New.HMInfer
+                       Jael.New.Misc
                        Jael.New.Parser
-                       Jael.New.Types
+                       Jael.New.Type
                        Jael.New.QType
 
   build-depends:       base-noprelude,
                        ansi-wl-pprint,
                        array,
                        base-prelude,
+                       bimap,
                        bytestring,
                        comonad,
                        containers,
@@ -36,6 +42,7 @@ library
                        llvm-hs,
                        llvm-hs-pure,
                        mtl-prelude,
+                       multimap,
                        parsers,
                        placeholders,
                        recursion-schemes >= 5.0.1,
@@ -74,12 +81,17 @@ test-suite test-jael
   main-is:             Test.hs
 
   other-modules:       Jael.Test.Util
+                       Jael.New.CoreSpec
+                       Jael.New.HMInferSpec
                        Jael.New.ParserSpec
 
   build-depends:       base-noprelude,
-                       jael,
+                       containers,
+                       free,
                        hspec,
+                       jael,
                        liquid-fixpoint,
+                       text,
                        trifecta
 
   hs-source-dirs:      test

@@ -33,7 +33,7 @@ in {
 
           ghc-exactprint = super.haskell.lib.dontCheck hsuper.ghc-exactprint;
           llvm-hs = super.haskell.lib.dontCheck hsuper.llvm-hs;
-          llvm-hs-pure = hself.llvm-hs-pure_4_1_0_0;
+          #llvm-hs-pure = hself.llvm-hs-pure_4_1_0_0;
 
           jael = hself.callCabal2nix "jael" ../jael {};
           jael-grammar = hself.callCabal2nix "jael-grammar" ../jael-grammar {};
