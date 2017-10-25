@@ -1,6 +1,7 @@
 {-# Language DeriveFunctor #-}
 {-# Language DeriveTraversable #-}
 {-# Language FlexibleInstances #-}
+{-# Language OverloadedStrings #-}
 {-# Language PatternSynonyms #-}
 {-# Language TemplateHaskell #-}
 {-# Language TypeSynonymInstances #-}
@@ -46,6 +47,12 @@ pattern TArr t n = Fix (TArrF t n)
 
 pattern TVar :: T.Text -> Type
 pattern TVar a = Fix (TVarF a)
+
+pattern TBool :: Type
+pattern TBool = Fix (TConF "Bool" [])
+
+pattern TInt :: Type
+pattern TInt = Fix (TConF "Int" [])
 
 class Prec a where
   prec :: a -> Integer

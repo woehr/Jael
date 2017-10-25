@@ -22,7 +22,7 @@ import Jael.New.QType
 -- The type of expressions parsed from a source file
 --type P = Cofree PatternF Span
 type P = PTree PatternF
-type E = PTree (ExprF () P)
+type E = PTree (ExprF () P T.Text)
 type T = PTree (QTypeF E)
 
 identifierStyle :: TokenParsing m => String -> m Char -> IdentifierStyle m
@@ -94,7 +94,8 @@ forall = reserved "forall"
 -- number' :: base -> digit parser -> (value, number of characters)
 number :: TokenParsing m => Integer -> m Char -> m (Integer, Integer)
 number base baseDigit = token $
-  (\xs -> (foldl' (\x d -> base*x + toInteger (digitToInt d)) 0 xs, toInteger $ length xs)
+  (\xs -> ( foldl' (\x d -> base*x + toInteger (digitToInt d)) 0 xs
+          , toInteger $ length xs)
   ) <$> some baseDigit
 
 binDigit :: CharParsing m => m Char
@@ -276,7 +277,7 @@ spanLeft :: (PTree f -> a -> f (PTree f))
 spanLeft f = foldl' f' where
   f' (l@(ls :< _)) (r :~ rs) = ls <> rs :< f l r
 
-binApp :: E -> E -> E -> ExprF () P E
+binApp :: E -> E -> E -> ExprF () P T.Text E
 binApp l op r = EAppF op [l, r]
 
 pBinApp :: Parser E -> Parser (E -> E -> E)
@@ -299,6 +300,7 @@ pExpr0 =
       spannit (symbolic '\\' *> (
             EAbsF <$> parens (commaSep1 pPattern0)
                   <*  symbol "->"
+                  <*> pure []
                   <*> pExpr0
         <|> ELamCaseF <$  reserved "case"
                       <*> caseBody

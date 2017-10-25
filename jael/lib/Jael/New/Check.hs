@@ -30,23 +30,25 @@ unboundVars bvs = MM.toList . flip (foldr MM.delete) (S.toList bvs) . cata alg
     alg (_ C.:< ETAbsF _ _) = error "Expected untyped expression."
     alg (_ C.:< ETAppF _ _) = error "Expected untyped expression."
 
-    alg (_ C.:< EAbsF ps e) = foldr MM.delete e (map fst $ concatMap patternBinds ps)
-    alg (_ C.:< ELamCaseF alts) = undefined
+    alg (_ C.:< EAbsF ps _ e) =
+      foldr MM.delete e (map fst $ concatMap patternBinds ps)
+
+    alg (_ C.:< ELamCaseF _alts) = undefined
 
     alg (_ C.:< EAppF f as) = MM.unionsWith (++) (f:as)
-    alg (_ C.:< ETupF   es) = undefined
+    alg (_ C.:< ETupF   es) = MM.unionsWith (++) es
 
-    alg (_ C.:< ELetF bs e) = undefined
+    alg (_ C.:< ELetF _bs _e) = undefined
 
-    alg (_ C.:< ERecF    fs) = undefined
-    alg (_ C.:< ERecUpF  fs e) = undefined
-    alg (_ C.:< ERecExtF top bot) = undefined
-    alg (_ C.:< ERecResF e l) = undefined
-    alg (_ C.:< ERecSelF e l) = undefined
+    alg (_ C.:< ERecF    _fs) = undefined
+    alg (_ C.:< ERecUpF  _fs _e) = undefined
+    alg (_ C.:< ERecExtF _top _bot) = undefined
+    alg (_ C.:< ERecResF _e _l) = undefined
+    alg (_ C.:< ERecSelF _e _l) = undefined
 
-    alg (_ C.:< ECaseF e alts) = undefined
-    alg (_ C.:< EIfF b t e) = undefined
-    alg (_ C.:< EMultiIfF gs me) = undefined
+    alg (_ C.:< ECaseF _e _alts) = undefined
+    alg (_ C.:< EIfF _b _t _e) = undefined
+    alg (_ C.:< EMultiIfF _gs _me) = undefined
 
     alg (s C.:< EVarF v) = MM.fromList [(v, s)]
     alg _ = MM.empty
@@ -54,7 +56,7 @@ unboundVars bvs = MM.toList . flip (foldr MM.delete) (S.toList bvs) . cata alg
 shadowedVars :: S.Set T.Text -> E -> [(T.Text, Span, Maybe Span)]
 shadowedVars bvs = map (\(a,(b,c)) -> (a,b,c)) . MM.toList . snd . cata alg
   where
-    alg :: C.CofreeF (ExprF t P) Span
+    alg :: C.CofreeF (ExprF t P s) Span
            (M.Map T.Text Span, MM.MultiMap T.Text (Span, Maybe Span))
         -> (M.Map T.Text Span, MM.MultiMap T.Text (Span, Maybe Span))
     -- Collect two maps, the first of where a variable was most recently bound
@@ -62,25 +64,24 @@ shadowedVars bvs = map (\(a,(b,c)) -> (a,b,c)) . MM.toList . snd . cata alg
     alg (_ C.:< ETAbsF _ _) = error "Expected untyped expression."
     alg (_ C.:< ETAppF _ _) = error "Expected untyped expression."
 
-    alg (s C.:< EAbsF ps e) =
-      foldr checkForShadows e (map patternBinds ps)
+    alg (_ C.:< EAbsF ps _ e) = foldr checkForShadows e (map patternBinds ps)
 
-    alg (_ C.:< ELamCaseF alts) = undefined
+    alg (_ C.:< ELamCaseF _alts) = undefined
 
     alg (_ C.:< EAppF f as) = mergeMaps (f:as)
-    alg (_ C.:< ETupF   es) = undefined
+    alg (_ C.:< ETupF   _es) = undefined
 
-    alg (_ C.:< ELetF bs e) = undefined
+    alg (_ C.:< ELetF _bs _e) = undefined
 
-    alg (_ C.:< ERecF    fs) = undefined
-    alg (_ C.:< ERecUpF  fs e) = undefined
-    alg (_ C.:< ERecExtF top bot) = undefined
-    alg (_ C.:< ERecResF e l) = undefined
-    alg (_ C.:< ERecSelF e l) = undefined
+    alg (_ C.:< ERecF    _fs) = undefined
+    alg (_ C.:< ERecUpF  _fs _e) = undefined
+    alg (_ C.:< ERecExtF _top _bot) = undefined
+    alg (_ C.:< ERecResF _e _l) = undefined
+    alg (_ C.:< ERecSelF _e _l) = undefined
 
-    alg (_ C.:< ECaseF e alts) = undefined
-    alg (_ C.:< EIfF b t e) = undefined
-    alg (_ C.:< EMultiIfF gs me) = undefined
+    alg (_ C.:< ECaseF _e _alts) = undefined
+    alg (_ C.:< EIfF _b _t _e) = undefined
+    alg (_ C.:< EMultiIfF _gs _me) = undefined
 
     alg _ = (M.empty, MM.empty)
 
@@ -205,4 +206,3 @@ invalidMulti p = isMulti p || para alg p where
   alg (_ C.:< PArrF ps)   = or $ map snd ps
   alg (_ C.:< PBindF _ (Just p')) = isMulti (fst p') || snd p'
   alg _ = False
-

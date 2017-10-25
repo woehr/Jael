@@ -6,6 +6,7 @@ module Prelude
   ( module X
   , filterByGt1
   , repeated
+  , unsafeLookup
   ) where
 
 import BasePrelude            as X hiding
@@ -33,6 +34,8 @@ import Data.Functor.Foldable  as X hiding
 import Data.Eq.Deriving       as X (deriveEq1)
 import Text.Show.Deriving     as X (deriveShow1)
 
+import qualified Data.Map as M
+
 $(deriveEq1   ''Cofree)
 $(deriveShow1 ''Cofree)
 
@@ -41,3 +44,9 @@ filterByGt1 = foldr (\x acc -> if length x > 1 then x:acc else acc) [] . group .
 
 repeated :: Ord a => [a] -> [a]
 repeated = map head . filterByGt1
+
+unsafeLookup :: Ord k => k -> M.Map k a -> a
+unsafeLookup k m =
+  case M.lookup k m of
+    Just x -> x
+    Nothing -> error "unsafeLookup: Key not found."

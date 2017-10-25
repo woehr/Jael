@@ -47,7 +47,7 @@ spec = do
     it "should pattern (or)" $ do
       parsePattern' "con(1|x|_)" `shouldBe` PPat "con" [POr [PConst $ (CInt $ JInt DecInt 1 1), PPat "x" [], PWild]]
     it "should expr (abs)" $ do
-      parseExpr "\\(x) -> true" `shouldBe` EAbs [PPat "x" []] (EVar "true")
+      parseExpr "\\(x) -> true" `shouldBe` EAbs [PPat "x" []] [] (EVar "true")
     it "should expr (lamcase)" $ do
       parseExpr "\\case { c -> x; c(1) -> x }" `shouldBe`
         ELamCase [ (PPat "c" [], EVar "x")

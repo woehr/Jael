@@ -14,7 +14,7 @@ import Jael.New.QType
 import Jael.New.Misc
 
 someData :: (T.Text, DataDecl Type)
-someData = fmap (fmap unQType) . parseData $ "data T { a; b; c(Int, Int) }"
+someData = fmap (fmap $ hoistFix unQType) . parseData $ "data T { a; b; c(Int, Int) }"
 
 patternErrs :: String -> [PatternErr]
 patternErrs s = case checkPattern (snd someData) . parsePattern $ s of

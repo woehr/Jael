@@ -1,5 +1,6 @@
 {-# Language DeriveFunctor #-}
 {-# Language PatternSynonyms #-}
+{-# Language RankNTypes #-}
 
 module Jael.New.QType
 where
@@ -12,8 +13,8 @@ type Refinement e = Maybe (T.Text, e)
 type QTypeF e = C.CofreeF TypeF (Refinement e)
 type QType e = Fix (QTypeF e)
 
-unQType :: QType a -> Type
-unQType = cata (\(_ C.:< t) -> Fix t)
+unQType :: QTypeF r f -> TypeF f
+unQType (_ C.:< t) = t
 
 pattern UQAllF :: [T.Text] -> a -> QTypeF e a
 pattern UQAllF a b = Nothing C.:< TAllF a b

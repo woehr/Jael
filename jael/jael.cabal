@@ -81,6 +81,7 @@ test-suite test-jael
   main-is:             Test.hs
 
   other-modules:       Jael.Test.Util
+                       Jael.New.CheckSpec
                        Jael.New.CoreSpec
                        Jael.New.HMInferSpec
                        Jael.New.ParserSpec

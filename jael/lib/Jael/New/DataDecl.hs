@@ -7,7 +7,7 @@ where
 import qualified Data.Map as M
 import qualified Data.Text as T
 
---import Jael.New.Type
+import Jael.New.Type
 
 data DataDecl t = DataDecl
                 { dataTVars :: [T.Text]
@@ -16,3 +16,6 @@ data DataDecl t = DataDecl
 
 constructorArity :: DataDecl t -> M.Map T.Text Int
 constructorArity (DataDecl {..}) = M.map length dataCons
+
+dataDeclType :: T.Text -> DataDecl Type -> Type
+dataDeclType n (DataDecl {..}) = TCon n (map TVar dataTVars)
