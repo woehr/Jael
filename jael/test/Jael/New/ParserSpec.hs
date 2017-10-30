@@ -104,7 +104,7 @@ spec = do
     it "should data" $ do
       parseData "data Foo(a) { foo1 \
                 \            ; foo2(a, Int, {x:a, y:Int}) \
-                \            }" `shouldBe` ("Foo", DataDecl ["a"] $ M.fromList
+                \            }" `shouldBe` (DataDecl "Foo" ["a"] $ M.fromList
                                              [ ("foo1", [])
                                              , ("foo2",
                                                  [ UQVar "a"

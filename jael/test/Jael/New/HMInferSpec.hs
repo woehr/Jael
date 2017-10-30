@@ -23,10 +23,8 @@ defaultData =
              [ "data Bool { false; true }"
              , "data Maybe(a) { nothing; just(a) }"
              ]
-      ds' = flip map ds $ second (fmap $ hoistFix unQType . removeAnn)
-      ds'' = map (\(n, dd) -> (dataDeclType n dd, dataCons dd)) ds'
-      cs = map (\(t, c) -> flip M.map c $ foldr TFun t) ds''
-   in M.unions cs
+      ds' = map (fmap $ hoistFix unQType . removeAnn) ds
+   in M.unions $ map dataConTypes ds'
 
 inferThrow :: M.Map T.Text Type -> E' -> (Type, TypedE)
 inferThrow ds e =
@@ -40,7 +38,11 @@ shouldHaveType e t =
       expr' = hoistCofree (mapExprP expandPattern) expr
       (actualType, _) = inferThrow defaultData expr'
       expectedType = parseType t
-   in actualType `shouldBe` expectedType
+   in if alphaEq actualType expectedType
+         then return ()
+         else expectationFailure $
+           "Types not equal, expected:\n\t" ++ show expectedType ++ "\n" ++
+           "but got:\n\t" ++ show actualType ++ "\n"
 
 spec :: Spec
 spec = do
@@ -49,13 +51,23 @@ spec = do
       "true" `shouldHaveType` "Bool"
     it "should infer integers" $ do
       "1" `shouldHaveType` "Int"
-    xit "should infer polymorphic abstractions" $ do
-      "\\($a) -> a" `shouldHaveType` "a -> a"
-    xit "should infer concrete abstractions" $ do
-      "\\($a) -> 1" `shouldHaveType` "a->Int"
+    it "should infer abstractions" $ do
+      "\\($a) -> a" `shouldHaveType` "forall a. a -> a"
+      "\\($a) -> 1" `shouldHaveType` "forall a. a->Int"
+      "\\($a@(($b, $c))) -> (a, b, c)"
+        `shouldHaveType` "forall a b. (a,b) -> ((a,b),a,b)"
+      "\\(($a,_,1) | (_,$a,_)) -> a"
+        `shouldHaveType` "forall a. (a,a,Int)->a"
     it "should infer applications" $ do
       "1+2" `shouldHaveType` "Int"
-    xit "should infer pattern binds" $ do
-      "\\($a@(($b, $c))) -> (a, b, c)" `shouldHaveType` "(a,b) -> ((a,b),a,b)"
     it "should infer if expressions" $ do
       "if true then 1 else 2" `shouldHaveType` "Int"
+    it "should infer let expressions" $ do
+      "{ $x = 1; x }" `shouldHaveType` "Int"
+      "{ $x = just; x(1) }" `shouldHaveType` "Maybe(Int)"
+      "{ $x = nothing; x }" `shouldHaveType` "forall a. Maybe(a)"
+      "{ $x@($y) = nothing; (x,y) }"
+        `shouldHaveType` "forall a b. (Maybe(a), Maybe(b))"
+      "{ $x@([_,$y,$z]) = [1, 2, 3]; (x,y,z) }"
+        `shouldHaveType` "([Int; 3], Int, Int)"
+      "{ [$x@(nothing)] = [just 1]; x }" `shouldHaveType` "Maybe(Int)"

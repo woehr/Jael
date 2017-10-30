@@ -7,22 +7,23 @@
 module Jael.New.HMInfer where
 
 import qualified Control.Comonad.Trans.Cofree as C
+import qualified Data.DList as DL
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
+import qualified Jael.Data.MultiMap as MM
 
 import Text.Trifecta
 
-import           Jael.New.Check
-import           Jael.New.Expr
-import           Jael.New.Parser
-import           Jael.New.Type
+import Jael.New.Expr
+import Jael.New.Parser
+import Jael.New.Type
 
 type Bind = T.Text
 type TypeSub = M.Map T.Text Type
 type Constraint = (Type, Type)
 type Unifier = (TypeSub, [Constraint])
-type SolveM = ExceptT [TypeErr] Identity
+type SolveM = WriterT (DL.DList TypeErr) Identity
 type HmEnv = M.Map T.Text Type
 
 nullSub :: TypeSub
@@ -34,6 +35,15 @@ l `compSub` r = (M.map (apply l) r) `M.union` l
 emptyEnv :: HmEnv
 emptyEnv = M.empty
 
+data HmInfW = HMWConstraint Constraint
+            | HMWError TypeErr
+            deriving (Eq, Show)
+
+filterHMW :: DL.DList HmInfW -> ([Constraint], [TypeErr])
+filterHMW ws = foldr f ([], []) ws where
+  f (HMWConstraint c) (cs, es) = (c:cs,   es)
+  f (HMWError e)      (cs, es) = (cs  , e:es)
+
 data HmInfS = HmInfS
   { hmsCount :: Integer }
   deriving (Eq, Show)
@@ -41,21 +51,29 @@ data HmInfS = HmInfS
 initState :: HmInfS
 initState = HmInfS { hmsCount = 0 }
 
-type HmInfM = RWST HmEnv [Constraint] HmInfS (Except TypeErr)
+type HmInfM = RWST HmEnv (DL.DList HmInfW) HmInfS (Except TypeErr)
 type TypedE = Cofree (ExprF Type [P] T.Text) Span
 type E' = Cofree (ExprF () [P] T.Text) Span
 
-data TypeErr = TypeErr
-  deriving (Show)
+data TypeErr = TEOccurs T.Text Type
+             | TEUnification Constraint
+             deriving (Eq, Show)
 
 infer :: HmEnv -> E' -> Either [TypeErr] (Type, TypedE)
-infer env expr =
-  let r = runIdentity $ runExceptT $ runRWST (cata doHm expr) env initState
-  in case r of
-       Left e -> Left [e]
-       Right ((t, te), _, w) -> do
-         s <- runIdentity $ runExceptT $ unificationSolver (nullSub, w)
-         Right (apply s t, te)
+infer env expr
+  | Left e <- runHm = Left [e]
+  | Right ((t, te), _, ws) <- runHm
+  = case filterHMW ws of
+      (cs, []) -> case  runUnify cs of
+        (s, []) -> Right $ (generalize' M.empty . apply s $ t, te)
+        (_, es) -> Left es
+      (_, es)  -> Left es
+  where
+    runHm = runIdentity $ runExceptT $ runRWST (cata doHm expr) env initState
+
+runUnify :: [Constraint] -> (TypeSub, [TypeErr])
+runUnify =
+  second DL.toList . runIdentity . runWriterT . unificationSolver . (nullSub,)
 
 doHm :: C.CofreeF (ExprF () [P] T.Text) Span (HmInfM (Type, TypedE))
      -> HmInfM (Type, TypedE)
@@ -84,16 +102,22 @@ doHm (sp C.:< EIfF b t e) = do
   return (t2, sp :< EIfF te1 te2 te3)
 
 doHm (sp C.:< ELetF xs e) = do
-  es <- sequence $ map snd xs
-  let xs' = zipWith (\ps (t, te) -> (ps, t, te)) (map fst xs) es
-  -- unifyPatterns :: [(Type, [P])] -> [(Bind, Type)] -> HmInfM ()
-  undefined
+  (t, xs', te) <- foldr f (liftM (\(t,te)->(t,[],te)) e) xs
+  return (t, sp :< ELetF xs' te)
+  where
+    f :: ([P], HmInfM (Type, TypedE))
+      -> HmInfM (Type, [([P], TypedE)], TypedE)
+      -> HmInfM (Type, [([P], TypedE)], TypedE)
+    f (ps, mtte) macc = do
+      (t, te) <- mtte
 
-  {-
-  let sch = generalize t1
-  (t2, te2) <- inEnv (n, sch) e2
-  return (t2, sp :< ELetF n te1 te2)
-  -}
+      let bts = MM.fromList $ concatMap (flip matchPatternToType t) ps
+      -- Check bts for duplicate binds and make sure their types unify
+      bts' <- unifyDups bts
+      bts'' <- forM bts' $ \(b,bt) -> generalize bt >>= return . (b,)
+
+      (t', xs', te') <- inEnv' bts'' macc
+      return $ (t', (ps, te):xs', te')
 
 doHm (sp C.:< EAppF e as) = do
   tv <- freshTv
@@ -106,17 +130,12 @@ doHm (sp C.:< EAppF e as) = do
 doHm (sp C.:< EAbsF pss [] e) = do
   lamTvs <- mapM (const freshTv) pss
 
-  let binds = map fst $ concatMap patternBinds (concat pss)
-  bindTvs <- mapM (const freshTv) binds
-
-  let bts = zip binds bindTvs
-  (t, te) <- inEnv' bts e
-
   -- Need to check patterns and unify bind type variables with the types
   -- expected in patterns. Also, unify top level bind type variables with
   -- lambda type variables
-  unifyPatterns (zip lamTvs pss) (zip binds bindTvs)
+  bts <- unifyPatterns (zip lamTvs pss)
 
+  (t, te) <- inEnv' bts e
   return (foldr TFun t lamTvs, sp :< EAbsF pss bts te)
 
 doHm (_ C.:< EAbsF _ (_:_) _) =
@@ -124,10 +143,17 @@ doHm (_ C.:< EAbsF _ (_:_) _) =
 
 doHm (sp C.:< ETupF es) = do
   es' <- sequence es
-  tv <- freshTv
   let t = TTup $ map fst es'
-  unify tv t
   return (t, sp :< ETupF (map snd es'))
+
+doHm (sp C.:< EArrF es) = do
+  es' <- sequence es
+  t <- case es' of
+         [] -> freshTv >>= return . flip TArr 0
+         (t,_):xs -> do
+           forM_ xs (unify t . fst)
+           return (TArr t . toInteger . length $ es')
+  return (t, sp :< EArrF (map snd es'))
 
 doHm (sp C.:< EConstF c) = return $
   case c of
@@ -136,36 +162,82 @@ doHm (sp C.:< EConstF c) = return $
 
 doHm (sp C.:< EUnaryOpF op) = return . (, sp :< EUnaryOpF op) $
   case op of
-    OpNot -> TCon "TODO" []
+    OpNot -> TFun (TCon "Bool" []) (TCon "Bool" [])
 
 doHm (sp C.:< EBinOpF op) = return . (, sp :< EBinOpF op) $
   case op of
     OpAdd -> TFun (TCon "Int" []) (TFun (TCon "Int" []) (TCon "Int" []))
 
--- All binds in the patterns of argTvs are keys in bindTvs
-unifyPatterns :: [(Type, [P])] -> [(Bind, Type)] -> HmInfM ()
-unifyPatterns argTvs bindTvs =
-  let bindTvMap = M.fromList bindTvs
+matchPatternToType :: P -> Type -> [(Bind, Type)]
+matchPatternToType p t = go p t []
+  where
+    go :: P -> Type -> [(Bind, Type)] -> [(Bind, Type)]
+    go (_ :< PPatF _n _xs) _ _ = error "TODO"
+    go (_ :< PTupF xs) (TTup xs') a = assert (length xs == length xs') $
+      concatMap (uncurry matchPatternToType) (zip xs xs') ++ a
+    go (_ :< POrF _xs)     _ _ = error "Shouldn't happen. Patterns should \
+                                       \be expanded before type inference."
+    go (_ :< PRecF _fs)    _ _ = error "TODO"
+    go (_ :< PArrF xs)     (TArr u n) a =
+      assert (toInteger (length xs) == n) $
+      foldr (\x a' -> go x u a') a xs
+    go (_ :< PConstF _c)   _ _ = error "TODO"
+    go (_ :< PWildF)       _ a = a
+    go (_ :< PMultiWildF)  _ a = a
+    go (_ :< PBindF n Nothing)  u a = (n,u):a
+    go (_ :< PBindF n (Just q)) u a = (n,u):(go q u a)
+    go _ _ _ = error "TODO"
 
-      patternType :: C.CofreeF PatternF Span (HmInfM Type) -> HmInfM Type
-      patternType (_ C.:< PPatF _n _xs) = error "TODO"
-      patternType (_ C.:< PTupF xs)     = liftM TTup $ sequence xs
-      patternType (_ C.:< POrF _xs)     = error "TODO"
-      patternType (_ C.:< PRecF _fs)    = error "TODO"
-      patternType (_ C.:< PArrF _xs)    = error "TODO"
-      patternType (_ C.:< PConstF _c)   = error "TODO"
-      patternType (_ C.:< PWildF)       = freshTv
-      patternType (_ C.:< PMultiWildF)  = freshTv
-      patternType (_ C.:< PBindF n Nothing) = return $ unsafeLookup n bindTvMap
-      patternType (_ C.:< PBindF n (Just p)) =
-        let nTy = unsafeLookup n bindTvMap
-         in p >>= unify nTy >> return nTy
+patternTypes :: P -> HmInfM (Type, [(Bind, Type)])
+patternTypes = cata alg where
+  alg (_ C.:< PPatF _n _xs) = error "TODO"
+  alg (_ C.:< PTupF xs)     = sequence xs >>= \xs' ->
+    return $ (TTup (fst <$> xs'), concatMap snd xs')
+  alg (_ C.:< POrF _xs)     = error "TODO"
+  alg (_ C.:< PRecF _fs)    = error "TODO"
+  alg (_ C.:< PArrF xs)     = sequence xs >>= \case
+    [] -> freshTv >>= \tv -> return (TArr tv 0, [])
+    --xs'@((t,_):_) -> do
+      --let ts = map fst xs'
+      --mapM_ (uncurry unify) $ concat (zipWith (zip . repeat) ts $ tails ts)
+    xs'@((t,_):_) -> do
+      mapM_ (unify t . fst) xs'
+      return (TArr t $ toInteger (length xs'), concatMap snd xs')
+  alg (_ C.:< PConstF (CInt _)) = return (TInt, [])
+  alg (_ C.:< PConstF _)    = error "TODO"
+  alg (_ C.:< PWildF)       = (,[]) <$> freshTv
+  alg (_ C.:< PMultiWildF)  = error "TODO"
+  alg (_ C.:< PBindF n Nothing) = freshTv >>= \tv -> return (tv, [(n, tv)])
+  alg (_ C.:< PBindF n (Just p)) = p >>= \(t, bs) -> return $ (t, (n,t):bs)
 
-   in forM_ argTvs $ \(tv, ps) -> forM_ ps $ \case
-    _ :< PBindF n Nothing  -> unify tv (unsafeLookup n bindTvMap)
-    _ :< PBindF n (Just p) -> unify tv (unsafeLookup n bindTvMap) >>
-                              cata patternType p >>= unify tv
-    p -> cata patternType p >>= unify tv
+--unifyPatterns :: [(Type, [P])] -> HmInfM [(Bind, Type)]
+--unifyPatterns tps = do
+--  let bs = concatMap (fmap fst . patternBinds) (concatMap snd tps)
+--  bindTvs <- forM bs $ \b -> (b,) <$> freshTv
+--  let bindMap = M.fromList bindTvs
+--  forM_ tps $ \(t, ps) -> forM_ ps $ \p -> do
+--    (patTy, bindTys) <- patternTypes p
+--    unify t patTy
+--    sequence_ $ M.intersectionWith unify bindMap $ M.fromList bindTys
+--  return $ M.toList bindMap
+
+unifyPatterns :: [(Type, [P])] -> HmInfM [(Bind, Type)]
+unifyPatterns tps = do
+  bindMMap <- forM tps $ \(t, ps) -> flip (flip foldrM MM.empty) ps $
+    \p m -> do
+      (patTy, bindTys) <- patternTypes p
+      unify t patTy
+      return $ foldr (uncurry MM.insert) m bindTys
+  unifyDups . MM.unionsWith (++) $ bindMMap
+
+unifyDups :: MM.MultiMap Bind Type -> HmInfM [(Bind, Type)]
+unifyDups bs = let
+  unifyList1 :: [Type] -> HmInfM Type
+  unifyList1 (t:ts) = mapM_ (unify t) ts >> return t
+  unifyList1 _ = error "Unexpected empty list."
+
+  -- MultiMaps never have keys with no values
+   in forM (MM.assocs bs) $ \(b,ts) -> (b,) <$> unifyList1 ts
 
 inEnv :: (T.Text, Type) -> HmInfM a -> HmInfM a
 inEnv (n, s) m = do
@@ -177,44 +249,50 @@ inEnv' :: [(T.Text, Type)] -> HmInfM a -> HmInfM a
 inEnv' bs m = foldr inEnv m bs
 
 unify :: Type -> Type -> HmInfM ()
-unify t1 t2 = tell [(t1, t2)]
+unify t1 t2 = --traceM (show (t1,t2)) >>
+  tellC (t1, t2)
 
 generalize :: Type -> HmInfM Type
-generalize t = do
-  env <- ask
-  return $ TAll (S.toList $ ftv t S.\\ ftv env) t
+generalize t = liftM (flip generalize' t) ask
 
 unificationSolver :: Unifier -> SolveM TypeSub
-unificationSolver (s, cs) =
-  case cs of
-    [] -> return s
-    ((t1, t2): cs') -> do
-      s' <- unifier t1 t2
-      unificationSolver (s' `compSub` s, apply s' cs')
+unificationSolver (s, []) = return s
+unificationSolver (s, (t1, t2):cs) =
+  unifier t1 t2 >>= \s' -> unificationSolver (s' `compSub` s, apply s' cs)
 
 unifier :: Type -> Type -> SolveM TypeSub
 unifier t1 t2 | t1 == t2 = return nullSub
 unifier (TFun l r) (TFun l' r') = unifyMany [l, r] [l', r']
+
 unifier (TVar n) t = bind n t
 unifier t (TVar n) = bind n t
-unifier (TCon n ts) (TCon n' ts')
+
+unifier t@(TCon n ts) t'@(TCon n' ts')
   | n == n' = unifyMany ts ts'
-  | otherwise = error $ "can't match " ++ show n ++ " and " ++ show n'
+  | otherwise = tellUnifier (TEUnification (t, t')) >> unifyMany ts ts'
 unifier (TTup ts) (TTup ts') = unifyMany ts ts'
+
 unifier (TArr t i) (TArr t' i')
   | i == i' = unifier t t'
 
 unifier (TRec _fs) (TRec _fs') = undefined
-unifier t t' = error $ "Non-unifying types " ++ show t ++ " and " ++ show t'
+
+--unifier (TAll _ t) t' = unifier t t'
+--unifier t (TAll _ t') = unifier t t'
+
+unifier t t' = tellUnifier (TEUnification (t, t')) >> return nullSub
 
 bind :: T.Text -> Type -> SolveM TypeSub
 bind v t
-  | (n, (TVar n')) <- (v, t)
-  , n == n'
+  | TVar n <- t
+  , v == n
   = return nullSub
 
-  | S.member v (ftv t)
-  = error "occurs check"
+  | v `S.member` ftv t
+  = tellUnifier (TEOccurs v t) >> return nullSub
+
+--  | TAll _ t' <- t
+--  = bind v t'
 
   | otherwise
   = return $ M.singleton v t
@@ -236,37 +314,11 @@ freshTv = do
   modify (\_ -> HmInfS $ c + 1)
   return $ TVar $ T.pack $ 'a' : show c
 
-class TIOps a where
-  ftv :: a -> S.Set T.Text
-  apply :: M.Map T.Text Type -> a -> a
+tellE :: TypeErr -> HmInfM ()
+tellE = tell . DL.singleton . HMWError
 
-instance TIOps Type where
-  ftv = cata alg
-    where alg (TVarF v)     = S.singleton v
-          alg (TFunF t1 t2) = t1 `S.union` t2
-          alg (TConF _ ts)  = S.unions ts
-          alg (TTupF ts)    = S.unions ts
-          alg (TRecF fs)    = S.unions $ map snd fs
-          alg (TArrF t _)   = t
-          alg (TAllF vs t)  = t S.\\ S.fromList vs
+tellC :: Constraint -> HmInfM ()
+tellC = tell . DL.singleton . HMWConstraint
 
-  apply s (TVar v)     = M.findWithDefault (TVar v) v s
-  apply s (TFun t1 t2) = TFun (apply s t1) (apply s t2)
-  apply s (TCon n ts)  = TCon n $ map (apply s) ts
-  apply s (TTup ts)    = TTup $ map (apply s) ts
-  apply s (TRec fs)    = TRec $ map (fmap $ apply s) fs
-  apply s (TArr t i)   = TArr (apply s t) i
-  apply s (TAll vs t)  = undefined s vs t
-  apply _ _ = error "huh?"
-
-instance TIOps (Type, Type) where
-  ftv (t1, t2) = S.union (ftv t1) (ftv t2)
-  apply s ts = join bimap (apply s) ts
-
-instance TIOps a => TIOps [a] where
-  ftv = S.unions . map ftv
-  apply s = map (apply s)
-
-instance TIOps (M.Map T.Text Type) where
-  ftv = S.unions . map ftv. M.elems
-  apply s = M.map (apply s)
+tellUnifier :: TypeErr -> SolveM ()
+tellUnifier = tell . DL.singleton

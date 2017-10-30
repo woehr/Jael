@@ -83,6 +83,7 @@ data ExprF t p v e = ETAbsF v e
 
                    | EAppF e [e]
                    | ETupF   [e]
+                   | EArrF   [e]
 
                    | ELetF [(p, e)] e
 
@@ -234,6 +235,7 @@ mapExpr f g = \case
   (ELamCaseF alts)   -> ELamCaseF $ map (first g) alts
   (EAppF e es)       -> EAppF e es
   (ETupF es)         -> ETupF es
+  (EArrF es)         -> EArrF es
   (ELetF es e)       -> ELetF (map (first g) es) e
   (ERecF fs)         -> ERecF fs
   (ERecUpF fs e)     -> ERecUpF fs e

@@ -2,8 +2,6 @@
 
 module Jael.New.ExprSpec (spec) where
 
-import qualified Data.Text as T
-
 import Test.Hspec
 import Jael.Test.Util
 import Jael.New.Check
@@ -13,11 +11,11 @@ import Jael.New.Type
 import Jael.New.QType
 import Jael.New.Misc
 
-someData :: (T.Text, DataDecl Type)
-someData = fmap (fmap $ hoistFix unQType) . parseData $ "data T { a; b; c(Int, Int) }"
+someData :: DataDecl Type
+someData = fmap (hoistFix unQType) . parseData $ "data T { a; b; c(Int, Int) }"
 
 patternErrs :: String -> [PatternErr]
-patternErrs s = case checkPattern (snd someData) . parsePattern $ s of
+patternErrs s = case checkPattern someData . parsePattern $ s of
   Left es -> es
   Right _ -> []
 

@@ -430,6 +430,7 @@ pExpr99 =
                    <|> pure (ERecF ls)
            ))
        <|> spannit (ETupF  <$> try (parens $ commaSep2 pExpr0))
+       <|> spannit (EArrF  <$> try (brackets $ commaSep pExpr0))
        <|> parens pExpr0
 
 {-
@@ -443,13 +444,12 @@ pDataCon = (,)
 {-
   data := "data" u (l,* l)? { con;* con }
 -}
-pData :: Parser (T.Text, DataDecl T)
+pData :: Parser (DataDecl T)
 pData = reserved "data"
-      $> (,)
+      $> DataDecl
      <*> uident
-     <*> (DataDecl <$> optionalList (parens $ commaSep1 lident)
-                   <*> (M.fromList <$> braces (semiSep1 pDataCon))
-         )
+     <*> optionalList (parens $ commaSep1 lident)
+     <*> (M.fromList <$> braces (semiSep1 pDataCon))
 
 data BitCons = BitConIdent T.Text
              | BitConInt JInt

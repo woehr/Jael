@@ -37,6 +37,7 @@ library
                        comonad,
                        containers,
                        deriving-compat >= 0.3,
+                       dlist,
                        free,
                        liquid-fixpoint,
                        llvm-hs,

@@ -40,8 +40,8 @@ parseQType =  unSpanQType . parseThrow pType0
 parseType :: String -> Type
 parseType = (hoistFix unQType) . parseQType
 
-parseData :: String -> (T.Text, DataDecl (QType (Expr () P T.Text)))
-parseData = fmap (fmap unSpanQType) . parseThrow pData
+parseData :: String -> DataDecl (QType (Expr () P T.Text))
+parseData = fmap unSpanQType . parseThrow pData
 
 parseExpr' :: String -> E
 parseExpr' = parseThrow pExpr0

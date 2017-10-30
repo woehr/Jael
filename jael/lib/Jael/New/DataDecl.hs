@@ -10,12 +10,18 @@ import qualified Data.Text as T
 import Jael.New.Type
 
 data DataDecl t = DataDecl
-                { dataTVars :: [T.Text]
+                { dataName :: T.Text
+                , dataTVars :: [T.Text]
                 , dataCons  :: M.Map T.Text [t]
                 } deriving (Eq, Functor, Show)
 
 constructorArity :: DataDecl t -> M.Map T.Text Int
 constructorArity (DataDecl {..}) = M.map length dataCons
 
-dataDeclType :: T.Text -> DataDecl Type -> Type
-dataDeclType n (DataDecl {..}) = TCon n (map TVar dataTVars)
+dataDeclType :: DataDecl Type -> Type
+dataDeclType (DataDecl {..}) =
+  generalize' M.empty $ TCon dataName (map TVar dataTVars)
+
+dataConTypes :: DataDecl Type -> M.Map T.Text Type
+dataConTypes (DataDecl {..}) = flip M.map dataCons $
+  generalize' M.empty . foldr TFun (TCon dataName $ map TVar dataTVars)
