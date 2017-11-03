@@ -1,4 +1,5 @@
 {-# Language DeriveFunctor #-}
+{-# Language RankNTypes #-}
 
 module Jael.New.Misc where
 
@@ -12,3 +13,6 @@ iterCofree f cfa = uncofree f cfa
 
 removeAnn :: Functor f => Cofree f a -> Fix f
 removeAnn = iterCofree (\_ f -> Fix f)
+
+hoistFix :: Functor f => (forall x. f x -> g x) -> Fix f -> Fix g
+hoistFix n = cata (Fix . n)

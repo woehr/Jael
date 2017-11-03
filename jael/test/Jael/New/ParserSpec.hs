@@ -32,7 +32,7 @@ spec = do
     it "should type (var)" $ do
       parseType "a" `shouldBe` (TVar "a")
     it "should type (record)" $ do
-      parseType "{foo: a, bar: Int}" `shouldBe` TRec [("foo", TVar "a"), ("bar", TCon "Int" [])]
+      parseType "{foo: a, bar: Int}" `shouldBe` TRec (Row [("foo", TVar "a"), ("bar", TCon "Int" [])] Nothing)
     it "should scheme" $ do
       parseType "forall a. a" `shouldBe` (TAll ["a"] $ TVar "a")
     it "should pattern" $ do
@@ -58,7 +58,11 @@ spec = do
       parseExpr "{x=5, y=x}" `shouldBe` ERec [("x", EConst $ CInt $ JInt DecInt 5 1), ("y", EVar "x")]
     it "should expr (rec ops)" $ do
       parseExpr "x.1.a.b" `shouldBe` ERecSel (ERecSel (ERecSel (EVar "x") "1") "a") "b"
-      parseExpr "{x=1,y=z|r}" `shouldBe` ERecUp [("x", EConst $ CInt $ JInt DecInt 1 1), ("y", EVar "z")] (EVar "r")
+      parseExpr "{x=1,y=z|r}" `shouldBe` ERecExt
+        [ ("x", EConst $ CInt $ JInt DecInt 1 1)
+        , ("y", EVar "z")
+        ]
+        (EVar "r")
       parseExpr "{}--1--a" `shouldBe` ERecRes (ERecRes (ERec []) "1") "a"
     it "should expr (let with patterns)" $ do
       parseExpr "{x|_=1;x}"   `shouldBe`
@@ -109,9 +113,10 @@ spec = do
                                              , ("foo2",
                                                  [ UQVar "a"
                                                  , UQCon "Int" []
-                                                 , UQRec [ ("x", UQVar "a")
-                                                         , ("y", UQCon "Int" [])
-                                                         ]
+                                                 , UQRec $ Row [ ("x", UQVar "a")
+                                                               , ("y", UQCon "Int" [])
+                                                               ]
+                                                               Nothing
                                                  ]
                                                )
                                              ]

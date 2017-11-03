@@ -32,25 +32,42 @@ inferThrow ds e =
     Left err -> error (show err)
     Right t  -> t
 
-shouldHaveType :: String -> String -> Expectation
-shouldHaveType e t =
+typeStrEq :: String -> String -> (Bool, Type, Type)
+typeStrEq e t =
   let expr = parseExpr' e
       expr' = hoistCofree (mapExprP expandPattern) expr
       (actualType, _) = inferThrow defaultData expr'
       expectedType = parseType t
-   in if alphaEq actualType expectedType
-         then return ()
-         else expectationFailure $
-           "Types not equal, expected:\n\t" ++ show expectedType ++ "\n" ++
-           "but got:\n\t" ++ show actualType ++ "\n"
+   in (alphaEq actualType expectedType, expectedType, actualType)
+
+shouldHaveType :: String -> String -> Expectation
+shouldHaveType e t =
+  let (b, expectedType, actualType) = typeStrEq e t
+   in if b
+        then return ()
+        else expectationFailure $
+          "Types not equal, expected:\n\t" ++ show expectedType ++ "\n" ++
+          "but got:\n\t" ++ show actualType ++ "\n"
+
+shouldNotHaveType :: String -> String -> Expectation
+shouldNotHaveType e t =
+  let (b, expectedType, actualType) = typeStrEq e t
+   in if not b
+        then return ()
+        else expectationFailure $
+          "Types are equal, expected:\n\t" ++ show expectedType ++ "\n" ++
+          "and:\n\t" ++ show actualType ++ "\n" ++
+          "to be unequal."
 
 spec :: Spec
 spec = do
   describe "inference of simple expressions" $ do
     it "should infer ADT constants" $ do
       "true" `shouldHaveType` "Bool"
+
     it "should infer integers" $ do
       "1" `shouldHaveType` "Int"
+
     it "should infer abstractions" $ do
       "\\($a) -> a" `shouldHaveType` "forall a. a -> a"
       "\\($a) -> 1" `shouldHaveType` "forall a. a->Int"
@@ -58,16 +75,43 @@ spec = do
         `shouldHaveType` "forall a b. (a,b) -> ((a,b),a,b)"
       "\\(($a,_,1) | (_,$a,_)) -> a"
         `shouldHaveType` "forall a. (a,a,Int)->a"
+
     it "should infer applications" $ do
       "1+2" `shouldHaveType` "Int"
+
     it "should infer if expressions" $ do
       "if true then 1 else 2" `shouldHaveType` "Int"
+
     it "should infer let expressions" $ do
       "{ $x = 1; x }" `shouldHaveType` "Int"
       "{ $x = just; x(1) }" `shouldHaveType` "Maybe(Int)"
       "{ $x = nothing; x }" `shouldHaveType` "forall a. Maybe(a)"
-      "{ $x@($y) = nothing; (x,y) }"
-        `shouldHaveType` "forall a b. (Maybe(a), Maybe(b))"
-      "{ $x@([_,$y,$z]) = [1, 2, 3]; (x,y,z) }"
-        `shouldHaveType` "([Int; 3], Int, Int)"
-      "{ [$x@(nothing)] = [just 1]; x }" `shouldHaveType` "Maybe(Int)"
+      "{ $x@($y) = nothing; (x,y) }" `shouldHaveType`
+        "forall a b. (Maybe(a), Maybe(b))"
+      "{ $x@([_,$y,$z]) = [1, 2, 3]; (x,y,z) }" `shouldHaveType`
+        "([Int; 3], Int, Int)"
+      "{ $x = 1+1; x }" `shouldHaveType` "Int"
+      "{ $x@(nothing) = just(1); x }" `shouldHaveType` "Maybe(Int)"
+      "{ $x@(just(1)) = nothing; x }" `shouldHaveType` "Maybe(Int)"
+      "{ just($y) = nothing; y }" `shouldHaveType` "forall a. a"
+      "{ just($x) = just(1); x }" `shouldHaveType` "Int"
+
+    it "should infer records" $ do
+      -- Order of labels does not matter
+      "{ x=1, y=true, z=nothing }" `shouldHaveType`
+        "forall a. { z: Maybe(a), y: Bool, x: Int }"
+      -- Order of the types of x do matter
+      "{ x=1, x=true, x=nothing }" `shouldHaveType`
+        "forall a. { x: Int, x: Bool, x: Maybe(a) }"
+      "{ x=1, x=true }" `shouldNotHaveType`
+        "{ x: Bool, x: Int }"
+      -- Order of x's and y's types matter only
+      -- amongst labels of the same name
+      "{ y=true, x=1, y=0, x=false}" `shouldHaveType`
+        "{ x:Int, x:Bool, y:Bool, y:Int }"
+      "{ y=true, x=1, y=0, x=false}" `shouldNotHaveType`
+        "{ x: Bool, x:Int, y:Int, y:Bool }"
+      "\\($x) -> { x = 1 | x }" `shouldHaveType` "forall r. {r}-> {x:Int|r}"
+    it "should infer record types where unification is necessary" $ do
+      "{ $r@({y=4, z=$y}) = {x=1,y=2,y=just,z=nothing}; {a=y|r} }"
+        `shouldHaveType` "forall a b. { a:Maybe(a), y:Int, z:Maybe(b) }"

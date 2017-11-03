@@ -44,6 +44,7 @@ library
                        llvm-hs-pure,
                        mtl-prelude,
                        multimap,
+                       multiset,
                        parsers,
                        placeholders,
                        recursion-schemes >= 5.0.1,

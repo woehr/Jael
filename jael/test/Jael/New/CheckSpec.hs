@@ -10,9 +10,9 @@ import Test.Hspec
 import Jael.Test.Util
 import Jael.New.Check
 
-spanEqs :: Span -> Span -> Bool
-spanEqs (Span d1 d2 _) (Span d1' d2' _) =
-  (d1 == d1') && (d2 == d2')
+--spanEqs :: Span -> Span -> Bool
+--spanEqs (Span d1 d2 _) (Span d1' d2' _) =
+--  (d1 == d1') && (d2 == d2')
 
 spanToDeltas :: Span -> (Delta, Delta)
 spanToDeltas (Span d1 d2 _) = (d1, d2)

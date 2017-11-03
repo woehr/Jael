@@ -88,8 +88,8 @@ data ExprF t p v e = ETAbsF v e
                    | ELetF [(p, e)] e
 
                    | ERecF    [(Label, e)]   -- Record construction
-                   | ERecUpF  [(Label, e)] e -- Record update
-                   | ERecExtF e e -- Extend second record with fields of first
+--                   | ERecUpF  [(Label, e)] e -- Record update
+                   | ERecExtF [(Label, e)] e -- Extend second record with fields of first
                    | ERecResF e Label -- Remove label from record
                    | ERecSelF e Label -- Select label from record
 
@@ -158,11 +158,11 @@ pattern ETup es = Fix (ETupF es)
 pattern ERec :: [(T.Text, Expr t p s)] -> Expr t p s
 pattern ERec ls = Fix (ERecF ls)
 
-pattern ERecUp :: [(Label, Expr t p s)] -> Expr t p s -> Expr t p s
-pattern ERecUp ls r = Fix (ERecUpF ls r)
+--pattern ERecUp :: [(Label, Expr t p s)] -> Expr t p s -> Expr t p s
+--pattern ERecUp ls r = Fix (ERecUpF ls r)
 
-pattern ERecExt :: Expr t p s -> Expr t p s -> Expr t p s
-pattern ERecExt r1 r2 = Fix (ERecExtF r1 r2)
+pattern ERecExt :: [(T.Text, Expr t p s)] -> Expr t p s -> Expr t p s
+pattern ERecExt exts r2 = Fix (ERecExtF exts r2)
 
 pattern ERecRes :: Expr t p s -> Label -> Expr t p s
 pattern ERecRes e l = Fix (ERecResF e l)
@@ -238,7 +238,7 @@ mapExpr f g = \case
   (EArrF es)         -> EArrF es
   (ELetF es e)       -> ELetF (map (first g) es) e
   (ERecF fs)         -> ERecF fs
-  (ERecUpF fs e)     -> ERecUpF fs e
+--  (ERecUpF fs e)     -> ERecUpF fs e
   (ERecExtF top bot) -> ERecExtF top bot
   (ERecResF e l)     -> ERecResF e l
   (ERecSelF e l)     -> ERecSelF e l

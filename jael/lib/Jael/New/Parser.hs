@@ -23,7 +23,7 @@ import Jael.New.QType
 --type P = Cofree PatternF Span
 type P = PTree PatternF
 type E = PTree (ExprF () P T.Text)
-type T = PTree (QTypeF E)
+type T = PTree (QTypeF T.Text E)
 
 identifierStyle :: TokenParsing m => String -> m Char -> IdentifierStyle m
 identifierStyle name p = IdentifierStyle
@@ -184,12 +184,18 @@ spannit p = flip fmap (spanned p) $ \(x :~ s) -> s :< x
       | (t0,+ t0)
       | (t0)
 -}
-pBaseType :: Parser (TypeF T)
+pBaseType :: Parser (TypeF T.Text T)
 pBaseType =
   (     TVarF <$> lident
     <|> TConF <$> uident <*> optionalList (parens $ commaSep1 pType1)
     <|> brackets (TArrF <$> pType1 <* semi <*> (intValue <$> anyint))
-    <|> (braces $ TRecF <$> commaSep ((,) <$> lident <* colon <*> pType1))
+    <|> (braces $
+              try (TRecF . Row [] <$> optional lident <* notFollowedBy colon)
+          <|> TRecF <$>
+                (Row <$> (commaSep $ (,) <$> lident <* colon <*> pType1)
+                     <*> optional (bar *> lident)
+                )
+        )
     <|> try (parens $ pType1 >>= \t -> TTupF . (t:) <$> some (comma *> pType1))
   )
   <|> try (parens pBaseType)
@@ -203,13 +209,13 @@ pType1 =  chainr1 pType2 (pSpanBinary $ UQFunF <$ rArrow)
       <|> pType2
 
 pType2 :: Parser T
-pType2 = spannit (try (braces $
+pType2 = spannit (angles $
            (\l t e -> Just (l,e) C.:< t) <$> lident
                                          <*  colon
                                          <*> pBaseType
                                          <*  bar
                                          <*> pExpr0
-         ))
+           )
       <|> spannit ((Nothing C.:<) <$> pBaseType)
       <|> parens pType1
 
@@ -390,7 +396,7 @@ pExpr10 :: Parser E
 pExpr10 = leftAssoc pExpr11 [OpTimes, OpDiv, OpMod]
 
 pExpr11 :: Parser E
-pExpr11 = pExpr12 `chainl1` (pSpanBinary $ ERecExtF <$ symbol "++")
+pExpr11 = pExpr12 -- TODO: `chainl1` (pSpanBinary $ ERecExtF <$ symbol "++")
 
 pExpr12 :: Parser E
 pExpr12 = pExpr13 >>= \e ->
@@ -426,7 +432,7 @@ pExpr99 =
            -- An lident followed by comma separated expressions or nothing
        <|> (pVar >>= \v -> spannit (EAppF v <$> (parens $ commaSep1 pExpr0)) <|> pure v)
        <|> spannit (braces (commaSep labelledExpr >>= \ls ->
-                       ERecUpF ls <$ bar <*> pExpr0
+                       ERecExtF ls <$ bar <*> pExpr0
                    <|> pure (ERecF ls)
            ))
        <|> spannit (ETupF  <$> try (parens $ commaSep2 pExpr0))

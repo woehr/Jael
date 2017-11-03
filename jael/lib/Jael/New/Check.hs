@@ -41,7 +41,7 @@ unboundVars bvs = MM.toList . flip (foldr MM.delete) (S.toList bvs) . cata alg
     alg (_ C.:< ELetF _bs _e) = undefined
 
     alg (_ C.:< ERecF    _fs) = undefined
-    alg (_ C.:< ERecUpF  _fs _e) = undefined
+--    alg (_ C.:< ERecUpF  _fs _e) = undefined
     alg (_ C.:< ERecExtF _top _bot) = undefined
     alg (_ C.:< ERecResF _e _l) = undefined
     alg (_ C.:< ERecSelF _e _l) = undefined
@@ -74,7 +74,7 @@ shadowedVars bvs = map (\(a,(b,c)) -> (a,b,c)) . MM.toList . snd . cata alg
     alg (_ C.:< ELetF _bs _e) = undefined
 
     alg (_ C.:< ERecF    _fs) = undefined
-    alg (_ C.:< ERecUpF  _fs _e) = undefined
+--    alg (_ C.:< ERecUpF  _fs _e) = undefined
     alg (_ C.:< ERecExtF _top _bot) = undefined
     alg (_ C.:< ERecResF _e _l) = undefined
     alg (_ C.:< ERecSelF _e _l) = undefined
