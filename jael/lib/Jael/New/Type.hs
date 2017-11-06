@@ -85,13 +85,13 @@ instance RowOps Row where
   rapply _ r@(Row _ Nothing) = r
   rapply s r@(Row fs (Just x)) =
     case M.lookup x s of
-      Just (Row gs y) -> Row (fs `mappend` gs) y
+      Just (Row gs y) -> sortRow $ Row (fs `mappend` gs) y
       Nothing -> r
 
 instance RowOps (Row' T.Text (S.Set T.Text)) where
   rftv (Row fs (Just v)) = S.unions $ S.singleton v : map snd fs
   rftv (Row fs Nothing)  = S.unions $ map snd fs
-  rapply = error "Why?"
+  rapply = error "Why would we need this?"
 
 instance RowOps a => RowOps [a] where
   rftv = S.unions . fmap rftv
@@ -115,6 +115,14 @@ instance RowOps Type where
           vs' = foldr f [] vs
        in TAll vs' t'
     t -> Fix $ fmap (rapply s) t
+
+instance RowOps (Type, Type) where
+  rftv (a, b) = rftv a `S.union` rftv b
+  rapply s = join bimap (rapply s)
+
+instance RowOps a => RowOps (M.Map T.Text a) where
+  rftv = S.unions . map rftv . M.elems
+  rapply s = M.map (rapply s)
 
 instance TIOps Type where
   ftv = cata alg
@@ -161,12 +169,12 @@ generalize' env t
 
 -- Sort according to the first element of the tuple while making sure elements
 -- with the same name stay in the same relative order.
-sortRows :: Row' v t -> Row' v t
-sortRows (Row fs mv) = Row (MM.toList . MM.fromList $ fs) mv
+sortRow :: Row' v t -> Row' v t
+sortRow (Row fs mv) = Row (MM.toList . MM.fromList $ fs) mv
 
 sortRecords :: Type -> Type
 sortRecords = hoistFix $ \case
-  TRecF r -> TRecF (sortRows r)
+  TRecF r -> TRecF (sortRow r)
   x -> x
 
 alphaEq :: Type -> Type -> Bool

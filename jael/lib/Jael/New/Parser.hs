@@ -2,6 +2,7 @@
 {-# Language LambdaCase #-}
 {-# Language OverloadedStrings #-}
 {-# Language RecordWildCards #-}
+{-# Language TupleSections #-}
 
 module Jael.New.Parser where
 
@@ -71,6 +72,12 @@ lident = ident
        $ identifierStyle "lowercase identifier"
        $ oneOf $ ['a'..'z']
 
+tsymbol :: (TokenParsing m, Monad m) => String -> m T.Text
+tsymbol = symbol >=> return . T.pack
+
+tsymbolic :: (TokenParsing m, Monad m) => Char -> m T.Text
+tsymbolic = symbolic >=> return . T.singleton
+
 uident :: (TokenParsing m, Monad m) => m T.Text
 uident = ident
        $ identifierStyle "uppercase identifier"
@@ -79,14 +86,17 @@ uident = ident
 label :: (TokenParsing m, Monad m) => m T.Text
 label = lident <|> (whole >>= \JInt{..} -> return . T.pack . show $ intValue)
 
-rArrow :: (TokenParsing m, Monad m) => m ()
-rArrow = symbol "->" $> ()
+rArrow :: (TokenParsing m, Monad m) => m T.Text
+rArrow = tsymbol "->"
 
-lArrow :: (TokenParsing m, Monad m) => m ()
-lArrow = symbol "<-" $> ()
+lArrow :: (TokenParsing m, Monad m) => m T.Text
+lArrow = tsymbol "<-"
 
-bar :: (TokenParsing m, Monad m) => m ()
-bar = symbolic '|' $> ()
+bar :: (TokenParsing m, Monad m) => m T.Text
+bar = tsymbolic '|'
+
+wildcard :: (TokenParsing m, Monad m) => m T.Text
+wildcard = tsymbolic '_'
 
 forall :: (TokenParsing m, Monad m) => m ()
 forall = reserved "forall"
@@ -242,13 +252,17 @@ pPattern0 =  ifGtOne' POrF (pPattern1 `sepBy1` bar)
 pPattern1 :: Parser P
 pPattern1 =
   let labelledPattern :: Parser (T.Text, P)
-      labelledPattern = (,) <$> lident <* symbolic '=' <*> pPattern0
+      labelledPattern = (,) <$> lident <* symbolic '=' <*> pPattern1
    in spannit
-        (    PWildF      <$  symbolic '_'
+        (    PWildF      <$  wildcard
          <|> PMultiWildF <$  symbol "..."
          <|> PConstF     <$> pConstant
-         <|> PRecF       <$> braces   (commaSep  labelledPattern)
-         <|> PArrF       <$> brackets (commaSep  pPattern0)
+         <|> PRecF [] Nothing <$ try (symbolic '{' <* symbolic '}')
+         <|> uncurry PRecF <$> braces ((,)
+             <$> (commaSep1 labelledPattern)
+             <*> (optional $ bar *> (symbolic '$' *> lident <|> wildcard))
+             )
+         <|> PArrF       <$> brackets (commaSep pPattern0)
          <|> PBindF      <$  symbolic '$'
                                <*> lident
                                <*> optional (symbolic '@' *> parens pPattern0)
@@ -473,7 +487,7 @@ data BitRep p = BitRep T.Text [T.Text] (Maybe SizeSpec) [BitCase p]
 -}
 pBitCons :: Parser (BitCons, Maybe SizeSpec)
 pBitCons =  (,)
-        <$> (BitConWild <$ symbolic '_' <|> BitConIdent <$> lident <|> BitConInt <$> anyint)
+        <$> (BitConWild <$ wildcard <|> BitConIdent <$> lident <|> BitConInt <$> anyint)
         <*> optional (angles pSizeSpec)
 {-
   bitcase := p = bitcon#* bitcon

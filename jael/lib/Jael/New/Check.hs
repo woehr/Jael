@@ -121,7 +121,8 @@ patternBinds = cata alg
     alg (_ C.:< POrF  _)     = error "Expected pattern without POrF"
     alg (_ C.:< PPatF _ ps)  = concat ps
     alg (_ C.:< PTupF ps)    = concat ps
-    alg (_ C.:< PRecF fs)    = concat $ map snd fs
+    alg (_ C.:< PRecF fs Nothing) = concat $ map snd fs
+    alg (s C.:< PRecF fs (Just v)) = (v,s): (concat $ map snd fs)
     alg (_ C.:< PArrF ps)    = concat ps
     alg (s C.:< PBindF v (Just p)) = (v,s):p
     alg (s C.:< PBindF v Nothing)  = [(v,s)]
@@ -134,8 +135,8 @@ expandPattern = cata alg
     alg (_ C.:< POrF ps) = join ps
     alg (s C.:< PPatF c ps) = fmap ((s :<) . PPatF c) $ expandPatternList ps
     alg (s C.:< PTupF ps) = fmap ((s :<) . PTupF) $ expandPatternList ps
-    alg (s C.:< PRecF fs) = fmap ((s :<) . PRecF) $ expandPatternList $
-                              map (\(f,ps) -> map (f,) ps) fs
+    alg (s C.:< PRecF fs mv) = fmap ((s :<) . flip PRecF mv) $ expandPatternList $
+                                 map (\(f,ps) -> map (f,) ps) fs
     alg (s C.:< PArrF ps) = fmap ((s :<) . PArrF) $ expandPatternList ps
     alg (s C.:< PBindF v (Just p)) = fmap ((s :<) . PBindF v . Just) p
 
@@ -178,7 +179,7 @@ checkConstructors dd = cata alg
            Nothing -> (PE_InvalidConstructor c):ps'
     alg (_ C.:< PTupF ps) = concat ps
     alg (_ C.:< POrF ps)  = concat ps
-    alg (_ C.:< PRecF fs) = concat $ map snd fs
+    alg (_ C.:< PRecF fs _) = concat $ map snd fs
     alg (_ C.:< PArrF ps) = concat ps
     alg (_ C.:< PBindF _ (Just p)) = p
     alg _ = []
@@ -189,7 +190,7 @@ multiMultiwild = para alg where
   alg (_ C.:< PPatF _ ps) = or $ map snd ps
   alg (_ C.:< PTupF ps)   = or $ map snd ps
   alg (_ C.:< POrF ps)    = or $ map snd ps
-  alg (_ C.:< PRecF fs)   = or $ map (snd . snd) fs
+  alg (_ C.:< PRecF fs _) = or $ map (snd . snd) fs
   alg (_ C.:< PArrF ps)   = let numMulti = length $ filter isMulti (map fst ps)
                              in or $ (numMulti>1):(map snd ps)
   alg (_ C.:< PBindF _ (Just p)) = snd p
@@ -201,7 +202,7 @@ invalidMulti p = isMulti p || para alg p where
   alg (_ C.:< PPatF _ ps) = or $ map (isMulti . fst) ps ++ map snd ps
   alg (_ C.:< PTupF ps)   = or $ map (isMulti . fst) ps ++ map snd ps
   alg (_ C.:< POrF ps)    = or $ map (isMulti . fst) ps ++ map snd ps
-  alg (_ C.:< PRecF fs)   = or $ map (isMulti . fst . snd) fs
+  alg (_ C.:< PRecF fs _) = or $ map (isMulti . fst . snd) fs
                                    ++ map (snd . snd) fs
   alg (_ C.:< PArrF ps)   = or $ map snd ps
   alg (_ C.:< PBindF _ (Just p')) = isMulti (fst p') || snd p'

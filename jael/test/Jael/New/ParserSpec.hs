@@ -41,7 +41,9 @@ spec = do
       parsePattern' "(a, b)" `shouldBe` PTup [PPat "a" [], PPat "b" []]
     it "should pattern (rec)" $ do
       parsePattern' "{x=1, y=_, z=z}" `shouldBe`
-        PRec [("x", PConst (CInt $ JInt DecInt 1 1)), ("y", PWild), ("z", PPat "z" [])]
+        PRec [("x", PConst (CInt $ JInt DecInt 1 1)), ("y", PWild), ("z", PPat "z" [])] Nothing
+      parsePattern' "{y=_ | $r}" `shouldBe`
+        PRec [("y", PWild)] (Just "r")
     it "should pattern (arr)" $ do
       parsePattern' "[1, x, ...]" `shouldBe` PArr [PConst (CInt $ JInt DecInt 1 1), PPat "x" [], PMultiWild]
     it "should pattern (or)" $ do
@@ -83,6 +85,7 @@ spec = do
         ELet [ ( PRec [ ("y", PConst $ CInt $ JInt DecInt 1 1)
                       , ("z", PPat "z" [])
                       ]
+                      Nothing
                , EVar "x")
              ]
              (EVar "z")
@@ -130,7 +133,7 @@ spec = do
                           [ BitCase (PPat "foo1" [])
                                     [ (BitConInt $ JInt BinInt 3 3, Nothing)
                                     , (BitConWild, Nothing)]
-                          , BitCase (PPat "foo2" [PPat "x" [], PRec [("l1", PPat "y" [])]])
+                          , BitCase (PPat "foo2" [PPat "x" [], PRec [("l1", PPat "y" [])] Nothing])
                             [ (BitConInt $ JInt DecInt 1 1, Just $ BitSize 3)
                                     , (BitConIdent "x", Nothing)
                                     , (BitConIdent "y", Just $ ByteSize 3)

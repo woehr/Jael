@@ -59,6 +59,15 @@ shouldNotHaveType e t =
           "and:\n\t" ++ show actualType ++ "\n" ++
           "to be unequal."
 
+shouldNotUnify :: String -> Expectation
+shouldNotUnify e =
+  let expr = parseExpr' e
+      expr' = hoistCofree (mapExprP expandPattern) expr
+   in case infer defaultData expr' of
+        Left _ -> return ()
+        Right (res, _) -> expectationFailure $
+          "Type inference succeeded, the resulting type was:\n" ++ show res
+
 spec :: Spec
 spec = do
   describe "inference of simple expressions" $ do
@@ -112,6 +121,15 @@ spec = do
       "{ y=true, x=1, y=0, x=false}" `shouldNotHaveType`
         "{ x: Bool, x:Int, y:Int, y:Bool }"
       "\\($x) -> { x = 1 | x }" `shouldHaveType` "forall r. {r}-> {x:Int|r}"
-    it "should infer record types where unification is necessary" $ do
-      "{ $r@({y=4, z=$y}) = {x=1,y=2,y=just,z=nothing}; {a=y|r} }"
-        `shouldHaveType` "forall a b. { a:Maybe(a), y:Int, z:Maybe(b) }"
+    xit "should infer record types where unification is necessary" $ do
+      "{ {y=4, z=$y | _} = {x=1,y=2,y=just,z=nothing}; { a=y } }"
+        `shouldHaveType` "forall a. { a:Maybe(a) }"
+      "{ {y=4, z=$y | $r} = {x=1,y=2,y=just,z=nothing}; {a=y|r} }"
+        `shouldHaveType` "forall a b. { a:Maybe(a), x:Int, y:b->Maybe(b) }"
+      "{ $r@({y=4, z=$y | $s}) = {x=1,y=2,y=just,z=nothing}; {a=r, b=s} }"
+        `shouldHaveType` "forall a b c.\
+                        \{ a:{x:Int,y:Int,y:a->Maybe(a),z:Maybe(b)}\
+                        \, b:{x:Int,y:c->Maybe(c)} }"
+    it "should terminate (and not unify)" $ do
+      shouldNotUnify "\\($r) -> if true then { x=1 | r } else { y = 2 | r }"
+      shouldNotUnify "\\($r) -> if true then { a=1, x=1, z=1 | r } else { a=2, y=2, z=2 | r }"

@@ -20,31 +20,39 @@ import Jael.New.Expr
 import Jael.New.Parser
 import Jael.New.Type
 
-type Bind = T.Text
 type TypeSub = M.Map T.Text Type
 type RowSub = M.Map T.Text Row
+type RowVar = T.Text
 type Constraint = (Type, Type)
-type Unifier = (TypeSub, [Constraint])
-type SolveM = WriterT (DL.DList TypeErr) Identity
+type Unifier = ((TypeSub, RowSub), [Constraint])
+type SolveM = StateT SolveS (WriterT (DL.DList TypeErr) Identity)
 type HmEnv = M.Map T.Text Type
 
+data SolveS = SolveS { ssNextTv :: Integer, ssNextRowTv :: Integer }
+  deriving (Eq, Show)
+
+initSolveSt :: SolveS
+initSolveSt = SolveS { ssNextTv = 0, ssNextRowTv = 0 }
+
 class Substitutable a where
-  nullSub :: M.Map T.Text a
-  nullSub = M.empty
+  applySub :: M.Map T.Text a -> a -> a
 
   compSub :: M.Map T.Text a -> M.Map T.Text a -> M.Map T.Text a
   l `compSub` r = fmap (applySub l) r `M.union` l
 
-  applySub :: M.Map T.Text a -> a -> a
+  nullSub :: M.Map T.Text a
+  nullSub = M.empty
 
 instance Substitutable Type where
   applySub = apply
-
 instance Substitutable Row where
   applySub = rapply
 
-emptyEnv :: HmEnv
-emptyEnv = M.empty
+compSubs :: (TypeSub, RowSub) -> (TypeSub, RowSub) -> (TypeSub, RowSub)
+compSubs (s1, r1) (s2, r2) = (s1 `compSub` s2, r1 `compSub` r2)
+
+subBoth :: (TIOps a, RowOps a) => (TypeSub, RowSub) -> a -> a
+subBoth (tsub, rsub) = rapply rsub . apply tsub
 
 data HmInfW = HMWError TypeErr
             deriving (Eq, Show)
@@ -67,6 +75,7 @@ type TypedE = Cofree (ExprF Type [P] T.Text) Span
 type E' = Cofree (ExprF () [P] T.Text) Span
 
 data TypeErr = TEOccurs T.Text Type
+             | TERowOccurs T.Text Row
              | TEUnification Type Type
              | TERowUnification Row Row
              | TEPatternType P Type
@@ -80,16 +89,19 @@ infer env expr
   | Right ((t, _te), hmState, hmWriter) <- runHm
   = case DL.toList hmWriter of
       [] -> case  runUnify . hmsConstraints $ hmState of
-        (s, []) -> Right $ ( generalize' M.empty . apply s $ t
-                           , error "TODO: Perform substitution on te")
+        ((s, r), []) -> Right $ ( generalize' M.empty . rapply r . apply s $ t
+                                , error "TODO: Perform substitution on te")
         (_, es) -> Left es
       es  -> Left $ map (\(HMWError e) -> e) es
   where
     runHm = runIdentity $ runExceptT $ runRWST (cata doHm expr) env initState
 
-runUnify :: [Constraint] -> (TypeSub, [TypeErr])
+runUnify :: [Constraint] -> ((TypeSub, RowSub), [TypeErr])
 runUnify =
-  second DL.toList . runIdentity . runWriterT . unificationSolver . (nullSub,)
+    first fst
+  . second DL.toList
+  . runIdentity . runWriterT . flip runStateT initSolveSt
+  . unificationSolver . ((nullSub, nullSub), )
 
 doHm :: C.CofreeF (ExprF () [P] T.Text) Span (HmInfM (Type, TypedE))
      -> HmInfM (Type, TypedE)
@@ -145,19 +157,14 @@ doHm (sp C.:< ELetF xs e) = do
     f (ps, mtte) macc = do
       (t, te) <- mtte
 
-      --bts <- MM.fromList . concat <$> mapM (flip matchPatternToType t) ps
-      ---- Check bts for duplicate binds and make sure their types unify
-      --bts' <- unifyDups bts
-      --bts'' <- forM bts' $ \(b,bt) -> generalize bt >>= return . (b,)
-
       bts' <- unifyPatterns [(t, ps)]
       unifyResult <- runUnify <$> gets hmsConstraints
-      sub <- case unifyResult of
-               (s, []) -> return s
-               (_, es)  -> throwError es
-      bts'' <- local (apply sub) $ mapM (mapM $ generalize . apply sub) bts'
+      s <- case unifyResult of
+             (s, []) -> return s
+             (_, es) -> throwError es
+      bts'' <- local (subBoth s) $ mapM (mapM $ generalize . subBoth s) bts'
 
-      (t', xs', te') <- inEnv' bts'' (local (apply sub) macc)
+      (t', xs', te') <- inEnv' bts'' $ local (subBoth s) macc
       return $ (t', (ps, te):xs', te')
 
 doHm (sp C.:< ERecF le's) = do
@@ -217,48 +224,6 @@ doHm (sp C.:< EBinOpF op) = return . (, sp :< EBinOpF op) $
   case op of
     OpAdd -> TFun (TCon "Int" []) (TFun (TCon "Int" []) (TCon "Int" []))
 
---mostSpecificType :: P -> Type -> [(Bind, Type)]
---mostSpecificType pat typ = go pat typ [] where
---  go = undefined
-
---matchPatternToType :: P -> Type -> HmInfM [(Bind, Type)]
---matchPatternToType p t = go p t (return []) where
---  go :: P -> Type -> HmInfM [(Bind, Type)] -> HmInfM [(Bind, Type)]
---  go (_ :< PPatF n xs) _t' a = do
---    mt <- M.lookup n <$> ask
---    case mt of
---      Just conTy -> do
---        -- Ensure that the shape of the constructor and t' match
---        -- We don't care what the types of conTy get instantiated to
---        -- Actually, this does nothing since t' gets generalized
---        --join $ unify t' <$> instantiate (returnType conTy)
---        when (arity conTy /= toInteger (length xs)) $
---          throwError $ TEPatternLength n xs
---        foldr (\(x, y) acc -> go x y acc) a (zip xs $ argTypes conTy)
---
---      Nothing -> throwError $ TEUnknownDataConstructor n
---
---  go p'@(_ :< PTupF xs) t'@(TTup xs') a = do
---    when (length xs == length xs') $ throwError $ TEPatternType p' t'
---    a' <- a
---    foldrM (\(x, y) acc -> (++acc) <$> matchPatternToType x y) a' (zip xs xs')
---
---  go (_ :< POrF _xs)     _ _ = error "Shouldn't happen. Patterns should \
---                                     \be expanded before type inference."
---
---  go (_ :< PRecF _fs)    _ _ = error "TODO"
---
---  go p'@(_ :< PArrF xs) t'@(TArr u n) a = do
---    when (toInteger (length xs) /= n) $ throwError $ TEPatternType p' t'
---    foldr (\x a' -> go x u a') a xs
---
---  go (_ :< PConstF _c)   _ _ = error "TODO"
---  go (_ :< PWildF)       _ a = a
---  go (_ :< PMultiWildF)  _ a = a
---  go (_ :< PBindF n Nothing)  u a = ((n,u):) <$> a
---  go (_ :< PBindF n (Just q)) u a = ((n,u):) <$> go q u a
---  go _ _ _ = error "TODO"
-
 patternTypes :: P -> HmInfM (Type, [(Bind, Type)])
 patternTypes = cata alg where
   alg :: C.CofreeF PatternF Span (HmInfM (Type, [(Bind, Type)]))
@@ -282,12 +247,16 @@ patternTypes = cata alg where
     return $ (TTup (fst <$> xs'), concatMap snd xs')
 
   alg (_ C.:< POrF _xs) = error "TODO"
-  alg (_ C.:< PRecF fs) = do
-    fs' <- mapM (\(l,m) -> (l,) <$> m) fs
-    rtv <- freshRowTv
-    return ( TRec $ Row (map (second fst) fs') (Just rtv)
-           , join $ map (snd . snd) fs'
-           )
+  alg (_ C.:< PRecF fs mrow) = do
+    (ls, (ts, btss)) <- second unzip . unzip <$> mapM (\(l,m) -> (l,) <$> m) fs
+    let bts = concat btss :: [(Bind, Type)]
+        lts = zip ls ts   :: [(Label, Type)]
+    case mrow of
+      Just r -> freshRowTv >>= \tv ->
+                  let t  = TRec $ Row lts (Just tv)
+                      rt = TRec $ Row []  (Just tv)
+                   in return (t, bool ((r, rt):bts) bts (r == "_"))
+      Nothing -> return (TRec $ Row lts Nothing, bts)
 
   alg (_ C.:< PArrF xs) = sequence xs >>= \case
     [] -> freshTv >>= \tv -> return (TArr tv 0, [])
@@ -301,17 +270,6 @@ patternTypes = cata alg where
   alg (_ C.:< PMultiWildF) = error "TODO"
   alg (_ C.:< PBindF n Nothing) = freshTv >>= \tv -> return (tv, [(n, tv)])
   alg (_ C.:< PBindF n (Just p)) = p >>= \(t, bs) -> return (t, (n,t):bs)
-
---unifyPatterns :: [(Type, [P])] -> HmInfM [(Bind, Type)]
---unifyPatterns tps = do
---  let bs = concatMap (fmap fst . patternBinds) (concatMap snd tps)
---  bindTvs <- forM bs $ \b -> (b,) <$> freshTv
---  let bindMap = M.fromList bindTvs
---  forM_ tps $ \(t, ps) -> forM_ ps $ \p -> do
---    (patTy, bindTys) <- patternTypes p
---    unify t patTy
---    sequence_ $ M.intersectionWith unify bindMap $ M.fromList bindTys
---  return $ M.toList bindMap
 
 unifyPatterns :: [(Type, [P])] -> HmInfM [(Bind, Type)]
 unifyPatterns tps = do
@@ -353,46 +311,116 @@ instantiate (TAll vs t) = do
   return $ apply (M.fromList sub) t
 instantiate t = return t
 
-unificationSolver :: Unifier -> SolveM TypeSub
+unificationSolver :: Unifier -> SolveM (TypeSub, RowSub)
 unificationSolver (s, []) = return s
-unificationSolver (s, (t1, t2):cs) = unifier t1 t2 >>=
-  \s' -> unificationSolver (s' `compSub` s, apply s' cs)
+-- Prior to unification records' row types may be in arbitrary order, so we do
+-- a sort first. During unification further sorts are unnecessary because
+-- substitutions maintain the fields ordering (see rapply).
+unificationSolver (s, (t1, t2):cs) = unifier (sortRecords t1) (sortRecords t2)
+  >>= (\s' -> unificationSolver (s' `compSubs` s, subBoth s' cs))
 
-unifier :: Type -> Type -> SolveM TypeSub
-unifier t1 t2 | t1 == t2 = return nullSub
+unifier :: Type -> Type -> SolveM (TypeSub, RowSub)
+unifier t1 t2 | t1 == t2 = return (nullSub, nullSub)
 unifier (TFun l r) (TFun l' r') = unifyMany [l, r] [l', r']
 
-unifier (TVar n) t = bind n t
-unifier t (TVar n) = bind n t
+unifier (TVar n) t = (, nullSub) <$> bind n t
+unifier t (TVar n) = (, nullSub) <$> bind n t
 
-unifier t@(TCon n ts) t'@(TCon n' ts')
+unifier (TCon n ts) (TCon n' ts')
   | n == n' = unifyMany ts ts'
-  | otherwise = unificationErr (TEUnification t t') >> unifyMany ts ts'
-unifier (TTup ts) (TTup ts') = unifyMany ts ts'
-
+unifier (TTup ts) (TTup ts')
+  = unifyMany ts ts'
 unifier (TArr t i) (TArr t' i')
   | i == i' = unifier t t'
 
--- Sorts row fields so rowUnifier can assume their already ordered
-unifier (TRec r) (TRec r') = undefined rowUnifier (sortRows r) (sortRows r')
+unifier (TRec r) (TRec r') = rowUnifier r r'
 
 unifier (TAll _ _) _ = error "Unexpected"
 unifier _ (TAll _ _) = error "Unexpected"
 
-unifier t t' = unificationErr (TEUnification t t') >> return nullSub
+unifier t t' = unificationError (TEUnification t t') >> return (nullSub, nullSub)
+
+unifyMany :: [Type] -> [Type] -> SolveM (TypeSub, RowSub)
+unifyMany [] [] = return (nullSub, nullSub)
+unifyMany (t1:t1s) (t2:t2s) = do
+  s1 <- unifier t1 t2
+  s2 <- unifyMany (subBoth s1 t1s)
+                  (subBoth s1 t2s)
+  return $ s2 `compSubs` s1
+
+unifyMany _ _ = error "bleh"
 
 rowUnifier :: Row -> Row -> SolveM (TypeSub, RowSub)
-rowUnifier r1@(Row fs1 Nothing) r2@(Row fs2 Nothing)
-  | map fst fs1 == map fst fs2
-  = (,nullSub) <$> unifyMany (map snd fs1) (map snd fs2)
-  | otherwise
-  = unificationErr (TERowUnification r1 r2) >> return (nullSub, nullSub)
 
-rowUnifier (Row _fs1 (Just _v)) (Row _fs2 (Just _v')) = undefined
+-- rules: uni-varl and uni-varr
+-- Just a row type variable on either side, same as bind for things of kind *
+rowUnifier (Row [] (Just v)) r = rowBind v r
+rowUnifier r (Row [] (Just v)) = rowBind v r
 
-rowUnifier (Row _fs1 (Just _v)) (Row _fs2 Nothing) = undefined
+-- rule: uni-row
+rowUnifier (Row ((l, t):fs) mv) (Row ((l', t'):fs') mv')
+  | l == l'
+  = do
+      -- s1 is the null substitution since no rewrite is necessary
+      s2 <- unifier t t'
+      s3 <- rowUnifier (subBoth s2 $ Row fs mv) (subBoth s2 $ Row fs' mv')
+      return (s3 `compSubs` s2)
 
-rowUnifier (Row _fs1 Nothing) (Row _fs2 (Just _v)) = undefined
+-- Consider the following sets of labels for the left row and right row,
+-- respectively
+-- 1) a, b, c    b, c
+-- 2) b, c       a, b, c
+-- In the first case we need to rewrite the right side to have an a,
+-- but in the second case we need to rewrite the left side to have the a.
+-- Also note that whichever side is rewritten must have a type variable
+-- present (it's where the new label "comes" from).
+
+-- Is l not in sFields?
+-- Rewrite right side to have l
+rowUnifier (Row ((l, tau):rFields) rVar) (Row sFields msVar)
+  | Just sVar <- msVar
+  , not $ l `S.member` S.fromList (map fst sFields)
+  = rowUni (l, tau, rFields, rVar) (sFields, sVar)
+
+-- Identical to previous case except the left and right patterns are swapped
+rowUnifier (Row sFields msVar) (Row ((l, tau):rFields) rVar)
+  | Just sVar <- msVar
+  , not $ l `S.member` S.fromList (map fst sFields)
+  = rowUni (l, tau, rFields, rVar) (sFields, sVar)
+
+-- rule: row-head, uni-const, uni-var
+rowUnifier r r' | r == r' = return (nullSub, nullSub)
+
+rowUnifier r1 r2 =
+  unificationError (TERowUnification r1 r2) >> return (nullSub, nullSub)
+
+-- The heavy lifting part of uni-row when rewriting one side is necessary.
+rowUni :: (Label, Type, [(Label, Type)], Maybe RowVar)
+       -> ([(Label, Type)], RowVar)
+       -> SolveM (TypeSub, RowSub)
+rowUni (l, tau, rFields, rVar) (sFields, sVar) = do
+  tau' <- freshUniTv
+
+  -- s' is the tail of s under the substitution s1 which adds the label l and
+  -- changes the row type variable
+  beta <- freshUniRowTv
+  let s' = Row sFields (Just beta)
+
+  let s1 :: (TypeSub, RowSub)
+      s1 = (nullSub, M.singleton sVar $ Row [(l, tau')] (Just beta))
+
+  s2 <- unifier (subBoth s1 tau) (subBoth s1 tau')
+  let s2s1 = s2 `compSubs` s1
+
+  -- Termination check
+  if rFields == [] && rVar == Just sVar
+    then unificationError (TERowUnification
+           (Row ((l, tau):rFields)       rVar)
+           (Row           sFields  (Just sVar)))
+         >> return (nullSub, nullSub)
+    else do
+      s3 <- rowUnifier (subBoth s2s1 $ Row rFields rVar) (subBoth s2s1 s')
+      return $ s3 `compSubs` s2s1
 
 bind :: T.Text -> Type -> SolveM TypeSub
 bind v t
@@ -401,7 +429,7 @@ bind v t
   = return nullSub
 
   | v `S.member` ftv t
-  = unificationErr (TEOccurs v t) >> return nullSub
+  = unificationError (TEOccurs v t) >> return nullSub
 
   | TAll _ _ <- t
   = error "Unexpected"
@@ -409,28 +437,40 @@ bind v t
   | otherwise
   = return $ M.singleton v t
 
-unifyMany :: [Type] -> [Type] -> SolveM TypeSub
-unifyMany [] [] = return nullSub
-unifyMany (t1:t1s) (t2:t2s) = do
-  s1 <- unifier t1 t2
-  s2 <- unifyMany (apply s1 t1s) (apply s1 t2s)
-  return (s2 `compSub` s1)
-unifyMany _ _ = error "bleh"
+rowBind :: T.Text -> Row -> SolveM (TypeSub, RowSub)
+rowBind v t
+  | Row [] (Just n) <- t
+  , v == n
+  = return (nullSub, nullSub)
 
-emptyUnifier :: Unifier
-emptyUnifier = (nullSub, [])
+  | v `S.member` rftv t
+  = unificationError (TERowOccurs v t) >> return (nullSub, nullSub)
+
+  | otherwise
+  = return $ (nullSub, M.singleton v t)
+
+freshTv' :: MonadState s m => (s -> Integer) -> (s -> s) -> T.Text -> m T.Text
+freshTv' prj upd pre = do
+  st <- gets prj
+  let r = (pre `T.append`) . T.pack . show $ st
+  modify upd
+  return r
+
+freshUniTv :: SolveM Type
+freshUniTv = TVar <$>
+  freshTv' ssNextTv (\s@(SolveS{..}) -> s { ssNextTv = ssNextTv + 1 }) "b"
+
+freshUniRowTv :: SolveM T.Text
+freshUniRowTv =
+  freshTv' ssNextRowTv (\s@(SolveS{..}) -> s { ssNextRowTv = ssNextRowTv + 1 }) "s"
 
 freshTv :: HmInfM Type
-freshTv = do
-  c <- gets hmsCount
-  modify (\s@(HmInfS{..}) -> s { hmsCount = c + 1 })
-  return $ TVar $ T.pack $ 'a' : show c
+freshTv = TVar <$>
+  freshTv' hmsCount (\s@(HmInfS{..}) -> s { hmsCount = hmsCount + 1 }) "a"
 
 freshRowTv :: HmInfM T.Text
-freshRowTv = do
-  c <- gets hmsRowCount
-  modify (\s@(HmInfS{..}) -> s { hmsRowCount = c + 1 })
-  return $ T.pack $ 'r' : show c
+freshRowTv =
+  freshTv' hmsRowCount (\s@(HmInfS{..}) -> s { hmsRowCount = hmsRowCount + 1 }) "r"
 
 tellE :: TypeErr -> HmInfM ()
 tellE = tell . DL.singleton . HMWError
@@ -438,5 +478,5 @@ tellE = tell . DL.singleton . HMWError
 tellC :: Constraint -> HmInfM ()
 tellC c = modify (\s@(HmInfS{..}) -> s { hmsConstraints = c:hmsConstraints })
 
-unificationErr :: TypeErr -> SolveM ()
-unificationErr = tell . DL.singleton
+unificationError :: TypeErr -> SolveM ()
+unificationError = tell . DL.singleton

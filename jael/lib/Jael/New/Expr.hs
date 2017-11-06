@@ -11,6 +11,10 @@ module Jael.New.Expr where
 
 import qualified Data.Text as T
 
+type Bind = T.Text
+type Constructor = T.Text
+type Label     = T.Text
+
 data IntFormat = BinInt | OctInt | HexInt | DecInt
                deriving (Eq, Show)
 
@@ -52,12 +56,18 @@ data SizeSpec = BitSize  Integer
               | SizeOf T.Text
               deriving (Eq, Show)
 
-data PatternF p = PPatF T.Text [p]    -- Constructed with sub-patterns
+data PatternF p = PPatF Constructor [p]    -- Constructed with sub-patterns
                 | PTupF [p]           -- tuples
                 | POrF [p]            -- Or pattern
-                | PRecF [(T.Text, p)] -- Record pattern
+                -- TODO: In (Maybe Bind) the bind can be a row type variable
+                -- or wildcard to indicate it's not used. Make the type reflect
+                -- this in the future. Perhaps Maybe (Maybe Bind) where the
+                -- first maybe indicates whether there is a type variable or
+                -- not and the second indicates whether it's named or a
+                -- wildcard?
+                | PRecF [(Label, p)] (Maybe Bind) -- Record pattern
                 | PArrF [p]           -- Array with sub-patterns
-                | PBindF T.Text (Maybe p)
+                | PBindF Bind (Maybe p)
                 | PConstF Constant    -- Ints, Chars
                 | PWildF              -- Single wildcard : _
                 | PMultiWildF         -- Multi wildcard  : ...
@@ -73,8 +83,6 @@ data Guarded e = Guarded e e
 
 $(deriveEq1   ''Guarded)
 $(deriveShow1 ''Guarded)
-
-type Label     = T.Text
 
 data ExprF t p v e = ETAbsF v e
                    | ETAppF e t
@@ -109,7 +117,7 @@ $(deriveEq1   ''ExprF)
 $(deriveShow1 ''ExprF)
 
 -- Patterns for PatternF
-pattern PPat :: T.Text -> [Pattern] -> Pattern
+pattern PPat :: Constructor -> [Pattern] -> Pattern
 pattern PPat x ps = Fix (PPatF x ps)
 
 pattern PTup :: [Pattern] -> Pattern
@@ -118,13 +126,13 @@ pattern PTup xs = Fix (PTupF xs)
 pattern POr :: [Pattern] -> Pattern
 pattern POr ps = Fix (POrF ps)
 
-pattern PRec :: [(T.Text, Pattern)] -> Pattern
-pattern PRec ps = Fix (PRecF ps)
+pattern PRec :: [(Label, Pattern)] -> Maybe Bind -> Pattern
+pattern PRec ps mb = Fix (PRecF ps mb)
 
 pattern PArr :: [Pattern] -> Pattern
 pattern PArr ps = Fix (PArrF ps)
 
-pattern PBind :: T.Text -> Maybe Pattern -> Pattern
+pattern PBind :: Bind -> Maybe Pattern -> Pattern
 pattern PBind b mp = Fix (PBindF b mp)
 
 pattern PConst :: Constant -> Pattern
@@ -155,13 +163,13 @@ pattern EApp f as = Fix (EAppF f as)
 pattern ETup :: [Expr t p s] -> Expr t p s
 pattern ETup es = Fix (ETupF es)
 
-pattern ERec :: [(T.Text, Expr t p s)] -> Expr t p s
+pattern ERec :: [(Label, Expr t p s)] -> Expr t p s
 pattern ERec ls = Fix (ERecF ls)
 
 --pattern ERecUp :: [(Label, Expr t p s)] -> Expr t p s -> Expr t p s
 --pattern ERecUp ls r = Fix (ERecUpF ls r)
 
-pattern ERecExt :: [(T.Text, Expr t p s)] -> Expr t p s -> Expr t p s
+pattern ERecExt :: [(Label, Expr t p s)] -> Expr t p s -> Expr t p s
 pattern ERecExt exts r2 = Fix (ERecExtF exts r2)
 
 pattern ERecRes :: Expr t p s -> Label -> Expr t p s

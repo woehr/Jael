@@ -29,18 +29,6 @@ spec = do
         , PPat "b" []
         , PPat "c" []
         ]
-    it "should remove or-patterns (records)" $ do
-      map removeAnn (expandPattern (parsePattern "{x=a|b|c, y=d|e|f}")) `shouldBe`
-        [ PRec [("x", PPat "a" []), ("y", PPat "d" [])]
-        , PRec [("x", PPat "b" []), ("y", PPat "d" [])]
-        , PRec [("x", PPat "c" []), ("y", PPat "d" [])]
-        , PRec [("x", PPat "a" []), ("y", PPat "e" [])]
-        , PRec [("x", PPat "b" []), ("y", PPat "e" [])]
-        , PRec [("x", PPat "c" []), ("y", PPat "e" [])]
-        , PRec [("x", PPat "a" []), ("y", PPat "f" [])]
-        , PRec [("x", PPat "b" []), ("y", PPat "f" [])]
-        , PRec [("x", PPat "c" []), ("y", PPat "f" [])]
-        ]
   describe "pattern checking" $ do
     it "should dup binds" $ do
       patternErrs "c($a,$a)" `shouldBe` [PE_DupBind "a"]
