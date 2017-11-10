@@ -25,6 +25,7 @@ library
                        Jael.New.HMInfer
                        Jael.New.Misc
                        Jael.New.Parser
+                       Jael.New.Session
                        Jael.New.Type
                        Jael.New.QType
 
