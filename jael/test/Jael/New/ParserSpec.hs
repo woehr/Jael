@@ -33,6 +33,11 @@ spec = do
       parseType "a" `shouldBe` (TVar "a")
     it "should type (record)" $ do
       parseType "{foo: a, bar: Int}" `shouldBe` TRec (Row [("foo", TVar "a"), ("bar", TCon "Int" [])] Nothing)
+    it "should type (refinement)" $ do
+      parseQType "(|v:Int|v>0|)" `shouldBe`
+        QCon ("v", EApp (EBinOp OpGt) [EVar "v", EInt (JInt DecInt 0 1)]) "Int" []
+      parseQType "⦇v:Buffer(⦇u:Int|true⦈) | b⦈" `shouldBe`
+        QCon ("v", EVar "b") "Buffer" [QCon ("u", ETrue) "Int" []]
     it "should scheme" $ do
       parseType "forall a. a" `shouldBe` (TAll ["a"] $ TVar "a")
     it "should pattern" $ do
@@ -47,7 +52,7 @@ spec = do
     it "should pattern (arr)" $ do
       parsePattern' "[1, x, ...]" `shouldBe` PArr [PConst (CInt $ JInt DecInt 1 1), PPat "x" [], PMultiWild]
     it "should pattern (or)" $ do
-      parsePattern' "con(1|x|_)" `shouldBe` PPat "con" [POr [PConst $ (CInt $ JInt DecInt 1 1), PPat "x" [], PWild]]
+      parsePattern' "con(1⋎x⋎_)" `shouldBe` PPat "con" [POr [PConst $ (CInt $ JInt DecInt 1 1), PPat "x" [], PWild]]
     it "should expr (abs)" $ do
       parseExpr "\\(x) -> true" `shouldBe` EAbs [PPat "x" []] [] (EVar "true")
     it "should expr (lamcase)" $ do
@@ -67,14 +72,14 @@ spec = do
         (EVar "r")
       parseExpr "{}--1--a" `shouldBe` ERecRes (ERecRes (ERec []) "1") "a"
     it "should expr (let with patterns)" $ do
-      parseExpr "{x|_=1;x}"   `shouldBe`
+      parseExpr "{x⋁_=1;x}"   `shouldBe`
         ELet [ ( POr [ PPat "x" []
                      , PWild
                      ]
                 , EConst $ CInt $ JInt DecInt 1 1)
              ]
              (EVar "x")
-      parseExpr "{0b1|02=x;x}" `shouldBe`
+      parseExpr "{0b1⋎02=x;x}" `shouldBe`
         ELet [ ( POr [ PConst (CInt $ JInt BinInt 1 1)
                      , PConst (CInt $ JInt DecInt 2 2)
                      ]

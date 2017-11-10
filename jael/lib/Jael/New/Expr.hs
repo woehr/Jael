@@ -208,6 +208,12 @@ pattern EInt x = EConst (CInt x)
 pattern EChar :: Char -> Expr t p s
 pattern EChar x = EConst (CChar x)
 
+pattern EFalse :: Expr t p s
+pattern EFalse = EVar "false"
+
+pattern ETrue :: Expr t p s
+pattern ETrue = EVar "true"
+
 class HasSymbol a where
   symbolOf :: a -> String
   exprConstructor :: forall t p s b. a -> ExprF t p s b

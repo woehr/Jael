@@ -82,7 +82,7 @@ spec = do
       "\\($a) -> 1" `shouldHaveType` "forall a. a->Int"
       "\\($a@(($b, $c))) -> (a, b, c)"
         `shouldHaveType` "forall a b. (a,b) -> ((a,b),a,b)"
-      "\\(($a,_,1) | (_,$a,_)) -> a"
+      "\\(($a,_,1) ⋎ (_,$a,_)) -> a"
         `shouldHaveType` "forall a. (a,a,Int)->a"
 
     it "should infer applications" $ do

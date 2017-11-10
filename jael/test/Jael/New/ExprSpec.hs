@@ -23,12 +23,27 @@ spec :: Spec
 spec = do
   describe "pattern expansion" $ do
     it "should remove or-patterns" $ do
-      map removeAnn (expandPattern (parsePattern "a(d|e)|b|c")) `shouldBe`
+      map removeAnn (expandPattern (parsePattern "a(d⋎e)⋎b⋎c")) `shouldBe`
         [ PPat "a" [PPat "d"[]]
         , PPat "a" [PPat "e"[]]
         , PPat "b" []
         , PPat "c" []
         ]
+
+    it "should remove or-patterns (records)" $ do
+      map removeAnn (expandPattern (parsePattern "{x=a \\/ b ∨ c, y=d ⋎ e ⋁ f | $r}"))
+        `shouldBe`
+        [ PRec [("x", PPat "a" []), ("y", PPat "d" [])] (Just "r")
+        , PRec [("x", PPat "b" []), ("y", PPat "d" [])] (Just "r")
+        , PRec [("x", PPat "c" []), ("y", PPat "d" [])] (Just "r")
+        , PRec [("x", PPat "a" []), ("y", PPat "e" [])] (Just "r")
+        , PRec [("x", PPat "b" []), ("y", PPat "e" [])] (Just "r")
+        , PRec [("x", PPat "c" []), ("y", PPat "e" [])] (Just "r")
+        , PRec [("x", PPat "a" []), ("y", PPat "f" [])] (Just "r")
+        , PRec [("x", PPat "b" []), ("y", PPat "f" [])] (Just "r")
+        , PRec [("x", PPat "c" []), ("y", PPat "f" [])] (Just "r")
+        ]
+
   describe "pattern checking" $ do
     it "should dup binds" $ do
       patternErrs "c($a,$a)" `shouldBe` [PE_DupBind "a"]

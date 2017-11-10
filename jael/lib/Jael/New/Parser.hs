@@ -60,12 +60,23 @@ reservedIdentifiers = H.fromList
 -- Improvement: Get a list of all BuiltinFunc constructors, create a set of
 -- characters from their strings, and use that (so adding stuff won't break this)
 opChars :: String
-opChars = "|&!=><+-*/%#$"
+opChars = "\\|&!=><+-*/%#$"
 
 reserved :: (TokenParsing m, Monad m) => T.Text -> m ()
 reserved = reserveText
          $ identifierStyle "reserved"
          $ oneOf $ ['a'..'z'] ++ ['A'..'Z']
+
+spannit :: (DeltaParsing p, Functor f)
+        => p (f (PTree f)) -> p (PTree f)
+spannit p = flip fmap (spanned p) $ \(x :~ s) -> s :< x
+
+ifGtOne' :: DeltaParsing m
+         => ([PTree f] -> f (PTree f))
+         -> m [PTree f] -> m (PTree f)
+ifGtOne' f pxs = flip fmap (spanned pxs) $ \case
+  ([x] :~ _) -> x
+  (xs  :~ s) -> s :< f xs
 
 lident :: (TokenParsing m, Monad m) => m T.Text
 lident = ident
@@ -87,19 +98,36 @@ label :: (TokenParsing m, Monad m) => m T.Text
 label = lident <|> (whole >>= \JInt{..} -> return . T.pack . show $ intValue)
 
 rArrow :: (TokenParsing m, Monad m) => m T.Text
-rArrow = tsymbol "->"
+rArrow =  tsymbol "->"
+      <|> tsymbolic '→'
+      <|> tsymbolic '⟶'
 
 lArrow :: (TokenParsing m, Monad m) => m T.Text
-lArrow = tsymbol "<-"
+lArrow =  tsymbol "<-"
+      <|> tsymbolic '←'
+      <|> tsymbolic '⟵'
 
 bar :: (TokenParsing m, Monad m) => m T.Text
 bar = tsymbolic '|'
 
+bananas :: TokenParsing m => m a -> m a
+bananas p =  (nesting . between (symbol "(|")  (symbol "|)"))  p
+         <|> (nesting . between (symbolic '⦇') (symbolic '⦈')) p
+         <|> (nesting . between (symbolic '⦅') (symbolic '⦆')) p
+
 wildcard :: (TokenParsing m, Monad m) => m T.Text
 wildcard = tsymbolic '_'
 
+patOr :: (TokenParsing m, Monad m) => m T.Text
+patOr = (   tsymbol "\\/"
+        <|> tsymbolic '⋁'
+        <|> tsymbolic '∨'
+        <|> tsymbolic '⋎'
+        )
+
 forall :: (TokenParsing m, Monad m) => m ()
-forall = reserved "forall"
+forall =  reserved "forall"
+      <|> tsymbolic '∀' *> pure ()
 
 -- number' :: base -> digit parser -> (value, number of characters)
 number :: TokenParsing m => Integer -> m Char -> m (Integer, Integer)
@@ -156,13 +184,6 @@ ifGtOne f mxs = mxs >>= \xs -> case xs of
   (x:[]) -> pure x
   _      -> pure $ f xs
 
-ifGtOne' :: DeltaParsing m
-         => ([PTree f] -> f (PTree f))
-         -> m [PTree f] -> m (PTree f)
-ifGtOne' f pxs = flip fmap (spanned pxs) $ \case
-  ([x] :~ _) -> x
-  (xs  :~ s) -> s :< f xs
-
 {-
   s := decInt (oneOf "bBKM")
      | sizeof(ident)
@@ -180,10 +201,6 @@ optionalList = fmap concat . optional
 
 commaSep2 :: Parser a -> Parser [a]
 commaSep2 p = (:) <$> p <* comma <*> commaSep1 p
-
-spannit :: (DeltaParsing p, Functor f)
-        => p (f (PTree f)) -> p (PTree f)
-spannit p = flip fmap (spanned p) $ \(x :~ s) -> s :< x
 
 {-
   t1 := l
@@ -219,7 +236,7 @@ pType1 =  chainr1 pType2 (pSpanBinary $ UQFunF <$ rArrow)
       <|> pType2
 
 pType2 :: Parser T
-pType2 = spannit (angles $
+pType2 = spannit (bananas $
            (\l t e -> Just (l,e) C.:< t) <$> lident
                                          <*  colon
                                          <*> pBaseType
@@ -247,12 +264,12 @@ pType2 = spannit (angles $
 --ifGtOne :: Monad m => ([a] -> a) -> m [a] -> m a
 --pPattern0 =  ifGtOne POrF $ spanned (pPattern1 `sepBy1` bar)
 pPattern0 :: Parser P
-pPattern0 =  ifGtOne' POrF (pPattern1 `sepBy1` bar)
+pPattern0 =  ifGtOne' POrF (pPattern1 `sepBy1` patOr)
 
 pPattern1 :: Parser P
 pPattern1 =
   let labelledPattern :: Parser (T.Text, P)
-      labelledPattern = (,) <$> lident <* symbolic '=' <*> pPattern1
+      labelledPattern = (,) <$> lident <* symbolic '=' <*> pPattern0
    in spannit
         (    PWildF      <$  wildcard
          <|> PMultiWildF <$  symbol "..."
