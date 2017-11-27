@@ -15,14 +15,14 @@ import Jael.New.Expr
 import Jael.New.Parser
 import Jael.New.Type
 
-data ExprErr = EE_UnboundVar  (T.Text, Span)
-             | EE_ShadowedVar (T.Text, Span, Maybe Span)
+data ExprErr = EEUnboundVar  (T.Text, Span)
+             | EEShadowedVar (T.Text, Span, Maybe Span)
              deriving (Eq, Show)
 
 checkExpr :: S.Set T.Text -> E -> [ExprErr]
 checkExpr bvs e =
-  map EE_UnboundVar (unboundVars bvs e) <>
-  map EE_ShadowedVar (shadowedVars bvs e)
+  map EEUnboundVar (unboundVars bvs e) <>
+  map EEShadowedVar (shadowedVars bvs e)
 
 unboundVars :: S.Set T.Text -> E -> [(T.Text, Span)]
 unboundVars bvs = MM.toList . flip (foldr MM.delete) (S.toList bvs) . cata alg
@@ -30,21 +30,21 @@ unboundVars bvs = MM.toList . flip (foldr MM.delete) (S.toList bvs) . cata alg
     alg (_ C.:< ETAbsF _ _) = error "Expected untyped expression."
     alg (_ C.:< ETAppF _ _) = error "Expected untyped expression."
 
-    alg (_ C.:< EAbsF ps _ e) =
-      foldr MM.delete e (map fst $ concatMap patternBinds ps)
+    alg (_ C.:< EAbsF ps e) =
+      foldr (MM.delete . fst) e (concatMap (patternBinds . fst) ps)
 
-    alg (_ C.:< ELamCaseF _alts) = undefined
+    alg (_ C.:< ELamCaseF _ _alts) = undefined
 
     alg (_ C.:< EAppF f as) = MM.unionsWith (++) (f:as)
     alg (_ C.:< ETupF   es) = MM.unionsWith (++) es
 
     alg (_ C.:< ELetF _bs _e) = undefined
 
-    alg (_ C.:< ERecF    _fs) = undefined
---    alg (_ C.:< ERecUpF  _fs _e) = undefined
-    alg (_ C.:< ERecExtF _top _bot) = undefined
-    alg (_ C.:< ERecResF _e _l) = undefined
-    alg (_ C.:< ERecSelF _e _l) = undefined
+    alg (_ C.:< ERecExtendF _l _e  _r) = undefined
+    alg (_ C.:< ERecUpdateF _l _e  _r) = undefined
+    alg (_ C.:< ERecRenameF _l _l' _r) = undefined
+    alg (_ C.:< ERecRemoveF _e _l) = undefined
+    alg (_ C.:< ERecSelectF _e _l) = undefined
 
     alg (_ C.:< ECaseF _e _alts) = undefined
     alg (_ C.:< EIfF _b _t _e) = undefined
@@ -64,20 +64,19 @@ shadowedVars bvs = map (\(a,(b,c)) -> (a,b,c)) . MM.toList . snd . cata alg
     alg (_ C.:< ETAbsF _ _) = error "Expected untyped expression."
     alg (_ C.:< ETAppF _ _) = error "Expected untyped expression."
 
-    alg (_ C.:< EAbsF ps _ e) = foldr checkForShadows e (map patternBinds ps)
-
-    alg (_ C.:< ELamCaseF _alts) = undefined
+    alg (_ C.:< EAbsF ps e) = foldr (checkForShadows . patternBinds . fst) e ps
+    alg (_ C.:< ELamCaseF _ _alts) = undefined
 
     alg (_ C.:< EAppF f as) = mergeMaps (f:as)
     alg (_ C.:< ETupF   _es) = undefined
 
     alg (_ C.:< ELetF _bs _e) = undefined
 
-    alg (_ C.:< ERecF    _fs) = undefined
---    alg (_ C.:< ERecUpF  _fs _e) = undefined
-    alg (_ C.:< ERecExtF _top _bot) = undefined
-    alg (_ C.:< ERecResF _e _l) = undefined
-    alg (_ C.:< ERecSelF _e _l) = undefined
+    alg (_ C.:< ERecExtendF _l _e  _r) = undefined
+    alg (_ C.:< ERecUpdateF _l _e  _r) = undefined
+    alg (_ C.:< ERecRenameF _l _l' _r) = undefined
+    alg (_ C.:< ERecRemoveF _e _l) = undefined
+    alg (_ C.:< ERecSelectF _e _l) = undefined
 
     alg (_ C.:< ECaseF _e _alts) = undefined
     alg (_ C.:< EIfF _b _t _e) = undefined
@@ -106,26 +105,26 @@ shadowedVars bvs = map (\(a,(b,c)) -> (a,b,c)) . MM.toList . snd . cata alg
           | S.member v bvs           = MM.insert v (s, Nothing) m
           | otherwise                = m
 
-data PatternErr = PE_DupBind T.Text
-                | PE_InvalidConstructor T.Text
-                | PE_MultiMulti
-                | PE_InvalidMulti
-                | PE_Arity T.Text Int Int
+data PatternErr = PEDupBind T.Text
+                | PEInvalidConstructor T.Text
+                | PEMultiMulti
+                | PEInvalidMulti
+                | PEArity T.Text Int Int
                 deriving (Eq, Show)
 
 -- Pattern must not have or-patterns
-patternBinds :: P -> [(T.Text, Span)]
+patternBinds :: Cofree (PatternF b) Span -> [(b, Span)]
 patternBinds = cata alg
   where
-    alg :: C.CofreeF PatternF Span [(T.Text, Span)] -> [(T.Text, Span)]
-    alg (_ C.:< POrF  _)     = error "Expected pattern without POrF"
-    alg (_ C.:< PPatF _ ps)  = concat ps
-    alg (_ C.:< PTupF ps)    = concat ps
-    alg (_ C.:< PRecF fs Nothing) = concat $ map snd fs
-    alg (s C.:< PRecF fs (Just v)) = (v,s): (concat $ map snd fs)
-    alg (_ C.:< PArrF ps)    = concat ps
-    alg (s C.:< PBindF v (Just p)) = (v,s):p
-    alg (s C.:< PBindF v Nothing)  = [(v,s)]
+    alg :: C.CofreeF (PatternF b) Span [(b, Span)] -> [(b, Span)]
+    alg (_ C.:< POrF  _)               = error "Expected pattern without POrF"
+    alg (_ C.:< PPatF _ ps)            = concat ps
+    alg (_ C.:< PTupF ps)              = concat ps
+    alg (s C.:< PRecF fs (TailBind v)) = (v,s) : concatMap snd fs
+    alg (_ C.:< PRecF fs _)            = concatMap snd fs
+    alg (_ C.:< PArrF ps)              = concat ps
+    alg (s C.:< PBindF v (Just p))     = (v,s):p
+    alg (s C.:< PBindF v Nothing)      = [(v,s)]
     alg _ = []
 
 -- Resulting list will have a length >= 1
@@ -133,17 +132,16 @@ expandPattern :: P -> [P]
 expandPattern = cata alg
   where
     alg (_ C.:< POrF ps) = join ps
-    alg (s C.:< PPatF c ps) = fmap ((s :<) . PPatF c) $ expandPatternList ps
-    alg (s C.:< PTupF ps) = fmap ((s :<) . PTupF) $ expandPatternList ps
-    alg (s C.:< PRecF fs mv) = fmap ((s :<) . flip PRecF mv) $ expandPatternList $
-                                 map (\(f,ps) -> map (f,) ps) fs
-    alg (s C.:< PArrF ps) = fmap ((s :<) . PArrF) $ expandPatternList ps
-    alg (s C.:< PBindF v (Just p)) = fmap ((s :<) . PBindF v . Just) p
+    alg (s C.:< PPatF c ps) = ((s :<) . PPatF c) <$> expandPatternList ps
+    alg (s C.:< PTupF ps)   = ((s :<) . PTupF) <$> expandPatternList ps
+    alg (s C.:< PRecF fs mv) = ((s :<) . flip PRecF mv) <$> expandPatternList
+      (map (\(f,ps) -> map (f,) ps) fs)
+    alg (s C.:< PArrF ps) = ((s :<) . PArrF) <$> expandPatternList ps
+    alg (s C.:< PBindF v (Just p)) = ((s :<) . PBindF v . Just) <$> p
 
     alg (s C.:< PBindF v Nothing) = [s :< PBindF v Nothing]
     alg (s C.:< PConstF c) = [s :< PConstF c]
     alg (s C.:< PWildF) = [s :< PWildF]
-    alg (s C.:< PMultiWildF) = [s :< PMultiWildF]
 
     expandPatternList :: [[a]] -> [[a]]
     expandPatternList = foldrM (\acc x -> map (:x) acc) []
@@ -151,15 +149,9 @@ expandPattern = cata alg
 checkPattern :: DataDecl Type -> P -> Either [PatternErr] [P]
 checkPattern dd p =
   let ps = expandPattern p
-      es = map PE_DupBind (concatMap dupBinds ps) ++
-           checkConstructors dd p ++
-           if any multiMultiwild ps then [PE_MultiMulti] else [] ++
-           if any invalidMulti ps then [PE_InvalidMulti] else []
+      es = map PEDupBind (concatMap dupBinds ps) ++
+           checkConstructors dd p
   in  if null es then Right ps else Left es
-
-isMulti :: P -> Bool
-isMulti (_ :< PMultiWildF) = True
-isMulti _                  = False
 
 -- Pattern must not have or-patterns
 dupBinds :: P -> [T.Text]
@@ -175,35 +167,11 @@ checkConstructors dd = cata alg
       let ps' = concat ps :: [PatternErr]
       in case M.lookup c cs of
            Just i | i == length ps -> ps'
-           Just i | otherwise -> (PE_Arity c i $ length ps):ps'
-           Nothing -> (PE_InvalidConstructor c):ps'
+           Just i    -> PEArity c i (length ps) : ps'
+           Nothing   -> PEInvalidConstructor c  : ps'
     alg (_ C.:< PTupF ps) = concat ps
     alg (_ C.:< POrF ps)  = concat ps
-    alg (_ C.:< PRecF fs _) = concat $ map snd fs
+    alg (_ C.:< PRecF fs _) = concatMap snd fs
     alg (_ C.:< PArrF ps) = concat ps
     alg (_ C.:< PBindF _ (Just p)) = p
     alg _ = []
-
--- Only a single multi-wildcard is allowed per array pattern
-multiMultiwild :: P -> Bool
-multiMultiwild = para alg where
-  alg (_ C.:< PPatF _ ps) = or $ map snd ps
-  alg (_ C.:< PTupF ps)   = or $ map snd ps
-  alg (_ C.:< POrF ps)    = or $ map snd ps
-  alg (_ C.:< PRecF fs _) = or $ map (snd . snd) fs
-  alg (_ C.:< PArrF ps)   = let numMulti = length $ filter isMulti (map fst ps)
-                             in or $ (numMulti>1):(map snd ps)
-  alg (_ C.:< PBindF _ (Just p)) = snd p
-  alg _ = False
-
--- The "multi-wildcard" pattern is only allowed in array patterns
-invalidMulti :: P -> Bool
-invalidMulti p = isMulti p || para alg p where
-  alg (_ C.:< PPatF _ ps) = or $ map (isMulti . fst) ps ++ map snd ps
-  alg (_ C.:< PTupF ps)   = or $ map (isMulti . fst) ps ++ map snd ps
-  alg (_ C.:< POrF ps)    = or $ map (isMulti . fst) ps ++ map snd ps
-  alg (_ C.:< PRecF fs _) = or $ map (isMulti . fst . snd) fs
-                                   ++ map (snd . snd) fs
-  alg (_ C.:< PArrF ps)   = or $ map snd ps
-  alg (_ C.:< PBindF _ (Just p')) = isMulti (fst p') || snd p'
-  alg _ = False

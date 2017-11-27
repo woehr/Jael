@@ -1,3 +1,4 @@
+{-# Language DeriveDataTypeable #-}
 {-# Language DeriveFunctor #-}
 {-# Language DeriveTraversable #-}
 {-# Language FlexibleInstances #-}
@@ -18,24 +19,22 @@ import qualified Data.Text as T
 import           Data.Eq.Deriving (deriveEq1)
 import           Text.Show.Deriving (deriveShow1)
 
-import Jael.New.Misc
-
 -- Types of kind row
 data Row' v t = Row [(T.Text, t)] (Maybe v)
-  deriving (Eq, Foldable, Functor, Show, Traversable)
+  deriving (Data, Eq, Foldable, Functor, Show, Traversable, Typeable)
 
 $(deriveEq1   ''Row')
 $(deriveShow1 ''Row')
 
 -- Types of kind * with universal quantification over both * and row
 data TypeF v t = TAllF [v] t
-               | TFunF t t
+               | TFunF (Maybe v) t t
                | TConF T.Text [t]
                | TTupF [t]
                | TRecF (Row' v t)
                | TArrF t Integer
                | TVarF v
-               deriving (Eq, Foldable, Functor, Show, Traversable)
+               deriving (Data, Eq, Foldable, Functor, Show, Traversable, Typeable)
 
 type Row = Row' T.Text Type
 type Type = Fix (TypeF T.Text)
@@ -46,8 +45,11 @@ $(deriveShow1 ''TypeF)
 pattern TAll :: [T.Text] -> Type -> Type
 pattern TAll a b = Fix (TAllF a b)
 
-pattern TFun :: Type -> Type -> Type
-pattern TFun a b = Fix (TFunF a b)
+pattern TFun :: Maybe T.Text -> Type -> Type -> Type
+pattern TFun n a b = Fix (TFunF n a b)
+
+pattern TFun' :: Type -> Type -> Type
+pattern TFun' a b = Fix (TFunF Nothing a b)
 
 pattern TCon :: T.Text -> [Type] -> Type
 pattern TCon a b = Fix (TConF a b)
@@ -55,7 +57,7 @@ pattern TCon a b = Fix (TConF a b)
 pattern TTup :: [Type] -> Type
 pattern TTup xs = Fix (TTupF xs)
 
-pattern TRec :: Row -> Type
+pattern TRec :: Row  -> Type
 pattern TRec r = Fix (TRecF r)
 
 pattern TArr :: Type -> Integer -> Type
@@ -132,7 +134,7 @@ instance TIOps Type where
           alg t = foldr S.union S.empty t
 
   apply s (TVar v)     = M.findWithDefault (TVar v) v s
-  apply s (TFun t1 t2) = TFun (apply s t1) (apply s t2)
+  apply s (TFun n t1 t2) = TFun n (apply s t1) (apply s t2)
   apply s (TCon n ts)  = TCon n $ map (apply s) ts
   apply s (TTup ts)    = TTup $ map (apply s) ts
   apply s (TRec (Row fs v)) = TRec (Row (map (second $ apply s) fs) v)
@@ -158,6 +160,51 @@ instance TIOps Row where
 instance TIOps a => TIOps (M.Map T.Text a) where
   ftv = S.unions . map ftv . M.elems
   apply s = M.map (apply s)
+
+rowUpdate :: T.Text -> t -> Row' v t -> Maybe (Row' v t)
+rowUpdate l t (Row ls mv) =
+  let mm = MM.fromList ls
+   in case MM.lookup l mm of
+        (_:vs) -> Just $ Row (MM.toList . MM.fromMap . M.insert l (t:vs) . MM.toMap $ mm) mv
+        _      -> Nothing
+
+rowUpdate' :: T.Text -> t -> TypeF v t -> Maybe (TypeF v t)
+rowUpdate' l t (TRecF r) = TRecF <$> rowUpdate l t r
+rowUpdate' _ _ _ = Nothing
+
+rowExtend :: T.Text -> t -> Row' v t -> Row' v t
+rowExtend l t (Row ls mv) = Row ((l,t):ls) mv
+
+rowExtend' :: T.Text -> t -> TypeF v t -> Maybe (TypeF v t)
+rowExtend' l t (TRecF r) = Just . TRecF $ rowExtend l t r
+rowExtend' _ _ _ = Nothing
+
+rowRename :: T.Text -> T.Text -> Row' v t -> Row' v t
+rowRename l' l (Row ls mv) =
+  Row (map (\x@(y, z) -> if y == l then (l', z) else x) ls) mv
+
+rowRename' :: T.Text -> T.Text -> TypeF v t -> Maybe (TypeF v t)
+rowRename' l' l (TRecF r) = Just . TRecF $ rowRename l' l r
+rowRename' _ _ _ = Nothing
+
+rowRemove :: Row' v t -> T.Text -> Maybe (Row' v t)
+rowRemove (Row ls mv) l =
+  let mm = MM.fromList ls
+   in case MM.lookup l mm of
+        [_]    -> Just $ Row (MM.toList $ MM.delete l mm) mv
+        (_:vs) -> Just $ Row (MM.toList . MM.fromMap . M.insert l vs . MM.toMap $ mm) mv
+        _      -> Nothing
+
+rowRemove' :: TypeF v t -> T.Text -> Maybe (TypeF v t)
+rowRemove' (TRecF r) l = TRecF <$> rowRemove r l
+rowRemove' _ _ = Nothing
+
+rowSelect :: Row' v t -> T.Text -> Maybe t
+rowSelect (Row ls _) l = headMay $ MM.lookup l (MM.fromList ls)
+
+rowSelect' :: TypeF v x -> T.Text -> Maybe x
+rowSelect' (TRecF r) l = rowSelect r l
+rowSelect' _ _ = Nothing
 
 generalize' :: M.Map T.Text Type -> Type -> Type
 generalize' env t
@@ -231,7 +278,7 @@ alphaEq t u = case mkSub (M.empty, M.empty) t u of
       | otherwise
       = Nothing
 
-    mkSub sub (TFun a a') (TFun b b') =
+    mkSub sub (TFun _ a a') (TFun _ b b') =
       mkSub sub a b >>= \sub' -> mkSub sub' a' b'
 
     mkSub sub a b
@@ -244,17 +291,17 @@ alphaEq t u = case mkSub (M.empty, M.empty) t u of
 
 arity :: Type -> Integer
 arity t = go t 0 where
-  go (TFun _ t2) acc = go t2 (acc + 1)
+  go (TFun _ _ t2) acc = go t2 (acc + 1)
   go (TAll _ t') acc = go t' acc
   go _ acc = acc
 
 argTypes :: Type -> [Type]
 argTypes t = go t [] where
-  go (TFun t1 t2) acc = t1 : go t2 acc
+  go (TFun _ t1 t2) acc = t1 : go t2 acc
   go (TAll _  t') acc = go t' acc
   go _ acc = acc
 
 returnType :: Type -> Type
-returnType (TFun _ t2) = returnType t2
+returnType (TFun _ _ t2) = returnType t2
 returnType (TAll vs t) = TAll vs $ returnType t
 returnType t = t

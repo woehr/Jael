@@ -15,7 +15,6 @@ import Jael.New.Expr
 import Jael.New.Type
 import Jael.New.QType
 import Jael.New.Parser
-import Jael.New.Misc
 
 defaultData :: M.Map T.Text Type
 defaultData =
@@ -26,7 +25,7 @@ defaultData =
       ds' = map (fmap $ hoistFix unQType . removeAnn) ds
    in M.unions $ map dataConTypes ds'
 
-inferThrow :: M.Map T.Text Type -> E' -> (Type, TypedE)
+inferThrow :: M.Map T.Text Type -> E' -> TypedExpr
 inferThrow ds e =
   case infer ds e of
     Left err -> error (show err)
@@ -36,9 +35,10 @@ typeStrEq :: String -> String -> (Bool, Type, Type)
 typeStrEq e t =
   let expr = parseExpr' e
       expr' = hoistCofree (mapExprP expandPattern) expr
-      (actualType, _) = inferThrow defaultData expr'
+      te = inferThrow defaultData expr'
       expectedType = parseType t
-   in (alphaEq actualType expectedType, expectedType, actualType)
+      actualType = exprType defaultData te
+   in (alphaEq expectedType actualType, expectedType, actualType)
 
 shouldHaveType :: String -> String -> Expectation
 shouldHaveType e t =
@@ -65,8 +65,9 @@ shouldNotUnify e =
       expr' = hoistCofree (mapExprP expandPattern) expr
    in case infer defaultData expr' of
         Left _ -> return ()
-        Right (res, _) -> expectationFailure $
-          "Type inference succeeded, the resulting type was:\n" ++ show res
+        Right res -> expectationFailure $
+          "Type inference succeeded, the resulting type was:\n"
+            ++ show (exprType defaultData res)
 
 spec :: Spec
 spec = do
@@ -121,7 +122,7 @@ spec = do
       "{ y=true, x=1, y=0, x=false}" `shouldNotHaveType`
         "{ x: Bool, x:Int, y:Int, y:Bool }"
       "\\($x) -> { x = 1 | x }" `shouldHaveType` "forall r. {r}-> {x:Int|r}"
-    xit "should infer record types where unification is necessary" $ do
+    it "should infer record types where unification is necessary" $ do
       "{ {y=4, z=$y | _} = {x=1,y=2,y=just,z=nothing}; { a=y } }"
         `shouldHaveType` "forall a. { a:Maybe(a) }"
       "{ {y=4, z=$y | $r} = {x=1,y=2,y=just,z=nothing}; {a=y|r} }"
@@ -133,3 +134,29 @@ spec = do
     it "should terminate (and not unify)" $ do
       shouldNotUnify "\\($r) -> if true then { x=1 | r } else { y = 2 | r }"
       shouldNotUnify "\\($r) -> if true then { a=1, x=1, z=1 | r } else { a=2, y=2, z=2 | r }"
+    it "should typecheck record restriction" $ do
+      "\\($r) -> r--x" `shouldHaveType` "forall a r. {x:a|r} -> {r}"
+    it "should typecheck record selection" $ do
+      "\\($r) -> r.x" `shouldHaveType` "forall a r. {x:a|r} -> a"
+    it "should typecheck compound record operations" $ do
+      -- Update
+      "\\($r, $a) -> { x=a | r--x}" `shouldHaveType` "forall a b r. {x:a|r} -> b -> {x:b|r}"
+      "\\($r, $a) -> { x:=a | r}" `shouldHaveType` "forall a b r. {x:a|r} -> b -> {x:b|r}"
+      -- Rename
+      "\\($r) -> { y=r.x | r--x}" `shouldHaveType` "forall a r. {x:a|r} -> {y:a|r}"
+      "\\($r) -> { y <- x | r}" `shouldHaveType` "forall a r. {x:a|r} -> {y:a|r}"
+    it "should typecheck case expressions" $ do
+      "case true of { false -> 0; $x -> 1 }" `shouldHaveType` "Int"
+      "\\($x) -> case x of { nothing -> 0; just($y) -> y }" `shouldHaveType` "Maybe(Int) -> Int"
+      "\\($x) -> case x of { $y -> y; _ -> x }" `shouldHaveType` "forall a. a -> a"
+    it "should typecheck multi-if expressions" $ do
+      "if | true then 0 | false then 1 | true then 2 " `shouldHaveType` "Int"
+      "if | true then 0 | else 1" `shouldHaveType` "Int"
+      shouldNotUnify "if | true then 0 | else true"
+      shouldNotUnify "if | true then 0 | false then false"
+      shouldNotUnify "if | 1 then 0 | false then 0"
+    it "should typecheck lambda cases" $ do
+      "\\case { true -> 0; false -> 1 }" `shouldHaveType` "Bool -> Int"
+      "\\case { 1 -> 0; 2 -> 1; $x -> x }" `shouldHaveType` "Int -> Int"
+      "\\case { just($x) -> x }" `shouldHaveType` "forall a. Maybe(a) -> a"
+      "\\($f) -> \\case { $x -> f(x) }" `shouldHaveType` "forall a b. (a -> b) -> a -> b"

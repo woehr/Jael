@@ -33,9 +33,5 @@ spec = do
       pending
     it "should (pattern) find invalid constructors" $ do
       pending
-    it "should (pattern) find multiple multi-wildcard usage" $ do
-      pending
-    it "should (pattern) identify multi-wildcards in non-array positions" $ do
-      pending
     it "should (pattern) identify constructors used with incorrect arities" $ do
       pending

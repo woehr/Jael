@@ -1,3 +1,5 @@
+:set -outputdir .ghci.d
+:set -fobject-code
 :set -Wall
 :set -fwarn-incomplete-uni-patterns
 :set -fwarn-incomplete-record-updates

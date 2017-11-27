@@ -14,7 +14,6 @@ import Jael.New.DataDecl
 import Jael.New.Type
 import Jael.New.QType
 import Jael.New.Parser
-import Jael.New.Misc
 
 parseBitRep :: String -> BitRep Pattern
 parseBitRep = removePatternParseInfo . parseThrow pBitRep
@@ -35,7 +34,7 @@ spec = do
       parseType "{foo: a, bar: Int}" `shouldBe` TRec (Row [("foo", TVar "a"), ("bar", TCon "Int" [])] Nothing)
     it "should type (refinement)" $ do
       parseQType "(|v:Int|v>0|)" `shouldBe`
-        QCon ("v", EApp (EBinOp OpGt) [EVar "v", EInt (JInt DecInt 0 1)]) "Int" []
+        QCon ("v", EApp (EConst OpGt) [EVar "v", EInt (JInt DecInt 0 1)]) "Int" []
       parseQType "⦇v:Buffer(⦇u:Int|true⦈) | b⦈" `shouldBe`
         QCon ("v", EVar "b") "Buffer" [QCon ("u", ETrue) "Int" []]
     it "should scheme" $ do
@@ -46,51 +45,51 @@ spec = do
       parsePattern' "(a, b)" `shouldBe` PTup [PPat "a" [], PPat "b" []]
     it "should pattern (rec)" $ do
       parsePattern' "{x=1, y=_, z=z}" `shouldBe`
-        PRec [("x", PConst (CInt $ JInt DecInt 1 1)), ("y", PWild), ("z", PPat "z" [])] Nothing
+        PRec [("x", PConst (CInt $ JInt DecInt 1 1)), ("y", PWild), ("z", PPat "z" [])] TailEmpt
       parsePattern' "{y=_ | $r}" `shouldBe`
-        PRec [("y", PWild)] (Just "r")
+        PRec [("y", PWild)] (TailBind "r")
     it "should pattern (arr)" $ do
-      parsePattern' "[1, x, ...]" `shouldBe` PArr [PConst (CInt $ JInt DecInt 1 1), PPat "x" [], PMultiWild]
+      parsePattern' "[1, x, _]" `shouldBe` PArr [PConst (CInt $ JInt DecInt 1 1), PPat "x" [], PWild]
     it "should pattern (or)" $ do
       parsePattern' "con(1⋎x⋎_)" `shouldBe` PPat "con" [POr [PConst $ (CInt $ JInt DecInt 1 1), PPat "x" [], PWild]]
     it "should expr (abs)" $ do
-      parseExpr "\\(x) -> true" `shouldBe` EAbs [PPat "x" []] [] (EVar "true")
+      parseExpr "\\(x) -> true" `shouldBe` EAbs [(PPat "x" [], ())] (EVar "true")
     it "should expr (lamcase)" $ do
       parseExpr "\\case { c -> x; c(1) -> x }" `shouldBe`
-        ELamCase [ (PPat "c" [], EVar "x")
-                 , (PPat "c" [PConst $ CInt $ JInt DecInt 1 1], EVar "x")
-                 ]
+        ELamCase () [ (PPat "c" [], EVar "x")
+                    , (PPat "c" [PConst $ CInt $ JInt DecInt 1 1], EVar "x")
+                    ]
     it "should expr (rec)" $ do
-      parseExpr "{}" `shouldBe` ERec []
-      parseExpr "{x=5, y=x}" `shouldBe` ERec [("x", EConst $ CInt $ JInt DecInt 5 1), ("y", EVar "x")]
+      parseExpr "{}" `shouldBe` ERec
+      parseExpr "{x=5, y=x}" `shouldBe` ERecExtend "x" (EConst $ CInt $ JInt DecInt 5 1)
+        (ERecExtend "y" (EVar "x") ERec)
     it "should expr (rec ops)" $ do
-      parseExpr "x.1.a.b" `shouldBe` ERecSel (ERecSel (ERecSel (EVar "x") "1") "a") "b"
-      parseExpr "{x=1,y=z|r}" `shouldBe` ERecExt
-        [ ("x", EConst $ CInt $ JInt DecInt 1 1)
-        , ("y", EVar "z")
-        ]
-        (EVar "r")
-      parseExpr "{}--1--a" `shouldBe` ERecRes (ERecRes (ERec []) "1") "a"
+      parseExpr "x.1.a.b" `shouldBe` ERecSelect (ERecSelect (ERecSelect (EVar "x") "1") "a") "b"
+      parseExpr "{}--1--a" `shouldBe` ERecRemove (ERecRemove ERec "1") "a"
+      parseExpr "{x=1,y=z|r}" `shouldBe` (ERecExtend
+        "x" (EConst $ CInt $ JInt DecInt 1 1)
+        (ERecExtend "y" (EVar "z")
+        (EVar "r")))
     it "should expr (let with patterns)" $ do
       parseExpr "{x⋁_=1;x}"   `shouldBe`
-        ELet [ ( POr [ PPat "x" []
-                     , PWild
-                     ]
+        ELet [ (( POr [ PPat "x" []
+                      , PWild
+                      ], ())
                 , EConst $ CInt $ JInt DecInt 1 1)
              ]
              (EVar "x")
       parseExpr "{0b1⋎02=x;x}" `shouldBe`
-        ELet [ ( POr [ PConst (CInt $ JInt BinInt 1 1)
-                     , PConst (CInt $ JInt DecInt 2 2)
-                     ]
+        ELet [ (( POr [ PConst (CInt $ JInt BinInt 1 1)
+                      , PConst (CInt $ JInt DecInt 2 2)
+                      ], ())
                , EVar "x")
              ]
              (EVar "x")
       parseExpr "{{y=1, z=z} = x; z}" `shouldBe`
-        ELet [ ( PRec [ ("y", PConst $ CInt $ JInt DecInt 1 1)
-                      , ("z", PPat "z" [])
-                      ]
-                      Nothing
+        ELet [ (( PRec [ ("y", PConst $ CInt $ JInt DecInt 1 1)
+                       , ("z", PPat "z" [])
+                       ]
+                       TailEmpt, ())
                , EVar "x")
              ]
              (EVar "z")
@@ -138,7 +137,7 @@ spec = do
                           [ BitCase (PPat "foo1" [])
                                     [ (BitConInt $ JInt BinInt 3 3, Nothing)
                                     , (BitConWild, Nothing)]
-                          , BitCase (PPat "foo2" [PPat "x" [], PRec [("l1", PPat "y" [])] Nothing])
+                          , BitCase (PPat "foo2" [PPat "x" [], PRec [("l1", PPat "y" [])] TailEmpt])
                             [ (BitConInt $ JInt DecInt 1 1, Just $ BitSize 3)
                                     , (BitConIdent "x", Nothing)
                                     , (BitConIdent "y", Just $ ByteSize 3)

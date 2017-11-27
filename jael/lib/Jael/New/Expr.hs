@@ -1,8 +1,10 @@
+{-# Language DeriveDataTypeable #-}
 {-# Language DeriveFunctor #-}
 {-# Language DeriveTraversable #-}
 {-# Language LambdaCase #-}
 {-# Language OverloadedStrings #-}
 {-# Language PatternSynonyms #-}
+{-# Language RecordWildCards #-}
 {-# Language TemplateHaskell #-}
 {-# Language TupleSections #-}
 {-# Language RankNTypes #-}
@@ -13,110 +15,136 @@ import qualified Data.Text as T
 
 type Bind = T.Text
 type Constructor = T.Text
-type Label     = T.Text
+type Label = T.Text
 
 data IntFormat = BinInt | OctInt | HexInt | DecInt
-               deriving (Eq, Show)
+                 deriving (Data, Eq, Show, Typeable)
 
 data JInt = JInt
-          { intFormat :: IntFormat
-          , intValue  :: Integer
-          , intLength :: Integer
-          } deriving (Eq, Show)
+  { intFormat :: IntFormat
+  , intValue  :: Integer
+  , intLength :: Integer
+  } deriving (Data, Eq, Show, Typeable)
 
-data Constant = CInt JInt
-              | CChar Char
-              deriving (Eq, Show)
+data Constant
+  = CInt JInt
+  | OpNot
+  | OpIff
+  | OpImp
+  | OpOr
+  | OpAnd
+  | OpEq
+  | OpNe
+  | OpGt
+  | OpGe
+  | OpLt
+  | OpLe
+  | OpAdd
+  | OpSub
+  | OpTimes
+  | OpDiv
+  | OpMod
+  deriving (Data, Eq, Typeable)
 
-data UnaryOp = OpNot
-             deriving (Eq, Show)
+instance Show Constant where
+  show (CInt j) = show j
+  show OpNot   = "!"
+  show OpIff   = "<->"
+  show OpImp   = "-->"
+  show OpOr    = "||"
+  show OpAnd   = "&&"
+  show OpEq    = "=="
+  show OpNe    = "!="
+  show OpGt    = ">"
+  show OpGe    = ">="
+  show OpLt    = "<"
+  show OpLe    = "<="
+  show OpAdd   = "+"
+  show OpSub   = "-"
+  show OpTimes = "*"
+  show OpDiv   = "/"
+  show OpMod   = "%"
 
-data BinOp = OpIff
-           | OpImp
-           | OpOr
-           | OpAnd
-           | OpEq
-           | OpNe
-           | OpGt
-           | OpGe
-           | OpLt
-           | OpLe
-           | OpAdd
-           | OpSub
-           | OpTimes
-           | OpDiv
-           | OpMod
-           deriving (Eq, Show)
+data SizeSpec
+  = BitSize  Integer
+  | ByteSize Integer
+  | KiloSize Integer
+  | MegaSize Integer
+  | SizedSum [SizeSpec]
+  | SizeOf T.Text
+  deriving (Eq, Show)
 
-data SizeSpec = BitSize  Integer
-              | ByteSize Integer
-              | KiloSize Integer
-              | MegaSize Integer
-              | SizedSum [SizeSpec]
-              | SizeOf T.Text
-              deriving (Eq, Show)
+data RecTailPat b
+  = TailBind b
+  | TailWild
+  | TailEmpt
+  deriving (Data, Eq, Functor, Show, Typeable)
 
-data PatternF p = PPatF Constructor [p]    -- Constructed with sub-patterns
-                | PTupF [p]           -- tuples
-                | POrF [p]            -- Or pattern
-                -- TODO: In (Maybe Bind) the bind can be a row type variable
-                -- or wildcard to indicate it's not used. Make the type reflect
-                -- this in the future. Perhaps Maybe (Maybe Bind) where the
-                -- first maybe indicates whether there is a type variable or
-                -- not and the second indicates whether it's named or a
-                -- wildcard?
-                | PRecF [(Label, p)] (Maybe Bind) -- Record pattern
-                | PArrF [p]           -- Array with sub-patterns
-                | PBindF Bind (Maybe p)
-                | PConstF Constant    -- Ints, Chars
-                | PWildF              -- Single wildcard : _
-                | PMultiWildF         -- Multi wildcard  : ...
-                deriving (Eq, Foldable, Functor, Show, Traversable)
+data PatternF b p
+  = PPatF Constructor [p]    -- Constructed with sub-patterns
+  | PTupF [p]           -- tuples
+  | POrF [p]            -- Or pattern
+  | PRecF [(Label, p)] (RecTailPat b) -- Record pattern
+  | PArrF [p]           -- Array with sub-patterns
+  | PBindF b (Maybe p)
+  | PConstF Constant    -- Ints, Chars
+  | PWildF              -- Single wildcard : _
+  deriving (Data, Eq, Foldable, Functor, Show, Traversable, Typeable)
 
-type Pattern = Fix PatternF
+type Pattern = Fix (PatternF T.Text)
 
 $(deriveEq1   ''PatternF)
 $(deriveShow1 ''PatternF)
 
+mapPatB :: (b -> b') -> PatternF b p -> PatternF b' p
+mapPatB _ (PPatF c ps)    = PPatF c ps
+mapPatB _ (PTupF ps)      = PTupF ps
+mapPatB _ (POrF ps)       = POrF ps
+mapPatB f (PRecF lp's mb) = PRecF lp's (f <$> mb)
+mapPatB _ (PArrF ps)      = PArrF ps
+mapPatB f (PBindF b mp)   = PBindF (f b) mp 
+mapPatB _ (PConstF c)     = PConstF c
+mapPatB _  PWildF         = PWildF
+
 data Guarded e = Guarded e e
-  deriving (Eq, Foldable, Functor, Show, Traversable)
+  deriving (Data, Eq, Foldable, Functor, Show, Traversable, Typeable)
 
 $(deriveEq1   ''Guarded)
 $(deriveShow1 ''Guarded)
 
-data ExprF t p v e = ETAbsF v e
-                   | ETAppF e t
-                   | EAbsF [p] [(v, t)] e
-                   | ELamCaseF [(p, e)]
+data ExprF t p v e
+  = ETAbsF [v] e
+  | ETAppF [t] e
+  | EAbsF [(p, t)] e
+  | ELamCaseF t [(p, e)]
 
-                   | EAppF e [e]
-                   | ETupF   [e]
-                   | EArrF   [e]
+  | EAppF e [e]
+  | ETupF   [e]
+  | EArrF   [e]
 
-                   | ELetF [(p, e)] e
+  | ELetF [((p, t), e)] e
 
-                   | ERecF    [(Label, e)]   -- Record construction
---                   | ERecUpF  [(Label, e)] e -- Record update
-                   | ERecExtF [(Label, e)] e -- Extend second record with fields of first
-                   | ERecResF e Label -- Remove label from record
-                   | ERecSelF e Label -- Select label from record
+  | ERecF -- Empty record
+  | ERecUpdateF Label e e -- Record update
+  | ERecExtendF Label e e -- Extend second record with fields of first
+  | ERecRenameF Label Label e -- Rename second label to first
+  | ERecRemoveF e Label -- Remove label from record
+  | ERecSelectF e Label -- Select label from record
 
-                   | ECaseF e [(p, e)]
-                   | EIfF e e e
-                   | EMultiIfF [Guarded e] (Maybe e)
+  | ECaseF e [(p, e)]
+  | EIfF e e e
+  | EMultiIfF [Guarded e] (Maybe e)
 
-                   | EVarF T.Text
-                   | EConstF Constant
-                   | EUnaryOpF UnaryOp
-                   | EBinOpF BinOp
-                   deriving (Eq, Foldable, Functor, Show, Traversable)
+  | EVarF T.Text
+  | EConstF Constant
+  deriving (Data, Eq, Foldable, Functor, Show, Traversable, Typeable)
 
-type Expr t p s = Fix (ExprF t p s)
+type Expr t p v = Fix (ExprF t p v)
 
 $(deriveEq1   ''ExprF)
 $(deriveShow1 ''ExprF)
 
--- Patterns for PatternF
+-- Patterns for Fix (PatternF T.Text)
 pattern PPat :: Constructor -> [Pattern] -> Pattern
 pattern PPat x ps = Fix (PPatF x ps)
 
@@ -126,7 +154,7 @@ pattern PTup xs = Fix (PTupF xs)
 pattern POr :: [Pattern] -> Pattern
 pattern POr ps = Fix (POrF ps)
 
-pattern PRec :: [(Label, Pattern)] -> Maybe Bind -> Pattern
+pattern PRec :: [(Label, Pattern)] -> RecTailPat T.Text -> Pattern
 pattern PRec ps mb = Fix (PRecF ps mb)
 
 pattern PArr :: [Pattern] -> Pattern
@@ -141,131 +169,97 @@ pattern PConst x = Fix (PConstF x)
 pattern PWild :: Pattern
 pattern PWild = Fix PWildF
 
-pattern PMultiWild :: Pattern
-pattern PMultiWild = Fix PMultiWildF
+-- Patterns for Fix (ExprF t p v)
+pattern ETAbs :: [v] -> Expr t p v -> Expr t p v
+pattern ETAbs vs e = Fix (ETAbsF vs e)
 
--- Patterns for ExprF
-pattern ETAbs :: s -> Expr t p s -> Expr t p s
-pattern ETAbs t e = Fix (ETAbsF t e)
+pattern ETApp :: [t] -> Expr t p v -> Expr t p v
+pattern ETApp t e = Fix (ETAppF t e)
 
-pattern ETApp :: Expr t p s -> t -> Expr t p s
-pattern ETApp e t = Fix (ETAppF e t)
+pattern EAbs :: [(p, t)] -> Expr t p v -> Expr t p v
+pattern EAbs ps e = Fix (EAbsF ps e)
 
-pattern EAbs :: [p] -> [(s, t)] -> Expr t p s -> Expr t p s
-pattern EAbs ps bs e = Fix (EAbsF ps bs e)
+pattern ELamCase :: t -> [(p, Expr t p v)] -> Expr t p v
+pattern ELamCase t alts = Fix (ELamCaseF t alts)
 
-pattern ELamCase :: [(p, Expr t p s)] -> Expr t p s
-pattern ELamCase alts = Fix (ELamCaseF alts)
-
-pattern EApp :: Expr t p s -> [Expr t p s] -> Expr t p s
+pattern EApp :: Expr t p v -> [Expr t p v] -> Expr t p v
 pattern EApp f as = Fix (EAppF f as)
 
-pattern ETup :: [Expr t p s] -> Expr t p s
+pattern ETup :: [Expr t p v] -> Expr t p v
 pattern ETup es = Fix (ETupF es)
 
-pattern ERec :: [(Label, Expr t p s)] -> Expr t p s
-pattern ERec ls = Fix (ERecF ls)
+pattern EArr :: [Expr t p v] -> Expr t p v
+pattern EArr es = Fix (EArrF es)
 
---pattern ERecUp :: [(Label, Expr t p s)] -> Expr t p s -> Expr t p s
---pattern ERecUp ls r = Fix (ERecUpF ls r)
+pattern ERec :: Expr t p v
+pattern ERec = Fix ERecF
 
-pattern ERecExt :: [(Label, Expr t p s)] -> Expr t p s -> Expr t p s
-pattern ERecExt exts r2 = Fix (ERecExtF exts r2)
+pattern ERecExtend :: Label -> Expr t p v -> Expr t p v -> Expr t p v
+pattern ERecExtend l e r = Fix (ERecExtendF l e r)
 
-pattern ERecRes :: Expr t p s -> Label -> Expr t p s
-pattern ERecRes e l = Fix (ERecResF e l)
+pattern ERecUpdate :: Label -> Expr t p v -> Expr t p v -> Expr t p v
+pattern ERecUpdate l e r = Fix (ERecUpdateF l e r)
 
-pattern ERecSel :: Expr t p s -> Label -> Expr t p s
-pattern ERecSel e l = Fix (ERecSelF e l)
+pattern ERecRename :: Label -> Label -> Expr t p v -> Expr t p v
+pattern ERecRename to from e = Fix (ERecRenameF to from e)
 
-pattern ECase :: Expr t p s -> [(p, Expr t p s)] -> Expr t p s
+pattern ERecRemove :: Expr t p v -> Label -> Expr t p v
+pattern ERecRemove e l = Fix (ERecRemoveF e l)
+
+pattern ERecSelect :: Expr t p v -> Label -> Expr t p v
+pattern ERecSelect e l = Fix (ERecSelectF e l)
+
+pattern ECase :: Expr t p v -> [(p, Expr t p v)] -> Expr t p v
 pattern ECase e ps = Fix (ECaseF e ps)
 
-pattern EIf :: Expr t p s -> Expr t p s -> Expr t p s -> Expr t p s
+pattern EIf :: Expr t p v -> Expr t p v -> Expr t p v -> Expr t p v
 pattern EIf b t e = Fix (EIfF b t e)
 
-pattern EMultiIf :: [Guarded (Expr t p s)] -> Maybe (Expr t p s) -> Expr t p s
+pattern EMultiIf :: [Guarded (Expr t p v)] -> Maybe (Expr t p v) -> Expr t p v
 pattern EMultiIf xs me = Fix (EMultiIfF xs me)
 
-pattern ELet :: [(p, Expr t p s)] -> Expr t p s -> Expr t p s
+pattern ELet :: [((p, t), Expr t p v)] -> Expr t p v -> Expr t p v
 pattern ELet es e = Fix (ELetF es e)
 
-pattern EVar :: T.Text -> Expr t p s
+pattern EVar :: T.Text -> Expr t p v
 pattern EVar x = Fix (EVarF x)
 
-pattern EConst :: Constant -> Expr t p s
+pattern EConst :: Constant -> Expr t p v
 pattern EConst x = Fix (EConstF x)
 
-pattern EUnaryOp :: UnaryOp -> Expr t p s
-pattern EUnaryOp x = Fix (EUnaryOpF x)
-
-pattern EBinOp :: BinOp -> Expr t p s
-pattern EBinOp x = Fix (EBinOpF x)
-
-pattern EInt :: JInt -> Expr t p s
+pattern EInt :: JInt -> Expr t p v
 pattern EInt x = EConst (CInt x)
 
-pattern EChar :: Char -> Expr t p s
-pattern EChar x = EConst (CChar x)
-
-pattern EFalse :: Expr t p s
+pattern EFalse :: Expr t p v
 pattern EFalse = EVar "false"
 
-pattern ETrue :: Expr t p s
+pattern ETrue :: Expr t p v
 pattern ETrue = EVar "true"
 
-class HasSymbol a where
-  symbolOf :: a -> String
-  exprConstructor :: forall t p s b. a -> ExprF t p s b
-
-instance HasSymbol UnaryOp where
-  symbolOf OpNot = "#"
-  exprConstructor = EUnaryOpF
-
-instance HasSymbol BinOp where
-  symbolOf OpIff   = "<->"
-  symbolOf OpImp   = "-->"
-  symbolOf OpOr    = "||"
-  symbolOf OpAnd   = "&&"
-  symbolOf OpEq    = "=="
-  symbolOf OpNe    = "!="
-  symbolOf OpGt    = ">"
-  symbolOf OpGe    = ">="
-  symbolOf OpLt    = "<"
-  symbolOf OpLe    = "<="
-  symbolOf OpAdd   = "+"
-  symbolOf OpSub   = "-"
-  symbolOf OpTimes = "*"
-  symbolOf OpDiv   = "/"
-  symbolOf OpMod   = "%"
-
-  exprConstructor = EBinOpF
-
-mapExpr :: (t -> t') -> (p -> p') -> ExprF t p s f -> ExprF t' p' s f
+mapExpr :: (t -> t') -> (p -> p') -> ExprF t p v f -> ExprF t' p' v f
 mapExpr f g = \case
-  (ETAbsF t e)       -> ETAbsF t e
-  (ETAppF e t)       -> ETAppF e (f t)
-  (EAbsF ps bs e)    -> EAbsF (map g ps) (map (second f) bs) e
-  (ELamCaseF alts)   -> ELamCaseF $ map (first g) alts
-  (EAppF e es)       -> EAppF e es
-  (ETupF es)         -> ETupF es
-  (EArrF es)         -> EArrF es
-  (ELetF es e)       -> ELetF (map (first g) es) e
-  (ERecF fs)         -> ERecF fs
---  (ERecUpF fs e)     -> ERecUpF fs e
-  (ERecExtF top bot) -> ERecExtF top bot
-  (ERecResF e l)     -> ERecResF e l
-  (ERecSelF e l)     -> ERecSelF e l
-  (ECaseF e alts)    -> ECaseF e $ map (first g) alts
-  (EIfF b t e)       -> EIfF b t e
-  (EMultiIfF gs me)  -> EMultiIfF gs me
-  (EVarF t)          -> EVarF t
-  (EConstF c)        -> EConstF c
-  (EUnaryOpF o)      -> EUnaryOpF o
-  (EBinOpF o)        -> EBinOpF o
+  (ETAbsF vs e)        -> ETAbsF vs e
+  (ETAppF ts e)        -> ETAppF (map f ts) e
+  (EAbsF pt's e)       -> EAbsF (map (bimap g f) pt's) e
+  (ELamCaseF t alts)   -> ELamCaseF (f t) $ map (first g) alts
+  (EAppF e es)         -> EAppF e es
+  (ETupF es)           -> ETupF es
+  (EArrF es)           -> EArrF es
+  (ELetF pte's e)      -> ELetF (map (first $ bimap g f) pte's) e
+  ERecF                -> ERecF
+  (ERecExtendF l e r)  -> ERecExtendF l e r
+  (ERecUpdateF l e r)  -> ERecUpdateF l e r
+  (ERecRenameF l l' r) -> ERecRenameF l l' r
+  (ERecRemoveF e l)    -> ERecRemoveF e l
+  (ERecSelectF e l)    -> ERecSelectF e l
+  (ECaseF e alts)      -> ECaseF e $ map (first g) alts
+  (EIfF b t e)         -> EIfF b t e
+  (EMultiIfF gs me)    -> EMultiIfF gs me
+  (EVarF t)            -> EVarF t
+  (EConstF c)          -> EConstF c
 
-mapExprT :: (t -> t') -> ExprF t p s f -> ExprF t' p s f
+mapExprT :: (t -> t') -> ExprF t p v f -> ExprF t' p v f
 mapExprT = flip mapExpr id
 
-mapExprP :: (p -> p') -> ExprF t p s f -> ExprF t p' s f
+mapExprP :: (p -> p') -> ExprF t p v f -> ExprF t p' v f
 mapExprP = mapExpr id

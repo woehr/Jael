@@ -1,5 +1,9 @@
-dist
-.stack-work
-.liquid
+*.hi
+*.o
 *.swp
 .DS_Store
+.liquid
+.stack-work
+cabal.project.local
+dist
+dist-newstyle

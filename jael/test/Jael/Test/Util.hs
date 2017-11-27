@@ -12,13 +12,9 @@ import Text.Trifecta.Delta
 
 import Jael.New.Expr
 import Jael.New.DataDecl
-import Jael.New.Misc
 import Jael.New.Parser
 import Jael.New.QType
 import Jael.New.Type
-
-$(deriveEq1   ''C.CofreeF)
-$(deriveShow1 ''C.CofreeF)
 
 parseThrow :: Parser a -> String -> a
 parseThrow p t = case parseString (p <* eof) (Directed "test" 0 0 0 0) t of
