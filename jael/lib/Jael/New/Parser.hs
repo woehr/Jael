@@ -122,11 +122,10 @@ patOr =  tsymbol "\\/"
      <|> tsymbolic '⋁'
      <|> tsymbolic '∨'
      <|> tsymbolic '⋎'
-        
 
 forall :: (TokenParsing m, Monad m) => m ()
 forall =  reserved "forall"
-      <|> tsymbolic '∀' *> pure ()
+      <|> tsymbolic '∀' $> ()
 
 -- number' :: base -> digit parser -> (value, number of characters)
 number :: TokenParsing m => Integer -> m Char -> m (Integer, Integer)
@@ -191,8 +190,8 @@ ifGtOne f mxs = mxs >>= \xs -> case xs of
 pSizeSpec :: Parser SizeSpec
 pSizeSpec = ifGtOne SizedSum $ (intSize <|> sizeOf) `sepBy1` symbolic '+'
 
-pIntConstant :: TokenParsing m => m Constant
-pIntConstant =  CInt   <$> anyint
+pIntConstant :: TokenParsing m => m Literal
+pIntConstant =  LInt <$> anyint
 
 optionalList :: Parser [a] -> Parser [a]
 optionalList = fmap concat . optional
@@ -269,8 +268,8 @@ pPattern1 =
   let labelledPattern :: Parser (T.Text, P)
       labelledPattern = (,) <$> lident <* symbolic '=' <*> pPattern0
    in spannit
-        (    PWildF      <$  wildcard
-         <|> PConstF     <$> pIntConstant
+        (    PWildF <$  wildcard
+         <|> PLitF  <$> pIntConstant
          <|> PRecF [] TailEmpt <$ try (symbolic '{' <* symbolic '}')
          <|> uncurry PRecF <$> braces
              ((,) <$> commaSep1 labelledPattern
@@ -296,10 +295,10 @@ caseBody = let alt = (,) <$> pPattern0
                          <*> pExpr0
            in  braces (semiSep1 alt)
 
-pOp :: Constant -> Parser E
-pOp x = spannit (EConstF <$> try (x <$ symbol (show x) <* notFollowedBy (oneOf opChars)))
+pOp :: Primitive -> Parser E
+pOp x = spannit (EPrimF <$> try (x <$ symbol (show x) <* notFollowedBy (oneOf opChars)))
 
-pOpOf :: [Constant] -> Parser E
+pOpOf :: [Primitive] -> Parser E
 pOpOf = foldr (\f p -> pOp f <|> p) empty
 
 pSpanBinary :: Parser (PTree f -> PTree g -> f (PTree f))
@@ -321,10 +320,10 @@ binApp l op r = EAppF op [l, r]
 pBinApp :: Parser E -> Parser (E -> E -> E)
 pBinApp pBinOp = pSpanBinary $ flip binApp <$> pBinOp
 
-noAssoc :: Parser E -> [Constant] -> Parser E
+noAssoc :: Parser E -> [Primitive] -> Parser E
 noAssoc p fs = p >>= \x -> spannit (binApp x <$> pOpOf fs <*> p) <|> pure x
 
-leftAssoc :: Parser E -> [Constant] -> Parser E
+leftAssoc :: Parser E -> [Primitive] -> Parser E
 leftAssoc p fs = p `chainl1` pBinApp (pOpOf fs)
 
 {-
@@ -477,7 +476,7 @@ pRecord =
 
 pExpr99 :: Parser E
 pExpr99 =
-      spannit (EConstF <$> pIntConstant)
+      spannit (ELitF <$> pIntConstant)
       -- An lident followed by comma separated expressions or nothing
   <|> (pVar >>= \v ->
         spannit (EAppF v <$> parens (commaSep1 pExpr0)) <|> pure v
@@ -503,7 +502,16 @@ pData = reserved "data"
       $> DataDecl
      <*> uident
      <*> optionalList (parens $ commaSep1 lident)
-     <*> (M.fromList <$> braces (semiSep1 pDataCon))
+     <*> (M.fromList . zipWith parsedToConsInfo [0..]
+           <$> braces (semiSep1 pDataCon)
+         )
+  where parsedToConsInfo tag (name, params) =
+          ( name
+          , ConsInfo
+            { ddciTag = tag
+            , ddciParams = params
+            }
+          )
 
 data BitCons = BitConIdent T.Text
              | BitConInt JInt

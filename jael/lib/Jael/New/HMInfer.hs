@@ -76,11 +76,20 @@ initState = HmInfS
   }
 
 type HmInfM = RWST HmEnv (DL.DList HmInfW) HmInfS (Except [TypeErr])
+
+type TypedPatPiece t = Cofree (PatternF (T.Text, t)) Span
+
+-- Typed expression parameterized by type
+type TypedE t = Cofree (ExprF t [TypedPatPiece t] T.Text) Span
+
+-- A parsed expression whose patterns are expanded to remove "or" patterns
 type E' = Cofree (ExprF () [P] T.Text) Span
-type TypedP t = Cofree (PatternF (T.Text, t)) Span
-type TypedE t = Cofree (ExprF t [TypedP t] T.Text) Span
-type TypedPat  = TypedP Type
+
+-- A single pattern, expanded to remove "or" patterns
+type TypedPat  = [TypedPatPiece Type]
+
 type TypedExpr = TypedE Type
+
 --TypedExpr == Cofree (ExprF Type [Cofree (PatternF (T.Text, Type)) Span] T.Text) Span
 
 instance TIOps TypedExpr where
@@ -93,7 +102,7 @@ instance TIOps TypedExpr where
            else sp :< ETAbsF vs' (apply s e)
 
   apply s (sp :< e) =
-    let applyToPat :: TypedPat -> TypedPat
+    let applyToPat :: TypedPatPiece Type -> TypedPatPiece Type
         applyToPat = hoistCofree (mapPatB $ second (apply s))
      in sp :< mapExprP (map applyToPat) (mapExprT (apply s) $ fmap (apply s) e)
 
@@ -115,7 +124,7 @@ instance RowOps TypedExpr where
            else sp :< ETAbsF vs' (rapply s e)
 
   rapply s (sp :< e) =
-    let applyToPat :: TypedPat -> TypedPat
+    let applyToPat :: TypedPatPiece Type -> TypedPatPiece Type
         applyToPat = hoistCofree (mapPatB $ second (rapply s))
      in sp :< mapExprP (map applyToPat) (mapExprT (rapply s) $ fmap (rapply s) e)
 
@@ -139,7 +148,7 @@ data TypeErr
 
 exprType :: M.Map T.Text Type -> TypedExpr -> Type
 exprType m = generalize' M.empty . go m . removeAnn where
-  go :: M.Map T.Text Type -> Fix (ExprF Type [TypedP Type] T.Text) -> Type
+  go :: M.Map T.Text Type -> Fix (ExprF Type TypedPat T.Text) -> Type
   go env (ETAbs vs e) = TAll vs (go env e)
   go env (ETApp ts e)
     | TAll vs t <- go env e
@@ -184,19 +193,20 @@ exprType m = generalize' M.empty . go m . removeAnn where
   go env (EIf _ _ e)         = go env e
   go env (EMultiIf (Guarded _ e : _) _) = go env e
 
-  go env (EVar n)            = unsafeLookup n env
-  go _   (EConst c)          = JC.constType c
+  go env (EVar n)  = unsafeLookup n env
+  go _   (EPrim c) = JC.primType c
+  go _   (ELit l)  = JC.litType l
 
   -- "If type inference was successful, this shouldn't happen."
   go env x = error $ show x ++ "\n\n" ++ show env
 
-  envWithPats :: [TypedP Type] -> M.Map T.Text Type -> M.Map T.Text Type
+  envWithPats :: TypedPat -> M.Map T.Text Type -> M.Map T.Text Type
   envWithPats ps env = foldr (uncurry M.insert . fst) env binds
     where binds = concatMap patternBinds ps
 
 -- Partial function: All bound variables in the provided patterns must have
 -- a key in the map.
-mapSubPatBinds :: [(T.Text, Type)] -> [P] -> [TypedP Type]
+mapSubPatBinds :: [(T.Text, Type)] -> [P] -> TypedPat
 mapSubPatBinds bt's = map (hoistCofree subPatternBind)
   where
     sub :: M.Map T.Text (T.Text, Type)
@@ -292,8 +302,8 @@ doHm (sp C.:< ELetF xs e) = do
   return (t, sp :< ELetF xs' te)
   where
     f :: (([P], ()), HmInfM (Type, TypedExpr))
-      -> HmInfM (Type, [(([TypedP Type], Type), TypedExpr)], TypedExpr)
-      -> HmInfM (Type, [(([TypedP Type], Type), TypedExpr)], TypedExpr)
+      -> HmInfM (Type, [((TypedPat, Type), TypedExpr)], TypedExpr)
+      -> HmInfM (Type, [((TypedPat, Type), TypedExpr)], TypedExpr)
     -- let x = e1 in e2
     f ((ps, ()), mtte) macc = do
       (xt, e1@(e1sp :< _)) <- mtte
@@ -423,7 +433,8 @@ doHm (sp C.:< EVarF n) = do
                  else sp :< EVarF n
       return (t', e)
 
-doHm (sp C.:< EConstF c) = return . (, sp :< EConstF c) . JC.constType $ c
+doHm (sp C.:< EPrimF c) = return . (, sp :< EPrimF c) . JC.primType $ c
+doHm (sp C.:< ELitF l)  = return . (, sp :< ELitF l)  . JC.litType  $ l
 
 patternTypes :: P -> HmInfM (Type, [(Bind, Type)])
 patternTypes = cata alg where
@@ -466,9 +477,7 @@ patternTypes = cata alg where
       mapM_ (unify t . fst) xs'
       return (TArr t $ toInteger (length xs'), concatMap snd xs')
 
-  alg (_ C.:< PConstF (CInt _)) = return (TInt, [])
-  alg (_ C.:< PConstF _) = error "Should not happen since parser doesn't \
-                          \parse other constants (like operators) in patterns"
+  alg (_ C.:< PLitF (LInt _)) = return (TInt, [])
   alg (_ C.:< PWildF) = (,[]) <$> freshTv
   alg (_ C.:< PBindF n Nothing) = freshTv >>= \tv -> return (tv, [(n, tv)])
   alg (_ C.:< PBindF n (Just p)) = p >>= \(t, bs) -> return (t, (n,t):bs)

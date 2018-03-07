@@ -26,9 +26,23 @@ data JInt = JInt
   , intLength :: Integer
   } deriving (Data, Eq, Show, Typeable)
 
-data Constant
-  = CInt JInt
-  | OpNot
+defaultInt :: Integer -> JInt
+defaultInt i =
+  JInt
+    { intFormat = DecInt
+    , intValue = i
+    , intLength = toInteger . length . show $ i
+    }
+
+newtype Literal
+  = LInt JInt
+  deriving (Data, Eq, Typeable)
+
+instance Show Literal where
+  show (LInt j) = show j
+
+data Primitive
+  = OpNot
   | OpIff
   | OpImp
   | OpOr
@@ -46,8 +60,7 @@ data Constant
   | OpMod
   deriving (Data, Eq, Typeable)
 
-instance Show Constant where
-  show (CInt j) = show j
+instance Show Primitive where
   show OpNot   = "!"
   show OpIff   = "<->"
   show OpImp   = "-->"
@@ -87,7 +100,7 @@ data PatternF b p
   | PRecF [(Label, p)] (RecTailPat b) -- Record pattern
   | PArrF [p]           -- Array with sub-patterns
   | PBindF b (Maybe p)
-  | PConstF Constant    -- Ints, Chars
+  | PLitF Literal
   | PWildF              -- Single wildcard : _
   deriving (Data, Eq, Foldable, Functor, Show, Traversable, Typeable)
 
@@ -102,8 +115,8 @@ mapPatB _ (PTupF ps)      = PTupF ps
 mapPatB _ (POrF ps)       = POrF ps
 mapPatB f (PRecF lp's mb) = PRecF lp's (f <$> mb)
 mapPatB _ (PArrF ps)      = PArrF ps
-mapPatB f (PBindF b mp)   = PBindF (f b) mp 
-mapPatB _ (PConstF c)     = PConstF c
+mapPatB f (PBindF b mp)   = PBindF (f b) mp
+mapPatB _ (PLitF c)       = PLitF c
 mapPatB _  PWildF         = PWildF
 
 data Guarded e = Guarded e e
@@ -136,7 +149,8 @@ data ExprF t p v e
   | EMultiIfF [Guarded e] (Maybe e)
 
   | EVarF T.Text
-  | EConstF Constant
+  | ELitF Literal
+  | EPrimF Primitive
   deriving (Data, Eq, Foldable, Functor, Show, Traversable, Typeable)
 
 type Expr t p v = Fix (ExprF t p v)
@@ -163,8 +177,8 @@ pattern PArr ps = Fix (PArrF ps)
 pattern PBind :: Bind -> Maybe Pattern -> Pattern
 pattern PBind b mp = Fix (PBindF b mp)
 
-pattern PConst :: Constant -> Pattern
-pattern PConst x = Fix (PConstF x)
+pattern PLit :: Literal -> Pattern
+pattern PLit x = Fix (PLitF x)
 
 pattern PWild :: Pattern
 pattern PWild = Fix PWildF
@@ -224,11 +238,14 @@ pattern ELet es e = Fix (ELetF es e)
 pattern EVar :: T.Text -> Expr t p v
 pattern EVar x = Fix (EVarF x)
 
-pattern EConst :: Constant -> Expr t p v
-pattern EConst x = Fix (EConstF x)
+pattern EPrim :: Primitive -> Expr t p v
+pattern EPrim x = Fix (EPrimF x)
+
+pattern ELit :: Literal -> Expr t p v
+pattern ELit x = Fix (ELitF x)
 
 pattern EInt :: JInt -> Expr t p v
-pattern EInt x = EConst (CInt x)
+pattern EInt x = ELit (LInt x)
 
 pattern EFalse :: Expr t p v
 pattern EFalse = EVar "false"
@@ -256,7 +273,8 @@ mapExpr f g = \case
   (EIfF b t e)         -> EIfF b t e
   (EMultiIfF gs me)    -> EMultiIfF gs me
   (EVarF t)            -> EVarF t
-  (EConstF c)          -> EConstF c
+  (EPrimF c)           -> EPrimF c
+  (ELitF l)            -> ELitF l
 
 mapExprT :: (t -> t') -> ExprF t p v f -> ExprF t' p v f
 mapExprT = flip mapExpr id

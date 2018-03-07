@@ -1,19 +1,23 @@
+resolver: nightly-2017-10-06
+
 flags: {}
 nix:
+  enable: false
   packages:
   - llvm_4
 
 extra-package-dbs: []
 
 packages:
-- location: jael/
+- location: .
 
 extra-deps:
 - git: https://github.com/ucsd-progsys/liquid-fixpoint
-  commit: d84bf9e36bc3888b149a5fc9e8d23c5545070803
+  commit: aba45f75b7d90a9c1980b835fe1b65ccb61dae4f
+- base-noprelude-4.10.1.0
 - dotgen-0.4.2
 - fgl-visualize-0.1.0.1
 - intern-0.9.1.4
-- located-base-0.1.1.0
+- located-base-0.1.1.1
 
-resolver: lts-9.14
+allow-newer: true

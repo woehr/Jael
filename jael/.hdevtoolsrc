@@ -1,5 +1,7 @@
 --nostack
--g -ilib -g -itest -g -Wall
+-g -ilib
+-g -itest
+-g -Wall
 -g -fwarn-incomplete-uni-patterns
 -g -fwarn-incomplete-record-updates
 -g -fwarn-monomorphism-restriction

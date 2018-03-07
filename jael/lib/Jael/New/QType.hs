@@ -1,8 +1,7 @@
 {-# Language PatternSynonyms #-}
 {-# Language RankNTypes #-}
 
-module Jael.New.QType
-where
+module Jael.New.QType where
 
 import qualified Data.Text as T
 import qualified Control.Comonad.Trans.Cofree as C

@@ -23,6 +23,7 @@ library
                        Jael.New.Core
                        Jael.New.DataDecl
                        Jael.New.Expr
+                       Jael.New.ExprToCore
                        Jael.New.HMInfer
                        Jael.New.Parser
                        Jael.New.Session

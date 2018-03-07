@@ -140,7 +140,7 @@ expandPattern = cata alg
     alg (s C.:< PBindF v (Just p)) = ((s :<) . PBindF v . Just) <$> p
 
     alg (s C.:< PBindF v Nothing) = [s :< PBindF v Nothing]
-    alg (s C.:< PConstF c) = [s :< PConstF c]
+    alg (s C.:< PLitF c) = [s :< PLitF c]
     alg (s C.:< PWildF) = [s :< PWildF]
 
     expandPatternList :: [[a]] -> [[a]]

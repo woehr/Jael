@@ -11,7 +11,7 @@ in
         hlint
         hdevtools
         #apply-refact
-        #stylish-haskell
+        stylish-haskell
         #hasktags
       ]);
   })

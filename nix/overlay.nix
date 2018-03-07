@@ -10,15 +10,8 @@ let
     owner  = "ucsd-progsys";
     repo   = "liquid-fixpoint";
     rev    = "aba45f75b7d90a9c1980b835fe1b65ccb61dae4f";
-    sha256 = "1a2ppn34iiz756d1jzcv6hgir74y84y9wg6i97v3fax7rnqi9fhb";
+    sha256 = "0zjpbmr3iw476zc3p8g7k2jwfnjccsz5bxnxi0a5lwn3qd7qi8cn";
   };
-
-  #liquid-fixpoint-src = fetchFromGitHub {
-  #  owner  = "ucsd-progsys";
-  #  repo   = "liquid-fixpoint";
-  #  rev    = "e43aed1ccf3944597d5512738875dc037d4c25ff";
-  #  sha256 = "1a2ppn34iiz756d1jzcv6hgir74y84y9wg6i97v3fax7rnqi9fhb";
-  #};
 
 in {
   haskell = super.haskell // {

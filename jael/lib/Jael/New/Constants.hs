@@ -23,7 +23,7 @@ intConst x =
   let ji = case parseString anyint (Directed "" 0 0 0 0) (show x) of
              Success i -> i
              Failure e -> error $ "Should always work:\n" ++ show e
-      _fpInt = EConst . CInt $ ji
+      _fpInt = ELit . LInt $ ji
   in  [rtype| (| v:Int | v == h__fpInt |) |]
 
 boolConst :: Bool -> QType T.Text (Expr () Pattern T.Text)
@@ -52,26 +52,32 @@ lt   = [rtype| x:Int -> y:Int -> (|v:Bool | v <-> x < y|) |]
 cat  = [rtype| x:Bits -> y:Bits -> (|v:Bits | size(v) == size(x) + size(y)|) |]
 lnot = [rtype| x:Bool -> (|v:Bool | v <-> !x|) |]
 
-constQType :: Constant -> QType T.Text (Expr () Pattern T.Text)
-constQType = \case
-    -- The integer value doesn't matter if we get rid of the refinement
-    CInt _  -> intConst 0
-    OpNot   -> lnot
-    OpIff   -> iff
-    OpImp   -> imp
-    OpOr    -> lor
-    OpAnd   -> land
-    OpEq    -> eq
-    OpNe    -> ne
-    OpGt    -> gt
-    OpGe    -> ge
-    OpLt    -> lt
-    OpLe    -> le
-    OpAdd   -> add
-    OpSub   -> sub
-    OpTimes -> mul
-    OpDiv   -> div
-    OpMod   -> mod
+litQType :: Literal -> QType T.Text (Expr () Pattern T.Text)
+litQType = \case
+  -- The integer value doesn't matter if we get rid of the refinement
+  LInt _  -> intConst 0
 
-constType :: Constant -> Type
-constType = hoistFix unQType . constQType
+primQType :: Primitive -> QType T.Text (Expr () Pattern T.Text)
+primQType = \case
+  OpNot   -> lnot
+  OpIff   -> iff
+  OpImp   -> imp
+  OpOr    -> lor
+  OpAnd   -> land
+  OpEq    -> eq
+  OpNe    -> ne
+  OpGt    -> gt
+  OpGe    -> ge
+  OpLt    -> lt
+  OpLe    -> le
+  OpAdd   -> add
+  OpSub   -> sub
+  OpTimes -> mul
+  OpDiv   -> div
+  OpMod   -> mod
+
+litType :: Literal -> Type
+litType = hoistFix unQType . litQType
+
+primType :: Primitive -> Type
+primType = hoistFix unQType . primQType
