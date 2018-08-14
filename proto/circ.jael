@@ -1,0 +1,52 @@
+data Bool = false | true;
+
+data Maybe(a) = nothing | just(a);
+
+data CircBuff(a) = circBuff(
+  { front : Int
+  , count : Int
+  , array : [a; 1]
+  });
+
+max_size : Int;
+max_size = 32;
+
+cbEmpty : forall a. CircBuff(a);
+cbEmpty = circBuff({ front = 0, count = 0, array = arrEmpty });
+
+cbAt : forall a. Int -> CircBuff(a) -> a;
+cbAt($i, circBuff({ front = $f
+                  , count = _
+                  , array = $a
+                  }))
+  = arrAt((f + i) % 10, a);
+
+cbPushBack : forall a. a -> CircBuff(a) -> Maybe(CircBuff(a));
+cbPushBack($val, circBuff({ front = $f
+                          , count = $c
+                          , array = $a
+                          }))
+  = if c >= max_size
+       then nothing
+       else (let { $ix = f + c % max_size }
+            in just(circBuff({ count = c+1
+                             , front = f
+                             , array = arrSet(ix, val, a)
+                             }))
+            )
+  ;
+
+cbPopBack : forall a. CircBuff(a) -> Maybe((a, CircBuff(a)));
+cbPopBack(circBuff({ front = $f, count = $c, array = $a }))
+  = if c == 0
+      then nothing
+      else (let { $ix = f + c - 1 % 10
+                }
+            in just(( arrAt(ix, a)
+                    , circBuff({ front = f
+                              , count = c - 1
+                              , array = arrUnset(ix, a)
+                              })
+                    ))
+           )
+  ;

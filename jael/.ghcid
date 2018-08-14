@@ -1,0 +1,3 @@
+-c "ghci lib/Jael/Pattern.hs"
+#-c "ghci src/Main.hs" --test=":main ../proto/circ.jael"
+#-c "ghci test/Main.hs" --test=":main"

@@ -1,0 +1,2 @@
+- group: {name: generalise, enabled: true}
+- ignore: {name: Eta reduce}

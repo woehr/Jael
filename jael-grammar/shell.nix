@@ -1,11 +1,1 @@
-{ nixpkgs ? import ../nix {}, compiler ? "ghc802" }:
-let
-  env = nixpkgs.haskell.packages.${compiler}.jael-grammar.env;
-in
-  nixpkgs.lib.overrideDerivation env (old: {
-    buildInputs = old.buildInputs ++
-      (with nixpkgs.haskell.packages.${compiler}; [
-        cabal-install ghc-mod
-        apply-refact hlint stylish-haskell hasktags
-      ]);
-  })
+import ./default.nix { shell = true; }

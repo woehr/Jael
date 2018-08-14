@@ -1,0 +1,27 @@
+build-type: Simple
+cabal-version: >=1.10
+name: libjael
+version: 0.0.0.0
+
+library
+  build-depends: base,bytestring,cmdargs,comonad,containers,deriving-compat,discrimination,dlist,file-embed,free,haskus-utils,hspec,hspec-discover,lens,mtl,multimap,multiset,placeholders,pretty-simple,pretty-tree,prettyprinter,prettyprinter-ansi-terminal,QuickCheck,recursion-schemes,regex-applicative,row-types,safe,split,syb,template-haskell,text,these,tostring,tree-diff,uniform-pair,vec,libjaelg
+  default-language: Haskell2010
+  exposed-modules: Jael.AST Jael.Classes Jael.Constants Jael.Data.MultiMap Jael.DataDecl Jael.Error Jael.Expr Jael.HMInfer Jael.Liquid Jael.Matching Jael.Pattern Jael.Prelude.Minimal Jael.Prelude Jael.Pretty Jael.QType Jael.Quotes Jael.TH Jael.Type
+  hs-source-dirs: lib
+
+
+executable jaelc
+  build-depends: base, butcher, containers, libjael, text
+  default-language: Haskell2010
+  hs-source-dirs: src
+  main-is: Main.hs
+
+
+test-suite tests
+  build-depends: base,bytestring,cmdargs,comonad,containers,deriving-compat,discrimination,dlist,file-embed,free,haskus-utils,hspec,hspec-discover,lens,mtl,multimap,multiset,placeholders,pretty-simple,pretty-tree,prettyprinter,prettyprinter-ansi-terminal,QuickCheck,recursion-schemes,regex-applicative,row-types,safe,split,syb,template-haskell,text,these,tostring,tree-diff,uniform-pair,vec,libjael,libjaelg
+  default-language: Haskell2010
+  hs-source-dirs: test
+  main-is: Main.hs
+  type: exitcode-stdio-1.0
+
+

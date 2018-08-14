@@ -1,10 +1,28 @@
 :set -outputdir .ghci.d
 :set -fobject-code
+
 :set -ilib
+:set -isrc
 :set -itest
+
 :set -Wall
 :set -fwarn-incomplete-uni-patterns
 :set -fwarn-incomplete-record-updates
 :set -fwarn-monomorphism-restriction
+:set -fwarn-implicit-prelude
 :set -fwarn-identities
-:set -XOverloadedStrings
+:set -fwarn-redundant-constraints
+
+:set -XDataKinds
+:set -XFlexibleContexts
+:set -XFlexibleInstances
+:set -XNoImplicitPrelude
+:set -XTemplateHaskell
+:set -XTypeApplications
+:set -XTypeFamilies
+:set -XTypeOperators
+
+:set -package pretty-simple
+:set -interactive-print=Text.Pretty.Simple.pPrint
+
+:load lib/Jael/Prelude.hs

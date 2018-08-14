@@ -1,0 +1,623 @@
+-------------------------------------------------------------------------------
+-- Tokens
+
+-- tokpass UIdent A
+-- tokpass UIdent Aa
+-- tokpass UIdent A_a
+-- tokfail UIdent a
+-- tokfail UIdent _
+-- tokfail UIdent 1
+token UIdent (upper (letter | digit | '_')*) ;
+
+-- tokpass LIdent a
+-- tokpass LIdent aa
+-- tokpass LIdent aA
+-- tokpass LIdent a000
+-- tokpass LIdent a1
+-- tokpass LIdent a_
+-- tokpass LIdent a_A
+-- tokpass LIdent _a
+-- tokpass LIdent __a
+-- tokpass LIdent __a_1_A
+-- tokfail LIdent A
+-- tokfail LIdent _
+-- tokfail LIdent 1
+token LIdent ('_'* lower (letter | digit | '_')*) ;
+
+-- An LIdent prepended by a ^
+
+-- tokpass NegChan ^a
+-- tokpass NegChan ^__a__
+-- tokfail NegChan a
+-- tokfail NegChan __a__
+token NegChan ('^' '_'* lower (letter | digit | '_')*) ;
+
+-- A lowercase identifier preceeded by a '
+-- These are builtin names and are restricted to not begin with '_
+
+-- tokpass ReftIdent 'a
+-- tokpass ReftIdent 'aA
+-- tokpass ReftIdent 'a_a
+-- tokfail ReftIdent '_a
+-- tokfail ReftIdent 'Aa
+-- tokfail ReftIdent '
+-- tokfail ReftIdent _
+-- tokfail ReftIdent a
+-- tokfail ReftIdent A
+
+token ReftIdent ('\'' lower (letter | digit | '_')* ) ;
+
+-- tokpass DecInt 0
+-- tokpass DecInt 1
+-- tokpass DecInt 10
+-- tokfail DecInt 01
+token DecInt ('0' | ["123456789"] digit*) ;
+
+token HexInt ({"0x"} ["0123456789abcdefABCDEF"]+) ;
+
+token OctInt ({"0o"} ["01234567"]+) ;
+
+token BinInt ({"0b"} ["01"]+) ;
+
+--token Size   (digit+ ["KMG"]? ["bB"]) ;
+
+LabelLIdent. Label ::= LIdent ;
+LabelDecInt. Label ::= DecInt ;
+
+AnyIntDec. AnyInt ::= DecInt ;
+AnyIntHex. AnyInt ::= HexInt ;
+AnyIntOct. AnyInt ::= OctInt ;
+AnyIntBin. AnyInt ::= BinInt ;
+
+LSpc1LIdentCon. LSpc1LIdent ::= LIdent LSpc1LIdent ;
+LSpc1LIdentNil. LSpc1LIdent ::= LIdent ;
+
+LCom1LIdentCon. LCom1LIdent ::= LIdent "," LCom1LIdent ;
+LCom1LIdentNil. LCom1LIdent ::= LIdent ;
+
+-------------------------------------------------------------------------------
+-- Types
+
+-- Test lower/upper identifiers and differences between BaseType0 and BaseType1
+-- pass BaseType1 x         // type var
+-- fail BaseType1 X()       // user def'd (no params)
+-- fail BaseType1 X         // user def'd (no params in BaseType0)
+-- fail BaseType1 X(x)      // user def'd (single param)
+-- fail BaseType1 X(x,y,z)  // user def'd (multiple params)
+-- pass BaseType2 X         // user def'd (no params)
+-- pass BaseType2 X(x)      // user def'd (single param)
+-- pass BaseType2 X(x,y,z)  // user def'd (multiple params)
+
+-- Test places we don't want parens
+-- fail BaseType1 (x)       // unnecessary parens
+-- fail BaseType1 (X)       // unnecessary parens
+-- fail BaseType2 (x)       // unnecessary parens
+-- fail BaseType2 (X)       // unnecessary parens
+
+-- Test records
+-- pass BaseType1 {}          // Empty record
+-- pass BaseType1 {x:{}}      // One element record
+-- pass BaseType1 {x:a,y:b}   // Two element record
+-- pass BaseType1 {r}         // Polymorphic record
+-- pass BaseType1 {x:a|r}     // Polymorphic record with 1 extension
+-- pass BaseType1 {x:a,y:b|r} // Polymorphic record with >1 extension
+
+-- Test tuples
+-- (one element tuples tested by unnecessary parens)
+-- fail BaseType1 ()        // empty tuple
+-- pass BaseType1 (x,A)     // tuple (BaseType0)
+-- pass BaseType1 (((a,a),b),c,(b,(a,a)))
+
+-- Test arrays
+-- fail BaseType1 []
+-- fail BaseType1 [;]
+-- fail BaseType1 [a;]
+-- fail BaseType1 [;8]
+-- pass BaseType1 [a;8]
+-- pass BaseType1 [a;0x10]
+
+-- Function types without labels
+-- pass BaseType a->b
+-- pass BaseType A->B
+-- pass BaseType (a->b)->c
+-- pass BaseType (A->B)->C
+-- same BaseType a->b->c === a->(b->c)
+-- same BaseType A->B->C === A->(B->C)
+
+-- Refined function types with labels
+-- pass BaseType x:a->b
+-- pass BaseType x:(y:a->b)->c
+-- pass BaseType x:a->(y:b->c)
+-- pass BaseType x:Int -> y:(| v:Int | v > 0 |) -> Int
+
+BTypeFun.         BaseType0 ::= RefinedType11 "->" RefinedType ;
+-- BTypeFunDep.      BaseType0 ::= LIdent ":" BaseType11 "->" RefinedType ;
+BTypeFunDep.     BaseType0 ::= LIdent ":" RefinedType11 "->" RefinedType ;
+-- BTypeFunDepFun.   BaseType0 ::= LIdent ":" "(" BaseType10 ")" "->" RefinedType ;
+
+BTypeVar.         BaseType1 ::= LIdent ;
+BTypeRecEmp.      BaseType1 ::= "{}" ;
+BTypeRecPoly.     BaseType1 ::= "{" LIdent "}" ;
+BTypeRec.         BaseType1 ::= "{" LCom1RowType "}" ;
+BTypeRecExt.      BaseType1 ::= "{" LCom1RowType "|" LIdent "}" ;
+BTypeTup.         BaseType1 ::= "(" LCom2RefType ")" ;
+BTypeArr.         BaseType1 ::= "[" RefinedType ";" AnyInt "]" ;
+
+BTypeAlias.       BaseType2 ::= Alias ;
+
+_. BaseType10 ::= BaseType0 ;
+_. BaseType11 ::= BaseType1 ;
+_. BaseType11 ::= BaseType2 ;
+
+_. BaseType   ::= BaseType10 ;
+_. BaseType   ::= BaseType11 ;
+
+_. BaseType99 ::= BaseType0 ;
+_. BaseType99 ::= BaseType1 ;
+
+LCom1RowTypeCon.  LCom1RowType ::= LIdent ":" RefinedType "," LCom1RowType ;
+LCom1RowTypeNil.  LCom1RowType ::= LIdent ":" RefinedType ;
+
+LCom1RefTypeCon.  LCom1RefType ::= RefinedType "," LCom1RefType ;
+LCom1RefTypeNil.  LCom1RefType ::= RefinedType ;
+
+LCom2RefTypeCon.  LCom2RefType ::= RefinedType "," LCom2RefType ;
+LCom2RefTypeNil.  LCom2RefType ::= RefinedType "," RefinedType ;
+
+-- Refined base types
+-- pass RefinedType (| x:a | r |)
+-- pass RefinedType (| x: (y:a -> b) | r |)
+-- fail RefinedType (| x : y:a -> b  | r |)
+
+-- Refined function types with labels in the refined type
+-- pass RefinedType (| x:a | r |) -> b
+-- fail RefinedType (| x:y:z | r |) -> a
+-- pass RefinedType (| x:(y:a->b) | r |) -> c
+-- fail RefinedType (| x: y:a->b  | r |) -> c
+
+RTypeBase0.       RefinedType0 ::= BaseType0 ;
+RTypeQualFun.     RefinedType1 ::= "(|" LIdent ":" "(" BaseType10 ")" "|" Expr "|)" ;
+RTypeQualBase.    RefinedType1 ::= "(|" LIdent ":" BaseType11 "|" Expr "|)" ;
+RTypeBase1.       RefinedType1 ::= BaseType1 ;
+RTypeBase2.       RefinedType2 ::= BaseType2 ;
+
+_. RefinedType10  ::= RefinedType0 ;
+_. RefinedType11  ::= RefinedType1 ;
+_. RefinedType11  ::= RefinedType2 ;
+_. RefinedType11  ::= "(" RefinedType0 ")" ;
+
+_. RefinedType    ::= RefinedType10 ;
+_. RefinedType    ::= RefinedType11 ;
+
+_. RefinedType99 ::= RefinedType0 ;
+_. RefinedType99 ::= RefinedType1 ;
+
+-------------------------------------------------------------------------------
+-- Patterns
+
+-- pass Pattern1 a
+-- pass Pattern1 a||b
+-- pass Pattern1 a || b || c
+
+-- pass Pattern2 $x
+-- fail Pattern2 $x@y
+-- fail Pattern2 $x@y(a, b)
+-- pass Pattern2 $x@(a, b)
+-- fail Pattern2 $x@$y
+-- pass Pattern2 $x@($y)
+
+-- fail Pattern2 $x@x||y
+-- pass Pattern2 $x@(x||y)
+
+-- fail Pattern3 x()
+-- pass Pattern3 x(a)
+-- pass Pattern3 x(a,b)
+-- pass Pattern3 x
+
+-- pass Pattern4 _
+-- pass Pattern4 0
+-- pass Pattern4 100
+-- pass Pattern4 ~100
+-- pass Pattern4 ~ 100
+-- fail Pattern4 ()
+-- pass Pattern4 (a)
+-- pass Pattern4 (a,b)
+
+-- pass Pattern4 {}
+-- pass Pattern4 {x=_}
+-- fail Pattern4 {x=_|}
+-- fail Pattern4 {x=_|r}
+-- pass Pattern4 {x=_|$r}
+-- pass Pattern4 {x=_|_}
+-- pass Pattern4 {x=a||b,y=$c,z=_}
+-- pass Pattern4 {x=a||b,y=$c,z=_|$r}
+
+-- fail Pattern4 []
+-- fail Pattern4 [ ]
+-- pass Pattern4 [ 1 ]
+-- pass Pattern4 [1, x]
+
+-- These are failures found be quickcheck that we want to verify stay failures
+-- fail Pattern {_}  // Should be written "_"
+-- fail Pattern {@a} // Should be written "@a"
+
+PatPar.     Pattern1 ::= LBar2Pattern ;
+
+PatVar.     Pattern2 ::= "$" LIdent ;
+PatVarAt.   Pattern2 ::= "$" LIdent "@" Pattern4 ;
+
+PatConArg.  Pattern3 ::= LIdent "(" LCom1Pattern ")" ;
+PatCon.     Pattern3 ::= LIdent ;
+
+PatWild.    Pattern4 ::= "_" ;
+PatInt.     Pattern4 ::= AnyInt ;
+PatNegInt.  Pattern4 ::= "~" DecInt ;
+PatRecEmp.  Pattern4 ::= "{}" ;
+PatRec.     Pattern4 ::= "{" LCom1RecPat "}" ;
+PatRecPoly. Pattern4 ::= "{" LCom1RecPat "|" "$" LIdent "}" ;
+PatRecWild. Pattern4 ::= "{" LCom1RecPat "|" "_" "}" ;
+PatTup.     Pattern4 ::= "(" LCom2Pattern ")" ;
+PatArr.     Pattern4 ::= "[" LCom1Pattern "]" ;
+
+coercions Pattern 4 ;
+
+LCom1PatternCon. LCom1Pattern ::= Pattern "," LCom1Pattern ;
+LCom1PatternNil. LCom1Pattern ::= Pattern ;
+
+LCom2PatternCon. LCom2Pattern ::= Pattern "," LCom2Pattern ;
+LCom2PatternNil. LCom2Pattern ::= Pattern "," Pattern ;
+
+LBar2PatternCon. LBar2Pattern ::= Pattern2 "||" LBar2Pattern ;
+LBar2PatternNil. LBar2Pattern ::= Pattern2 "||" Pattern2 ;
+
+LCom1RecPatCon. LCom1RecPat ::= LIdent "=" Pattern "," LCom1RecPat ;
+LCom1RecPatNil. LCom1RecPat ::= LIdent "=" Pattern ;
+
+-------------------------------------------------------------------------------
+-- Expressions
+
+-- pass Expr101 \($x) -> true
+-- pass Expr102 \case {c -> x; c(1) -> x ; $c -> c}
+EAbs.     Expr101 ::= "\\(" LCom1Pattern ")" "->"  Expr ;
+EAbsCase. Expr102 ::= "\\case" "{" LSemi1Case "}" ;
+
+_.        Expr1   ::= Expr101 ;
+_.        Expr1   ::= Expr102 ;
+
+LSemi1CaseCon.    LSemi1Case    ::= Pattern "->" Expr ";" LSemi1Case ;
+LSemi1CaseNil.    LSemi1Case    ::= Pattern "->" Expr ;
+
+-- pass Expr201 case x of {p -> a; p(p) -> b; (x,y) -> c; _ -> d}
+-- pass Expr202 let { 1=1;2=2;3=3;4=4;5=5;6=6;7=7;8=8;9=9} in 1
+-- pass Expr202 let { x || _ =1} in x
+-- pass Expr    let { x || _ =1} in x
+-- pass Expr202 let { 0b1 || 2=x} in x
+-- pass Expr202 let { {y=1, z=z} = x}in z
+-- pass Expr202 let { {y=4, z=$y | _} = {x=1,y=2,y=just,z=nothing}}in{ a=y }
+-- pass Expr202 let { {y=4, z=$y | $r} = {x=1,y=2,y=just,z=nothing}}in {a=y|r}
+-- pass Expr202 let { $r@{y=4,z=$y|$s}={x=1,y=2,y=just,z=nothing} } in{a=r,b=s}
+---- pass Expr203 x where {x=1; y=2}
+
+-- "where" binds stronger than let so the variables in the let can be used in the
+-- where below.
+-- -- same Expr2 let {x=1} in e where {y=x} === let {x=1} in (e where{y=x})
+ECase.    Expr201 ::= "case" Expr "of" "{" LSemi1Case "}" ;
+ELet.     Expr202 ::= "let" "{" LSemi1Let "}" "in" Expr2 ;
+-- EWhere.   Expr203 ::= Expr3 "where" "{" LSemi1Let "}" ;
+
+_.        Expr2   ::= Expr201 ;
+_.        Expr2   ::= Expr202 ;
+-- _.        Expr2   ::= Expr203 ;
+
+LSemi1LetCon.     LSemi1Let     ::= Pattern "=" Expr ";" LSemi1Let ;
+LSemi1LetNil.     LSemi1Let     ::= Pattern "=" Expr ;
+
+-- pass Expr301 if x then y else z
+-- pass Expr302 if { x -> y; z -> 1 }
+---- pass Expr303 guard { $x <- 1 -> x; p <- x -> foo }
+
+-- We could be more lenient and allow any expression on the left side of ->,
+-- but an Expr1 will never typecheck and is looks confusing if used.
+-- See examples below:
+-- if { \(x) -> x -> x } === if { (\(x) -> x) -> x }
+-- guard { x <- \(x) -> x -> x } === guard { x <- (\(x) -> x) -> x }
+-- Therefore, the expressions in this position are restricted to Expr2 and above.
+-- fail Expr302 if { \(x) -> x -> x }
+---- fail Expr303 guard { x <- \(x) -> x -> x }
+
+---- same Expr if x then y else z where {x=1;y=2;z=3} === (if x then y else z) where {x=1;y=2;z=3}
+EIf.      Expr301 ::= "if" Expr "then" Expr3 "else" Expr3 ;
+EMultiIf. Expr302 ::= "if" "{" LSemi1Multi "}" ;
+--EGuard.   Expr303 ::= "guard" "{" LSemi1Guard "}" ;
+
+_.        Expr3   ::= Expr301 ;
+_.        Expr3   ::= Expr302 ;
+--_.        Expr3   ::= Expr303 ;
+
+LSemi1MultiCon.  LSemi1Multi ::= Expr2 "->" Expr ";" LSemi1Multi ;
+LSemi1MultiNil.  LSemi1Multi ::= Expr2 "->" Expr;
+
+--LSemi1GuardCon.  LSemi1Guard ::= Pattern "<-" Expr2 "->" Expr ";" LSemi1Guard ;
+--LSemi1GuardNil.  LSemi1Guard ::= Pattern "<-" Expr2 "->" Expr;
+
+-- same Expr4  a <-> (b <-> c) === a <-> b <-> c
+EIff.     Expr4 ::= Expr5 "<->" Expr4 ;
+
+-- fail Expr5 a --> b --> c
+-- same Expr a --> b <-> c === a --> b <-> c
+EImp.     Expr5 ::= Expr6 "-->" Expr6 ;
+
+-- same Expr6 a || b || c === a || (b || c)
+ELogOr.   Expr6 ::= Expr7 "||" Expr6 ;
+
+-- same Expr7 a && b && c === a && (b && c)
+ELogAnd.  Expr7 ::= Expr8 "&&" Expr7 ;
+
+-- fail Expr8 a == b == c
+-- fail Expr8 a != b != c
+-- fail Expr8 a >= b >= c
+-- fail Expr8 a <= b <= c
+-- fail Expr8 a > b > c
+-- fail Expr8 a < b < c
+EEq.      Expr8 ::= Expr9 "==" Expr9 ;
+ENotEq.   Expr8 ::= Expr9 "!=" Expr9 ;
+EGtEq.    Expr8 ::= Expr9 ">=" Expr9 ;
+ELtEq.    Expr8 ::= Expr9 "<=" Expr9 ;
+EGt.      Expr8 ::= Expr9 ">"  Expr9 ;
+ELt.      Expr8 ::= Expr9 "<"  Expr9 ;
+
+-- same Expr9 a + b - c === a + (b - c)
+-- same Expr9 a - b + c === a - (b + c)
+EPlus.    Expr9 ::= Expr10 "+" Expr9 ;
+EMinus.   Expr9 ::= Expr10 "-" Expr9 ;
+
+-- same Expr10 a * b / c % d === a * (b / (c % d))
+ETimes.   Expr10 ::= Expr11 "*" Expr10 ;
+EDiv.     Expr10 ::= Expr11 "/" Expr10 ;
+EMod.     Expr10 ::= Expr11 "%" Expr10 ;
+
+-- same Expr11 !~!~x === !(~(!(~x)))
+ELogNot.  Expr11 ::= "!" Expr11 ;
+ENegate.  Expr11 ::= "~" Expr11 ;
+
+-- pass Expr1201 x.1.a.b
+-- pass Expr1201 {}\1\a
+-- same Expr12 a.b\c.d === (((a.b)\c).d)
+-- pass Expr1202 0b10
+-- pass Expr1202 0o76543210
+-- pass Expr1202 9876543210
+-- pass Expr1202 0xFEDCBAfedcba9876543210
+-- fail Expr1202 A
+-- pass Expr1202 a
+-- pass Expr1202 'a
+-- pass Expr1202 impossible
+-- pass Expr1202 unimplemented
+-- fail Expr1202 a()
+-- fail Expr1202 ()
+-- pass Expr1202 a(x)
+-- pass Expr1202 a(x,y)
+-- fail Expr1202 ()
+-- fail Expr1202 (x)
+-- pass Expr1202 (x,x)
+-- fail Expr1202 []
+-- pass Expr1202 [x]
+-- pass Expr1202 [x,x]
+-- pass Expr1202 (\($x) -> x)(foo)
+-- same Expr12 x(a)(b)(c) === (((x(a))(b))(c))
+-- pass Expr1203 {}
+-- pass Expr1203 {x=5, y=x}
+-- pass Expr1203 {x=1,y=z|r}
+-- pass Expr1203 {y<-x,x=1,y:=5|r\a}
+ERecSel.  Expr1201 ::= Expr12 "." Label ;
+ERecRem.  Expr1201 ::= Expr12 "\\" Label ;
+
+EInt.     Expr1202 ::= AnyInt ;
+EVar.     Expr1202 ::= LIdent ;
+EReftVar. Expr1202 ::= ReftIdent ;
+EApp.     Expr1202 ::= Expr12 "(" LCom1Expr ")" ;
+ETup.     Expr1202 ::= "(" LCom2Expr ")" ;
+EArr.     Expr1202 ::= "[" LCom1Expr "]" ;
+
+ERecEmpt. Expr1203 ::= "{}" ;
+ERec.     Expr1203 ::= "{" LCom1RecExpr "}" ;
+ERecPoly. Expr1203 ::= "{" LCom1RecExpr "|" Expr "}" ;
+
+_.        Expr12   ::= Expr1201 ;
+_.        Expr12   ::= Expr1202 ;
+_.        Expr12   ::= Expr1203 ;
+
+LCom1ExprCon.     LCom1Expr     ::= Expr "," LCom1Expr ;
+LCom1ExprNil.     LCom1Expr     ::= Expr ;
+
+LCom2ExprCon.     LCom2Expr     ::= Expr "," LCom2Expr ;
+LCom2ExprNil.     LCom2Expr     ::= Expr "," Expr ;
+
+LCom1RecExtendCon. LCom1RecExpr ::= LIdent "="  Expr   "," LCom1RecExpr ;
+LCom1RecRenameCon. LCom1RecExpr ::= LIdent "<-" LIdent "," LCom1RecExpr ;
+LCom1RecUpdateCon. LCom1RecExpr ::= LIdent ":=" Expr   "," LCom1RecExpr ;
+
+LCom1RecExtendNil. LCom1RecExpr ::= LIdent "="  Expr ;
+LCom1RecRenameNil. LCom1RecExpr ::= LIdent "<-" LIdent ;
+LCom1RecUpdateNil. LCom1RecExpr ::= LIdent ":=" Expr ;
+
+-- same Expr ~x % !y.z + a > b --> c <-> d --> ~e.f -g/s || q === (((((~x) % (!(y.z))) + a) > b) --> c) <-> (d --> ((~(e.f)) - (g/s)) || q)
+coercions Expr 12 ;
+
+-------------------------------------------------------------------------------
+-- Sessions
+
+-- Session gets and puts are split into several rules using variants of base
+-- and refined types. This is done to prevent reduce/reduce errors when a
+-- UIdent could be a base, refined, or session type. Instead, the compiler
+-- must look up the identifier and decide what type it is.
+
+-- Any type (not schemes)
+-- pass AnyType a -> b
+-- pass AnyType { x:Int }
+-- pass AnyType ![a]
+AnyTypeRType.   AnyType ::= RefinedType99 ;
+AnyTypeSess.    AnyType ::= Session99 ;
+AnyTypeAlias.   AnyType ::= Alias ;
+
+LCom1AnyTypeCon.  LCom1AnyType ::= AnyType "," LCom1AnyType ;
+LCom1AnyTypeNil.  LCom1AnyType ::= AnyType ;
+
+-- pass Alias X
+-- pass Alias X(Y)
+-- pass Alias X((A,b,c->d))
+-- pass Alias X(![a])
+-- pass Alias X(Y, (A,b,c->d), ![a])
+-- pass Alias X( ; foo+2)
+-- pass Alias X( { x:Int } ; foo+2 )
+AliasNoParam. Alias ::= UIdent ;
+AliasParam.   Alias ::= UIdent "(" LCom1AnyType MaybeLCom1Expr ")" ;
+
+MaybeLCom1ExprJust.    MaybeLCom1Expr ::= ";" LCom1Expr ;
+MaybeLCom1ExprNothing. MaybeLCom1Expr ::= ;
+
+-- pass Session ?[a]
+-- pass Session ?[(|foo:bar|baz|)]
+-- pass Session ?[?[a]]
+-- pass Session ?[A]
+-- pass Session ![a]
+-- pass Session ![(|foo:bar|baz|)]
+-- pass Session ![?[a]]
+-- pass Session ![A]
+-- pass Session +[a->, b->A, c->![a]]
+-- pass Session &[a->, b->A, c->![a]]
+-- pass Session coind A. ![a]![b]A
+-- pass Session A
+-- pass Session A(a)
+-- pass Session A(Foo)
+-- pass Session A(![a])
+-- pass Session dual A
+-- pass Session dual A(a)
+-- pass Session dual A(Foo)
+-- pass Session dual A(![a])
+-- pass Session coind X. Y(X)
+-- pass Session coind X. Y
+SessRec.        Session0  ::= "coind" UIdent "."  Session12 ;
+SessGet.        Session1  ::= "?" "[" AnyType "]" Session ;
+SessPut.        Session1  ::= "!" "[" AnyType "]" Session ;
+SessSel.        Session1  ::= "+" "[" LCom1SChoice "]" ;
+SessCho.        Session1  ::= "&" "[" LCom1SChoice "]" ;
+SessDual.       Session1  ::= "dual" Session2 ;
+SessEnd.        Session1  ::= ;
+SessAlias.      Session2  ::= Alias ;
+
+_.              Session12 ::= Session1 ;
+_.              Session12 ::= Session2 ;
+
+_.              Session99 ::= Session0 ;
+_.              Session99 ::= Session1 ;
+
+_.              Session   ::= Session0 ;
+_.              Session   ::= Session1 ;
+_.              Session   ::= Session2 ;
+
+LCom1SChoiceCon. LCom1SChoice ::= LIdent "->" Session "," LCom1SChoice ;
+LCom1SChoiceNil. LCom1SChoice ::= LIdent "->" Session ;
+
+-------------------------------------------------------------------------------
+-- Processes
+
+ChanExprNeg. ChanExp ::= NegChan ;
+ChanExprExp. ChanExp ::= Expr ;
+
+ChanPos. Chan ::= LIdent ;
+ChanNeg. Chan ::= NegChan ;
+
+-- pass Proc1 {|}
+-- pass Proc1 {x<-x |y<-y }
+-- pass Proc1 {x<-x | y<-y | z<-z }
+-- fail Proc1 {|{|}}
+-- fail Proc1 {|{{|}}}
+ProcPar.    Proc1 ::= "{" LBar2ParProc "}" ;
+
+-- pass Proc2 let $x = foo
+-- pass Proc2 new x :
+-- pass Proc2 x -> $x
+-- pass Proc2 ^x -> $x
+-- pass Proc2 x <- x
+-- pass Proc2 x <- x(1,2,3)
+-- pass Proc2 x <- ^x
+ProcLet.    Proc2 ::= "let" Pattern  "=" Expr    Proc ;
+ProcNew.    Proc2 ::= "new" LIdent ":"   Session Proc ;
+ProcGet.    Proc2 ::= Chan "->" Pattern Proc ;
+ProcPut.    Proc2 ::= Chan "<-" ChanExp Proc ;
+
+-- pass Proc2 x select __a
+-- pass Proc2 x select a
+-- pass Proc2 x cases { a ->, __b -> b select b}
+ProcSel.    Proc2 ::= Chan "select" LIdent Proc ;
+ProcChoice. Proc2 ::= Chan "cases" "{" LCom1PChoice "}" ;
+
+-- pass Proc2 corec w(x=x,y=^y,z=1)
+-- pass Proc2 x(x, ^y, 1)
+-- pass Proc2 x<->x
+-- pass Proc2 ^x<->^x
+ProcRec.    Proc2 ::= "corec" LIdent "(" LCom1RecProc ")" Proc ;
+ProcNamed.  Proc2 ::= LIdent "(" LCom1ChanExp ")" ;
+ProcFwd.    Proc2 ::= Chan "<->" Chan ;
+ProcEnd.    Proc2 ::= ;
+
+_.          Proc  ::= Proc1 ;
+_.          Proc  ::= Proc2 ;
+
+LCom1ChanExpCon. LCom1ChanExp ::= ChanExp "," LCom1ChanExp ;
+LCom1ChanExpNil. LCom1ChanExp ::= ChanExp ;
+
+LCom1PChoiceCon. LCom1PChoice ::= LIdent "->" Proc "," LCom1PChoice ;
+LCom1PChoiceNil. LCom1PChoice ::= LIdent "->" Proc ;
+
+LCom1RecProcCon. LCom1RecProc ::= Pattern "=" ChanExp "," LCom1RecProc ;
+LCom1RecProcNil. LCom1RecProc ::= Pattern "=" ChanExp ;
+
+LBar2ParProcCon. LBar2ParProc ::= Proc2 "|" LBar2ParProc ;
+LBar2ParProcNil. LBar2ParProc ::= Proc2 "|" Proc2 ;
+
+-------------------------------------------------------------------------------
+-- Top level grammar
+
+DataConEmpt.     DataCon      ::= LIdent ;
+DataConArgs.     DataCon      ::= LIdent "(" LCom1RefType ")" ;
+
+LBar1DataConCon. LBar1DataCon ::= DataCon "|" LBar1DataCon ;
+LBar1DataConNil. LBar1DataCon ::= DataCon ;
+
+-- fail TScheme forall . X
+-- pass TScheme forall a. X
+-- pass TScheme forall a b c d e. X
+TPoly. TScheme  ::= "forall" LSpc1LIdent "." RefinedType ;
+TMono. TScheme  ::= RefinedType ;
+
+-- pass Top x : forall a. a -> b
+TopTypeDef.   Top ::= LIdent ":" TScheme ;
+
+-- pass Top type X = (| x:{a:foo, b:bar} | x.a == true |)
+-- fail Top type X(a, b) = forall c. c -> a -> b
+-- pass Top type X =
+-- pass Top type X(a, b) = ![b] ?[a]
+TopType.      Top ::= "type" UIdent "=" AnyType ;
+TopTypeParam. Top ::= "type" UIdent "(" LCom1LIdent ")" "=" AnyType ;
+
+-- pass Top data X = x
+-- pass Top data X(a) = x(a)
+-- pass Top data X(a,b) = x(a) | y(b)
+TopData.      Top ::= "data" UIdent "=" LBar1DataCon ;
+TopDataParam. Top ::= "data" UIdent "(" LCom1LIdent ")" "=" LBar1DataCon ;
+
+-- pass Top x = 1
+-- pass Top x($a, 1, $b@(c(d,1,$e))) = let { $f = 2 } in foo(1,2)
+-- pass Top let $a@(b($c)) = b(1)
+TopExpr.      Top ::= LIdent "=" Expr ;
+TopFunc.      Top ::= LIdent "(" LCom1Pattern ")" "=" Expr ;
+TopPat.       Top ::= "let" Pattern "=" Expr ;
+
+-- pass Top proc x($a,1,foo($b)) = a <- 1 new c : X
+TopProc.      Top ::= "proc" LIdent "(" LCom1Pattern ")" "=" Proc ;
+
+LTopCon.      LTop ::= Top ";" LTop ;
+LTopNil.      LTop ::= Top ";" ;
+
+comment "//" ;

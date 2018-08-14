@@ -1,8 +1,6 @@
 language: nix
 sudo: false
 
-script: nix-build -A haskell.packages.ghc802.jael ./nix
-
 notifications:
   email:
     on_success: never

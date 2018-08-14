@@ -1,0 +1,10 @@
+:set -outputdir .ghci.d
+:set -fobject-code
+:set -isrc
+:set -itest
+:set -Wall
+:set -fwarn-incomplete-uni-patterns
+:set -fwarn-incomplete-record-updates
+:set -fwarn-monomorphism-restriction
+:set -fwarn-identities
+:set -XOverloadedStrings
