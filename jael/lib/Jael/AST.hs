@@ -45,11 +45,6 @@ type ParseExpr = Expr' ParsePattern
 
 --type ParseExprM = StateT FreshVarS Identity
 
-data RecordOp = RecExtend G.LIdent G.Expr
-              | RecRename G.LIdent G.LIdent
-              | RecUpdate G.LIdent G.Expr
-              deriving (Eq, Show)
-
 appArgs :: (ToExprList e) => ParseExpr -> e -> ParseExpr
 appArgs o gs = EApp o (toExprList gs)
 
@@ -79,36 +74,6 @@ instance ToJInt G.HexInt where
 
 instance ToJInt G.DecInt where
   toJInt (G.DecInt s) = JInt DecInt (number 10 s) (length s)
-
-type family Element g
-type instance Element [a] = a
-type instance Element G.LSpc1LIdent = G.LIdent
-type instance Element G.LCom1LIdent = G.LIdent
-type instance Element G.LCom1RowType = (G.LIdent, G.RefinedType)
-type instance Element G.LCom1RefType = G.RefinedType
-type instance Element G.LCom2RefType = G.RefinedType
-type instance Element G.LCom1Pattern = G.Pattern
-type instance Element G.LCom2Pattern = G.Pattern
-type instance Element G.LBar2Pattern = G.Pattern
-type instance Element G.LCom1RecPat = (G.LIdent, G.Pattern)
-type instance Element G.LSemi1Case = (G.Pattern, G.Expr)
-type instance Element G.LSemi1Let = (G.Pattern, G.Expr)
-type instance Element G.LSemi1Multi = (G.Expr, G.Expr)
---type instance LSemi1Guard = (G.Pattern, G.Expr, G.Expr)
-type instance Element G.LCom1Expr = G.Expr
-type instance Element G.LCom2Expr = G.Expr
-type instance Element G.LCom1RecExpr = RecordOp
-type instance Element G.LCom1AnyType = G.AnyType
-type instance Element G.LCom1SChoice = (G.LIdent, G.Session)
-type instance Element G.LCom1ChanExp = G.ChanExp
-type instance Element G.LCom1PChoice = (G.LIdent, G.Proc)
-type instance Element G.LCom1RecProc = (G.Pattern, G.ChanExp)
-type instance Element G.LBar2ParProc = G.Proc
-type instance Element G.LBar1DataCon = G.DataCon
-type instance Element G.LTop = G.Top
-
-class ToList mono where
-  otoList :: mono -> [Element mono]
 
 class ToText g where
   toText :: g -> T.Text
@@ -143,9 +108,6 @@ instance ToText T.Text where
 
 instance ToText String where
   toText = T.pack
-
-instance ToList [a] where
-  otoList = id
 
 instance ToPattern ParsePattern where
   toPattern = id
@@ -187,102 +149,6 @@ instance ToText G.NegChan where
 instance ToText G.Label where
   toText (G.LabelLIdent s) = toText s
   toText (G.LabelDecInt i) = T.pack . show . intValue . toJInt $ i
-
-instance ToList G.LSpc1LIdent where
-  otoList (G.LSpc1LIdentNil l)    = [l]
-  otoList (G.LSpc1LIdentCon l xs) = l: otoList xs
-
-instance ToList G.LCom1LIdent where
-  otoList (G.LCom1LIdentNil l)    = [l]
-  otoList (G.LCom1LIdentCon l xs) = l: otoList xs
-
-instance ToList G.LCom1RowType where
-  otoList (G.LCom1RowTypeNil l b)    = [(l, b)]
-  otoList (G.LCom1RowTypeCon l b xs) = (l, b): otoList xs
-
-instance ToList G.LCom1RefType where
-  otoList (G.LCom1RefTypeNil r)    = [r]
-  otoList (G.LCom1RefTypeCon r xs) = r: otoList xs
-
-instance ToList G.LCom2RefType where
-  otoList (G.LCom2RefTypeNil r1 r2) = [r1, r2]
-  otoList (G.LCom2RefTypeCon r xs)  = r: otoList xs
-
-instance ToList G.LCom1Pattern where
-  otoList (G.LCom1PatternNil p)    = [p]
-  otoList (G.LCom1PatternCon p xs) = p: otoList xs
-
-instance ToList G.LCom2Pattern where
-  otoList (G.LCom2PatternNil p1 p2) = [p1, p2]
-  otoList (G.LCom2PatternCon p xs)  = p: otoList xs
-
-instance ToList G.LBar2Pattern where
-  otoList (G.LBar2PatternNil p1 p2) = [p1, p2]
-  otoList (G.LBar2PatternCon p xs)  = p: otoList xs
-
-instance ToList G.LCom1RecPat where
-  otoList (G.LCom1RecPatNil l p)    = [(l, p)]
-  otoList (G.LCom1RecPatCon l p xs) = (l, p): otoList xs
-
-instance ToList G.LSemi1Case where
-  otoList (G.LSemi1CaseNil p e)    = [(p, e)]
-  otoList (G.LSemi1CaseCon p e xs) = (p, e): otoList xs
-
-instance ToList G.LSemi1Let where
-  otoList (G.LSemi1LetNil p e)    = [(p, e)]
-  otoList (G.LSemi1LetCon p e xs) = (p, e): otoList xs
-
-instance ToList G.LSemi1Multi where
-  otoList (G.LSemi1MultiNil e1 e2)    = [(e1, e2)]
-  otoList (G.LSemi1MultiCon e1 e2 xs) = (e1, e2): otoList xs
-
-instance ToList G.LCom1Expr where
-  otoList (G.LCom1ExprNil e)    = [e]
-  otoList (G.LCom1ExprCon e xs) = e: otoList xs
-
-instance ToList G.LCom2Expr where
-  otoList (G.LCom2ExprNil e1 e2) = [e1, e2]
-  otoList (G.LCom2ExprCon e xs)  = e: otoList xs
-
-instance ToList G.LCom1RecExpr where
-  otoList (G.LCom1RecExtendNil l e)      = [RecExtend l e]
-  otoList (G.LCom1RecExtendCon l e xs)   = RecExtend l e: otoList xs
-  otoList (G.LCom1RecRenameNil l1 l2)    = [RecRename l1 l2]
-  otoList (G.LCom1RecRenameCon l1 l2 xs) = RecRename l1 l2: otoList xs
-  otoList (G.LCom1RecUpdateNil l e)      = [RecUpdate l e]
-  otoList (G.LCom1RecUpdateCon l e xs)   = RecUpdate l e: otoList xs
-
-instance ToList G.LCom1AnyType where
-  otoList (G.LCom1AnyTypeNil t)    = [t]
-  otoList (G.LCom1AnyTypeCon t xs) = t: otoList xs
-
-instance ToList G.LCom1SChoice where
-  otoList (G.LCom1SChoiceNil l s)    = [(l, s)]
-  otoList (G.LCom1SChoiceCon l s xs) = (l, s): otoList xs
-
-instance ToList G.LCom1ChanExp where
-  otoList (G.LCom1ChanExpNil ce)    = [ce]
-  otoList (G.LCom1ChanExpCon ce xs) = ce: otoList xs
-
-instance ToList G.LCom1PChoice where
-  otoList (G.LCom1PChoiceNil l p)    = [(l, p)]
-  otoList (G.LCom1PChoiceCon l p xs) = (l, p): otoList xs
-
-instance ToList G.LCom1RecProc where
-  otoList (G.LCom1RecProcNil p ce)    = [(p, ce)]
-  otoList (G.LCom1RecProcCon p ce xs) = (p, ce): otoList xs
-
-instance ToList G.LBar2ParProc where
-  otoList (G.LBar2ParProcNil p1 p2) = [p1, p2]
-  otoList (G.LBar2ParProcCon p xs)  = p: otoList xs
-
-instance ToList G.LBar1DataCon where
-  otoList (G.LBar1DataConNil dc)    = [dc]
-  otoList (G.LBar1DataConCon dc xs) = dc: otoList xs
-
-instance ToList G.LTop where
-  otoList (G.LTopCon x xs) = x: otoList xs
-  otoList (G.LTopNil x)    = [x]
 
 recPatToParse :: G.LCom1RecPat -> [(T.Text, ParsePattern)]
 recPatToParse = fmap (bimap toText toPattern) . otoList
@@ -428,19 +294,17 @@ makeLenses ''AST
 emptyAST :: AST a b c ()
 emptyAST = AST [] [] []
 
-parseTo :: ([G.Token] -> G.Err a) -> (a -> b) -> String -> b
-parseTo p f x = case p (G.tokens x) of
-  G.Ok  a -> f a
-  G.Bad e -> error $ show e <> " in the string:\n" <> x
+parseTo' :: _
+parseTo' = either error id . parseTo
 
 parseToAST :: String -> AST T.Text ParsePattern ParseType ()
-parseToAST = parseTo G.pLTop grammarToAST
+parseToAST = parseTo' G.pLTop grammarToAST
 
 parseToPattern :: String -> ParsePattern
-parseToPattern = parseTo G.pPattern toPattern
+parseToPattern = parseTo' G.pPattern toPattern
 
 parseToQType :: String -> ParseType
-parseToQType = parseTo G.pRefinedType toType
+parseToQType = parseTo' G.pRefinedType toType
 
 grammarToAST :: G.LTop -> AST T.Text ParsePattern ParseType ()
 grammarToAST = foldr splitTop emptyAST . otoList

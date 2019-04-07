@@ -1,1 +1,1 @@
-import ./default.nix { shell = true; }
+(import ../default.nix { shell = true; }).jael-grammar

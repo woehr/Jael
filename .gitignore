@@ -8,5 +8,3 @@ cabal.project.local
 dist
 dist-newstyle
 .ghci.d
-.bazel
-bazel-out

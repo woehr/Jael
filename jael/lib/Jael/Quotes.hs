@@ -1,20 +1,16 @@
-{-# LANGUAGE NoImplicitPrelude #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Jael.Quotes where
+module Jael.TH.Quotes where
 
 import Data.List.Split
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote
-import Language.Haskell.TH.Syntax (lift)
+import Language.Haskell.TH.Syntax
 import Text.Regex.Applicative
 
 import qualified Data.Set as S
-
-import Jael.AST
-import Jael.Prelude hiding (lift)
 
 rtype :: QuasiQuoter
 rtype = QuasiQuoter

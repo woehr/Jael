@@ -1,0 +1,22 @@
+name: jael-grammar-test
+version: 0.0.0.0
+build-type: Simple
+cabal-version: >=1.10
+
+data-files:       Grammar.cf
+
+library
+
+test-suite tests
+  build-depends: base
+               , containers
+               , hint
+               , hspec
+               , jael-grammar
+               , split
+
+  default-language: Haskell2010
+  hs-source-dirs:   test
+  other-modules:    Paths_jael_grammar_test
+  main-is:          Main.hs
+  type:             exitcode-stdio-1.0
