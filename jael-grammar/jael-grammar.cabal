@@ -4,12 +4,19 @@ build-type: Simple
 cabal-version: >=1.10
 
 library
-  build-depends: array
-               , base
-               , text
+  build-depends:    base,
 
-  build-tools: alex
-             , happy
+                    jael-types,
+
+                    array,
+                    bytestring,
+                    mtl,
+                    scanf,
+                    text,
+                    transformers
+
+  build-tools:      alex,
+                    happy
 
   default-language: Haskell2010
   hs-source-dirs:   lib
@@ -22,8 +29,8 @@ library
                     Jael.Grammar.Print
 
 executable jael-syntax
-  build-depends: base
-               , jael-grammar
+  build-depends:    base,
+                    jael-grammar
 
   default-language: Haskell2010
   hs-source-dirs:   src
