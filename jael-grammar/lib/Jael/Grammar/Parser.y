@@ -12,7 +12,6 @@ import Jael.Grammar.Token
 }
 
 %name pProg foo
-%name pDigit asdf
 %tokentype { AlexToken }
 %error { parserError }
 %errorhandlertype explist
@@ -27,13 +26,8 @@ import Jael.Grammar.Token
 %%
 
 foo
-  : foo alpha { $2 : $1 }
-  | foo decimal { $2 : $1 }
-  | alpha { [$1] }
+  : foo decimal { $2 : $1 }
   | decimal { [$1] }
-
-asdf
-  : decimal { $1 }
 
 {
 --alexGetPosition :: Alex (AlexPosn)

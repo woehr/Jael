@@ -5,8 +5,7 @@ let
 in rec {
   inherit hpkgs;
   open-adt          = f "open-adt"          ../open-adt/open-adt { };
-  jael-grammar      = f "jael-grammar"      ./jael-grammar       { inherit jael-types; };
-  jael-grammar-test = f "jael-grammar-test" ./jael-grammar-test  { inherit jael-grammar; };
+  jael-grammar      = f "jael-grammar"      ./jael-grammar       { inherit jael-types open-adt; };
   jael-types        = f "jael-types"        ./jael-types         { inherit open-adt; };
   jael-pp           = f "jael-pp"           ./jael-pp            { inherit jael-types; };
   jael              = f "jael"              ./jael               { inherit jael-grammar jael-types; };

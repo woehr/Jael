@@ -13,7 +13,12 @@ library
                     mtl,
                     scanf,
                     text,
-                    transformers
+                    transformers,
+
+                    row-types,
+                    open-adt,
+                    free,
+                    comonad
 
   build-tools:      alex,
                     happy
