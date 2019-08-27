@@ -19,6 +19,7 @@ import Jael.Grammar.Located
 data Token a
   = TokenDec a
   | TokenAlpha a
+  | TokenInvalid a
   | TokenEOF
   deriving (Eq, Functor, Show)
 
@@ -28,14 +29,14 @@ pattern IgnoreLocation x <- Located _ _ x
 pattern EOF :: Located (Token a)
 pattern EOF <- IgnoreLocation TokenEOF
 
-type SimpleExprRowF =
-     "eAbsF" .== EAbsF T.Text
-  .+ "eAppF" .== EAppF
-  .+ "eVarF" .== EVarF T.Text
-
-type family Phase (f :: * -> *) :: Row (* -> *) where
-  Phase EAppF = "eAbsF" .== EAbsF T.Text .+ "eAppF" .== EAppF .+ "eVarF" .== EVarF T.Text
-
-type Expr ph 
-
-foo :: Expr Phase1 
+--type SimpleExprRowF =
+--     "eAbsF" .== EAbsF T.Text
+--  .+ "eAppF" .== EAppF
+--  .+ "eVarF" .== EVarF T.Text
+--
+--type family Phase (f :: * -> *) :: Row (* -> *) where
+--  Phase EAppF = "eAbsF" .== EAbsF T.Text .+ "eAppF" .== EAppF .+ "eVarF" .== EVarF T.Text
+--
+--type Expr ph
+--
+--foo :: Expr Phase1 

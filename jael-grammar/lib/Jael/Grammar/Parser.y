@@ -1,7 +1,6 @@
 {
 module Jael.Grammar.Parser
   ( pProg
-  , pDigit
   )
 where
 
@@ -20,14 +19,19 @@ import Jael.Grammar.Token
 %lexer { lexer } { EOF }
 
 %token
-  alpha   { IgnoreLocation (TokenAlpha $$) }
-  decimal { IgnoreLocation (TokenDec $$) }
+  alpha   { IgnoreLocation $$ } -- (TokenAlpha $$) }
+  decimal { IgnoreLocation $$ } -- (TokenDec $$) }
+  invalid { IgnoreLocation $$ } -- (TokenInvalid $$) }
 
 %%
 
 foo
-  : foo decimal { $2 : $1 }
+  : foo alpha { $2 : $1 }
+  | foo decimal { $2 : $1 }
+  | foo invalid { $2 : $1 }
+  | alpha { [$1] }
   | decimal { [$1] }
+  | invalid { [$1] }
 
 {
 --alexGetPosition :: Alex (AlexPosn)

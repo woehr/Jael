@@ -1,11 +1,14 @@
 *.hi
 *.o
 *.swp
+
 .DS_Store
+.gcroots
+.ghc.d
+.ghc.environment.*
+.ghci.d
 .liquid
 .stack-work
 cabal.project.local
 dist
 dist-newstyle
-.ghc.d
-.ghci.d

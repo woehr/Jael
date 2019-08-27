@@ -13,18 +13,40 @@ import Jael.Grammar.Token
 
 %wrapper "monadUserState-bytestring"
 
+$digit = [0-9]
 $binDigit = [01]
 $octDigit = [0-7]
-$decDigit = [0-9]
 $hexDigit = [0-9a-fA-F]
 
+$upper = [A-Z]
+$lower = [a-z]
 $alpha = [a-zA-Z]
+
+$alphanum = [$alpha $digit]
+$ident = [$alphanum _]
+
+$parL = [\(]
+$parR = [\)]
+$braL = [\[]
+$braR = [\]]
+$angL = [\<]
+$angR = [\>]
+
+$syms = [$parL $parR $braL $braR $angL $angR]
+
+$invalid = [^ $ident $syms]
 
 :-
   $white+     ;
-  "//" [.]*   ;
-  $decDigit+    { mkToken TokenDec }
-  $alpha+       { mkToken TokenAlpha }
+  "//" [.]*       { mkToken TokenComment }
+  -- E notation, size specifiers
+  $digit+      { mkToken (TokenInt IntDecimal) }
+
+  "0b" $binDigit+ { mkToken (TokenInt IntBinary) }
+  "0o" $octDigit+ { mkToken (TokenInt IntOctal) }
+  "0x" $hexDigit+ { mkToken (TokenInt IntHexidecimal) }
+
+  $invalid+       { mkToken TokenInvalid }
 
 {
 type AlexBS = BS.ByteString

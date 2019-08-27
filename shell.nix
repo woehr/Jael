@@ -6,4 +6,5 @@ in ps.hpkgs.shellFor {
   shellHook = ''
     export HIE_HOOGLE_DATABASE="$NIX_GHC_LIBDIR/../../share/doc/hoogle/index.html"
   '';
+  buildInputs = with ps.hpkgs; [ cabal-install stack ];
 }

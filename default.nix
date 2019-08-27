@@ -1,4 +1,7 @@
-{ pkgs ? import <nixos1903> {} }:
+let
+  pkgsTarball = https://nixos.org/channels/nixos-19.03/nixexprs.tar.xz;
+in
+{ pkgs ? import (fetchTarball pkgsTarball) {} }:
 let
   hpkgs = pkgs.haskell.packages.ghc864;
   f = hpkgs.callCabal2nix;
