@@ -1,0 +1,11 @@
+resolver: lts-13.19
+
+packages:
+- jael-types
+- jael-grammar
+
+extra-deps:
+- open-adt-1.0
+- row-types-0.3.0.0
+- uniform-pair-0.1.15
+- prelude-extras-0.4.0.3

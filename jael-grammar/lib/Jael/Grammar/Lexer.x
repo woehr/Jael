@@ -42,7 +42,7 @@ $invalid = [^ $ident $syms]
   -- E notation, size specifiers
   $digit+      { mkToken (TokenInt IntDecimal) }
 
-  "0b" $binDigit+ { mkToken (TokenInt IntBinary) }
+  "0b" $binDigit [$binDigit _ ]+ { mkToken (TokenInt IntBinary) }
   "0o" $octDigit+ { mkToken (TokenInt IntOctal) }
   "0x" $hexDigit+ { mkToken (TokenInt IntHexidecimal) }
 

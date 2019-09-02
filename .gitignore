@@ -9,6 +9,8 @@
 .ghci.d
 .liquid
 .stack-work
+
 cabal.project.local
 dist
 dist-newstyle
+stack.yaml.lock

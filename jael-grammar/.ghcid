@@ -1,0 +1,3 @@
+--command "stack repl jael-grammar:lib"
+--reload=./lib/Jael/Grammar/Lexer.x
+--reload=./lib/Jael/Grammar/Parser.y
