@@ -35,9 +35,9 @@ data IntFormat = BinInt | OctInt | HexInt | DecInt
                  deriving (Data, Eq, Generic, NFData, Show, Typeable)
 
 data JInt = JInt
-  { intFormat :: IntFormat
-  , intValue  :: Integer
-  , intLength :: Integer
+  { intFormat    :: IntFormat
+  , intValue     :: Integer
+  , intNumDigits :: Integer
   } deriving (Data, Eq, Generic, NFData, Show, Typeable)
 
 data Primitive x

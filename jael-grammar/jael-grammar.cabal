@@ -34,9 +34,7 @@ library
 
   exposed-modules:
     Jael.Grammar
-    Jael.Grammar.Error
     Jael.Grammar.Lexer
-    Jael.Grammar.Located
     Jael.Grammar.Monad
     Jael.Grammar.Parser
     Jael.Grammar.Token

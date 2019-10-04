@@ -4,24 +4,23 @@ module Jael.Grammar.Parser
   )
 where
 
-import Jael.Grammar.Error
 import Jael.Grammar.Lexer
 import Jael.Grammar.Monad
 import Jael.Grammar.Token
 }
 
 %name pProg foo
-%tokentype { AlexToken }
+%tokentype { MyToken }
 %error { parserError }
 %errorhandlertype explist
 
 %monad { ParseMonad }
-%lexer { lexer } { EOF }
+%lexer { lexer } { IgnoreDecorations TokenEOF }
 
 %token
-  alpha   { IgnoreLocation $$ } -- (TokenAlpha $$) }
-  decimal { IgnoreLocation $$ } -- (TokenDec $$) }
-  invalid { IgnoreLocation $$ } -- (TokenInvalid $$) }
+  alpha   { IgnoreDecorations $$ } -- (TokenAlpha $$) }
+  decimal { IgnoreDecorations $$ } -- (TokenDec $$) }
+  invalid { IgnoreDecorations $$ } -- (TokenInvalid $$) }
 
 %%
 

@@ -6,12 +6,10 @@ module Jael.Grammar.Lexer where
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.Text.Lazy as T
 
-import Jael.Grammar.Error
-import Jael.Grammar.Located
 import Jael.Grammar.Token
 }
 
-%wrapper "monadUserState-bytestring"
+%wrapper "posn-bytestring"
 
 $digit = [0-9]
 $binDigit = [01]
@@ -32,36 +30,57 @@ $braR = [\]]
 $angL = [\<]
 $angR = [\>]
 
-$syms = [$parL $parR $braL $braR $angL $angR]
+$neg = [\~]
 
-$invalid = [^ $ident $syms]
+$syms = [
+  -- Various enclosures
+  $parL $parR $braL $braR $angL $angR
+  -- Operators
+  $neg
+  ]
+
+$invalid = [^ $ident $syms $white]
 
 :-
-  $white+     ;
-  "//" [.]*       { mkToken TokenComment }
+  $white+ ;
+  "//" [.]*                     { mkToken (const TokenComment) }
+
   -- E notation, size specifiers
-  $digit+      { mkToken (TokenInt IntDecimal) }
 
-  "0b" $binDigit [$binDigit _ ]+ { mkToken (TokenInt IntBinary) }
-  "0o" $octDigit+ { mkToken (TokenInt IntOctal) }
-  "0x" $hexDigit+ { mkToken (TokenInt IntHexidecimal) }
+  $neg? $digit+                 { mkToken parseInteger }
+  "0b" $binDigit [$binDigit _]+ { mkToken parseInteger }
+  "0o" $octDigit [$octDigit _]+ { mkToken parseInteger }
+  "0x" $hexDigit [$hexDigit _]+ { mkToken parseInteger }
 
-  $invalid+       { mkToken TokenInvalid }
+  $lower $ident*                { mkToken lowerIdent }
+  $upper $ident*                { mkToken upperIdent }
+
+  $invalid+                     { mkToken (const TokenInvalid) }
 
 {
 type AlexBS = BS.ByteString
-type AlexToken = Located (Token AlexBS)
+type MyToken = DecoratedToken AlexBS
 
-mkToken :: (AlexBS -> Token AlexBS) -> AlexAction AlexToken
-mkToken tokCon (psn, _, bs, _) len = return $ alexPosnToLocated psn (tokCon (BS.take len bs))
+decorate :: AlexPosn -> a -> PlainToken -> DecoratedToken a
+decorate (AlexPn b r c) s t = DecoratedToken
+  { tokenOffset = Just b
+  , tokenPosn   = Just (r, c)
+  , tokenString = s
+  , tokenPlain  = t
+  }
 
-alexPosnToLocated :: AlexPosn -> a -> Located a
-alexPosnToLocated (AlexPn b r c) x = Located (Just b) (Just (r,c)) x
+--mkToken :: (AlexBS -> PlainToken) -> AlexAction MyToken
+--mkToken f (psn, _, bs, _) len =
+--  let s = BS.take len bs
+--  in return $ decorate psn s (f s)
 
-alexEOF :: Alex (Located (Token a))
-alexEOF = do
-  (psn, _, _, _) <- alexGetInput
-  return $ alexPosnToLocated psn TokenEOF
+mkToken :: (AlexBS -> PlainToken) -> AlexPosn -> BS.ByteString -> MyToken
+mkToken f psn bs = decorate psn bs (f bs)
+
+--alexEOF :: Alex MyToken
+--alexEOF = do
+--  (psn, _, _, _) <- alexGetInput
+--  return $ decorate psn BS.empty TokenEOF
 
 type AlexUserState = ()
 alexInitUserState = ()
