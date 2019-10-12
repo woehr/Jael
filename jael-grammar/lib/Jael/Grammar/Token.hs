@@ -38,6 +38,7 @@ data PlainToken
   | TokenComment
   | TokenInvalid
   | TokenEOF
+  | TokenBadUTF8 Integer
   deriving (Eq, Show)
 
 data DecoratedToken a = DecoratedToken

@@ -20,7 +20,8 @@ library
     mtl,
     open-adt,
     row-types,
-    scanf,
+    streaming,
+    streaming-bytestring,
     text,
     transformers,
     utf8-string

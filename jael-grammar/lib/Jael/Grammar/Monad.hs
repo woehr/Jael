@@ -1,55 +1,81 @@
-{-# Language QuasiQuotes #-}
-
 module Jael.Grammar.Monad where
 
-import Data.Bifunctor (first, second)
 import Control.Monad (ap)
---import Control.Monad.Except (ExceptT, lift, runExceptT, throwError)
 import Control.Monad.Except (Except, lift, runExceptT, throwError)
-import Text.Scanf ((:+)(..), fmt, scanf)
 
-import qualified Data.ByteString.Lazy as BS
+import Data.Bifunctor (first, second)
+import Data.Functor.Identity (Identity, runIdentity)
+import Data.Word (Word8)
+
+import qualified Streaming as S
+import qualified Streaming.Prelude as S
+
+import qualified Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Streaming as BSS
 
 import Jael.Grammar.Lexer
 import Jael.Grammar.Token
+
 
 data ParseError = UnicodeDecodeError String
                 | LexicalError (Int, Int)
                 | ErrorMessage String
                 deriving (Eq, Show)
 
-parseAlexError :: String -> ParseError
-parseAlexError s
-  | Just (r :+ c :+ ()) <- scanf [fmt|lexical error at line %d, column %d|] s
-  = LexicalError (r, c)
-  | otherwise = ErrorMessage s
-
---type ParseMonad = ExceptT ParseError Alex
 type ParseMonad = Except ParseError
 
--- alexMonadScan = do
---   inp__@(_,_,_,n) <- alexGetInput
---   sc <- alexGetStartCode
---   case alexScan inp__ sc of
---     AlexEOF -> alexEOF
---     AlexError ((AlexPn _ line column),_,_,_) -> alexError $ "lexical error at line " ++ (show line) ++ ", column " ++ (show column)
---     AlexSkip  inp__' _len -> do
---         alexSetInput inp__'
---         alexMonadScan
---     AlexToken inp__'@(_,_,_,n') _ action -> do
---         alexSetInput inp__'
---         action (ignorePendingBytes inp__) len
---       where
---         len = n'-n
+alexEOF :: AlexPosn -> MyToken
+alexEOF p = decorate p BSL.empty TokenEOF
 
---tokenScan :: ParseMonad AlexToken
---tokenScan = lift alexMonadScan
+alexStartPos :: AlexPosn
+alexStartPos = AlexPn 0 1 1
 
---lexer :: (AlexToken -> ParseMonad a) -> ParseMonad a
---lexer = (tokenScan >>=)
+alexInitialInput :: S.Stream (S.Of Word8) Identity () -> AlexInput
+alexInitialInput x = (alexStartPos, '\n', x)
 
---runParseMonad :: BS.ByteString -> ParseMonad a -> Either ParseError a
---runParseMonad bs m = either (Left . parseAlexError) id (runAlex bs (runExceptT m))
+-- alexScan :: AlexInput -> StartCode -> AlexReturn a
+
+-- T.decodeUtf8With :: OnDecodeError -> ByteString -> Text
+-- type OnDecodeError = OnError Word8 Char
+-- type OnError a b = String -> Maybe a -> Maybe b
+
+decodeUTF8Bytestring :: BSS.ByteString        Identity ()
+                     -> S.Stream (S.Of Word8) Identity ()
+decodeUTF8Bytestring = undefined
+
+--let inp = alexInitialInput (decodeUTF8Bytestring bs)
+
+packWord8Stream :: S.Stream (S.Of Word8) Identity () -> BSL.ByteString
+packWord8Stream s =
+  let bs S.:> () = runIdentity (BSS.toLazy (BSS.pack s))
+  in  bs
+
+scan :: AlexInput -> S.Stream (S.Of MyToken) Identity (Maybe ParseError)
+scan inp@(pos, _, s) =
+  case alexScan inp 0 of
+    AlexSkip inp' _ -> scan inp'
+    AlexEOF         -> S.yields (alexEOF pos S.:> Nothing)
+    AlexError ((AlexPn _ l c), _, _) -> pure $ Just (LexicalError (l, c))
+    AlexToken inp' l act ->
+      act pos (packWord8Stream (S.take l s)) `S.cons` scan inp'
+
+--  go ::  AlexInput -> S.ByteString Identity ParseError
+--  go x@(pos, _, str) =
+--    case alexScan x 0 of
+--      AlexEOF                             -> Free $ Compose (alexEOF pos, Nothing)
+--      AlexError ((AlexPn _ l c), _, _) -> Pure (LexicalError (l, c))
+--      AlexSkip  x' _                      -> go x'
+--      AlexToken x'@(_,_,_) _ act ->
+--        Free $ Compose (act pos (BS.take (n'-n) str), Just (go x'))
+
+getToken :: ParseMonad MyToken
+getToken = undefined
+
+lexer :: (MyToken -> ParseMonad a) -> ParseMonad a
+lexer = (getToken >>=)
+
+runParseMonad :: BSL.ByteString -> ParseMonad a -> Either ParseError a
+runParseMonad bs m = undefined -- either (Left . parseAlexError) id (runAlex bs (runExceptT m))
 
 --alexPosition :: Alex AlexPosn
 --alexPosition = Alex $ \s@AlexState{alex_pos=pos} -> Right (s, pos)
@@ -57,30 +83,5 @@ type ParseMonad = Except ParseError
 --parserPosition :: ParseMonad AlexPosn
 --parserPosition = lift alexPosition
 
---parserError :: (AlexToken, [String]) -> ParseMonad a
---parserError x = throwError $ ErrorMessage (show x)
-
--- posn-bytestring lexer
-
-lexer :: (MyToken -> ParseMonad a) -> ParseMonad a
-lexer = (scan >>=)
-
---alexScanTokens :: ByteString.ByteString -> [token]
--- alexScanTokens str0 = go (alexStartPos,'\n',str0,0)
---   where go inp__@(pos,_,str,n) =
---           case alexScan inp__ 0 of
---                 AlexEOF -> []
---                 AlexError ((AlexPn _ line column),_,_,_) -> error $ "lexical error at line " ++ (show line) ++ ", column " ++ (show column)
---                 AlexSkip  inp__' _len       -> go inp__'
---                 AlexToken inp__'@(_,_,_,n') _ act ->
---                   act pos (ByteString.take (n'-n) str) : go inp__'
-
-scan :: BS.ByteString -> [MyToken]
-scan str0 = go (alexStartPos,'\n',str0,0)
-  where go inp__@(pos,_,str,n) =
-          case alexScan inp__ 0 of
-                AlexEOF -> []
-                AlexError ((AlexPn _ line column),_,_,_) -> error $ "lexical error at line " ++ (show line) ++ ", column " ++ (show column)
-                AlexSkip  inp__' _len       -> go inp__'
-                AlexToken inp__'@(_,_,_,n') _ act ->
-                  act pos (BS.take (n'-n) str) : go inp__'
+parserError :: (MyToken, [String]) -> ParseMonad a
+parserError (t,es) = throwError $ ErrorMessage (show t <> "\n" <> show es)
