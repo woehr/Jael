@@ -4,12 +4,11 @@ module Jael.Grammar.Parser
   )
 where
 
-import Jael.Grammar.Lexer
 import Jael.Grammar.Monad
 import Jael.Grammar.Token
 }
 
-%name pProg foo
+%name pProg expr
 %tokentype { MyToken }
 %error { parserError }
 %errorhandlertype explist
@@ -18,26 +17,21 @@ import Jael.Grammar.Token
 %lexer { lexer } { IgnoreDecorations TokenEOF }
 
 %token
-  alpha   { IgnoreDecorations $$ } -- (TokenAlpha $$) }
-  decimal { IgnoreDecorations $$ } -- (TokenDec $$) }
-  invalid { IgnoreDecorations $$ } -- (TokenInvalid $$) }
+  intBin  { IgnoreDecorations (TokenBinInt $$) }
+  intOct  { IgnoreDecorations (TokenOctInt $$) }
+  intHex  { IgnoreDecorations (TokenHexInt $$) }
+  intDec  { IgnoreDecorations (TokenDecInt $$) }
+
+  invalid { IgnoreDecorations (TokenInvalid $$) }
 
 %%
 
-foo
-  : foo alpha { $2 : $1 }
-  | foo decimal { $2 : $1 }
-  | foo invalid { $2 : $1 }
-  | alpha { [$1] }
-  | decimal { [$1] }
-  | invalid { [$1] }
+int
+  : intBin { $1 }
+  | intOct { $1 }
+  | intHex { $1 }
+  | intDec { $1 }
 
-{
---alexGetPosition :: Alex (AlexPosn)
---alexGetPosition = Alex $ \s@AlexState{alex_pos=pos} -> Right (s, pos)
---
---alexShowError :: (Show t, Show t1) => (t, t1, Maybe String) -> Alex a
---alexShowError (line, column, e) = alexError $ "show-error: " ++ (show (line, column, e))
-
-
-}
+expr
+  : expr int { $2 : $1 }
+  | int { [$1] }

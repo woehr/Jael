@@ -1,9 +1,9 @@
 let
-  pkgsTarball = https://nixos.org/channels/nixos-19.03/nixexprs.tar.xz;
+  pkgsTarball = https://nixos.org/channels/nixos-19.09/nixexprs.tar.xz;
 in
 { pkgs ? import (fetchTarball pkgsTarball) {} }:
 let
-  jael-ghc = "ghc864";
+  jael-ghc = "ghc865";
   hpkgs = pkgs.haskell.packages."${jael-ghc}";
   f = hpkgs.callCabal2nix;
   jael-pkgs = rec {

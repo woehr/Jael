@@ -1,16 +1,12 @@
 module Jael.Grammar
-  ( module Jael.Grammar.Error
-  , module Jael.Grammar.Lexer
-  , module Jael.Grammar.Located
+  ( module Jael.Grammar.Lexer
   , module Jael.Grammar.Monad
   , module Jael.Grammar.Parser
   , module Jael.Grammar.Token
   )
 where
 
-import           Jael.Grammar.Error
 import           Jael.Grammar.Lexer
-import           Jael.Grammar.Located
 import           Jael.Grammar.Monad
 import           Jael.Grammar.Parser
 import           Jael.Grammar.Token

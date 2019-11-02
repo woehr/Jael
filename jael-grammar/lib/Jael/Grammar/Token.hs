@@ -14,47 +14,49 @@ import Data.Maybe (fromMaybe)
 
 import Data.OpenADT (OpenADT)
 import Data.Row (type (.==), type (.+), Row)
+import Data.Text.Short.Unsafe (fromByteStringUnsafe)
 
-import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Lazy.Char8 as C8
 import qualified Data.Row.Internal as RI
-import qualified Data.Text.Lazy as T
-import qualified Data.Text.Lazy.Encoding as T
+import qualified Data.Text.Short as T
 
---import Jael.Types.Expr ( IntFormat(..), JInt(..) )
+-- S for string type
+type S = T.ShortText
+
+toS :: BSL.ByteString -> S
+toS = fromByteStringUnsafe . BSL.toStrict
 
 data IntInfo = IntInfo
   { intValue :: Integer
   , intDigits :: Integer
   } deriving (Eq, Show)
 
-data PlainToken
+data PlainToken a
   = TokenBinInt IntInfo
   | TokenOctInt IntInfo
   | TokenDecInt IntInfo
   | TokenHexInt IntInfo
-  | TokenLower T.Text
-  | TokenUpper T.Text
+  | TokenLower a
+  | TokenUpper a
   | TokenComment
-  | TokenInvalid
+  | TokenInvalid Int -- Valid utf8 but not "lexable"
+  | TokenBadUTF8 Int -- Invalid utf8 encoded bytes
   | TokenEOF
-  | TokenBadUTF8 Integer
   deriving (Eq, Show)
 
 data DecoratedToken a = DecoratedToken
-  { tokenOffset :: Maybe Int
-  , tokenPosn   :: Maybe (Int, Int)
-  , tokenString :: a
-  , tokenPlain  :: PlainToken
-  }
-  deriving (Eq, Show)
+  { tokenOffset :: Int
+  , tokenPosn   :: (Int, Int)
+  , tokenPlain  :: PlainToken a
+  } deriving (Eq, Show)
 
-pattern IgnoreDecorations :: PlainToken -> DecoratedToken a
+pattern IgnoreDecorations :: PlainToken a -> DecoratedToken a
 pattern IgnoreDecorations x <- DecoratedToken { tokenPlain = x }
 
-lowerIdent, upperIdent :: BS.ByteString -> PlainToken
-lowerIdent = TokenLower . T.decodeUtf8
-upperIdent = TokenUpper . T.decodeUtf8
+lowerIdent, upperIdent :: BSL.ByteString -> PlainToken S
+lowerIdent = TokenLower . toS
+upperIdent = TokenUpper . toS
 
 -- Total, integer version.
 -- https://hackage.haskell.org/package/base-4.11.1.0/docs/src/Data.Char.html#digitToInt
@@ -75,10 +77,31 @@ number base xs =
       (error $ "Grammar error: base " <> show base <> " for string " <> show xs)
     $ foldlM (\x d -> (base * x +) <$> (digitToInt d)) 0 xs
 
-parseInteger :: BS.ByteString -> PlainToken
+parseInteger :: BSL.ByteString -> PlainToken a
 parseInteger n =
   case filter (/= '_') $ C8.unpack n of
-    s -> TokenBinInt IntInfo
-          { intValue  = number 10 s
-          , intDigits = toInteger $ length s
-          }
+    '~':s ->
+      TokenDecInt IntInfo
+        { intValue  = -(number 10 s)
+        , intDigits = toInteger $ length s
+        }
+    '0':'b':s ->
+      TokenDecInt IntInfo
+        { intValue  = number 2 s
+        , intDigits = toInteger $ length s
+        }
+    '0':'o':s ->
+      TokenDecInt IntInfo
+        { intValue  = number 8 s
+        , intDigits = toInteger $ length s
+        }
+    '0':'x':s ->
+      TokenDecInt IntInfo
+        { intValue  = number 16 s
+        , intDigits = toInteger $ length s
+        }
+    s ->
+      TokenDecInt IntInfo
+        { intValue  = number 10 s
+        , intDigits = toInteger $ length s
+        }

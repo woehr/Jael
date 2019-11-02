@@ -23,6 +23,7 @@ library
     streaming,
     streaming-bytestring,
     text,
+    text-short,
     transformers,
     utf8-string
 
