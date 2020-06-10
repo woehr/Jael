@@ -1,2 +1,1 @@
---command ghci
-Main
+--command ghci -r Main

@@ -33,6 +33,12 @@ pattern Newline = 0x0A
 pattern Replacement :: Char
 pattern Replacement = '\xFFFD'
 
+mkToken :: (BSL.ByteString -> PlainToken S)
+        -> BSL.ByteString
+        -> AlexPosn
+        -> DecoratedToken S
+mkToken f i p = decorate (f i) p
+
 decodeBS :: BSL.ByteString -> DecodedBytes
 decodeBS i = case decode i of
   Just (Replacement, numBytes) -> InvalidUTF8 (fromIntegral numBytes)
@@ -77,9 +83,3 @@ decorate t (a, l, c) = DecoratedToken
   , tokenPosn   = (l, c)
   , tokenPlain  = t
   }
-
-mkToken :: (BSL.ByteString -> PlainToken S)
-        -> BSL.ByteString
-        -> AlexPosn
-        -> DecoratedToken S
-mkToken f i p = decorate (f i) p

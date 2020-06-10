@@ -8,10 +8,9 @@ import Jael.Grammar.Input
 import Jael.Grammar.Token
 
 import qualified Data.ByteString.Lazy as BSL
-
 }
 
-$digit = [0-9]
+$digit    = [0-9]
 $binDigit = [01]
 $octDigit = [0-7]
 $hexDigit = [0-9a-fA-F]
@@ -23,34 +22,47 @@ $alpha = [a-zA-Z]
 $alphanum = [$alpha $digit]
 $ident = [$alphanum _]
 
-$parL = [\(]
-$parR = [\)]
-$braL = [\[]
-$braR = [\]]
-$angL = [\<]
-$angR = [\>]
+$symChar = [\( \) \[ \] \< \> \{ \} \~ \| ]
 
-$neg = [\~]
+@intBin = "0b" $binDigit+ (_ $binDigit)*
+@intOct = "0o" $octDigit+ (_ $octDigit)*
+@intHex = "0x" $hexDigit+ (_ $hexDigit)*
+@intDec = $digit+         (_ $digit)*
 
-$syms = [
-  -- Various enclosures
-  $parL $parR $braL $braR $angL $angR
-  -- Operators
-  $neg
-  ]
+$whiteOrSym = [ $white $symChar ]
 
-$invalid = [^ $ident $syms $white]
+$invalid = [^ $white $ident $symChar ]
 
 :-
   $white+                       ;
-  "//" [.]*                     { mkToken (const TokenComment) }
+  "//" [.]*                     { mkToken (TokenComment . toS) }
+
+  "~" { mkToken (TokenSymbol . toS) }
+  "|" { mkToken (TokenSymbol . toS) }
+  "(" { mkToken (TokenSymbol . toS) }
+  ")" { mkToken (TokenSymbol . toS) }
+  "[" { mkToken (TokenSymbol . toS) }
+  "]" { mkToken (TokenSymbol . toS) }
+  "<" { mkToken (TokenSymbol . toS) }
+  ">" { mkToken (TokenSymbol . toS) }
+  "{" { mkToken (TokenSymbol . toS) }
+  "}" { mkToken (TokenSymbol . toS) }
+  "(|" { mkToken (TokenSymbol . toS) }
+  "|)" { mkToken (TokenSymbol . toS) }
+  "[|" { mkToken (TokenSymbol . toS) }
+  "|]" { mkToken (TokenSymbol . toS) }
+  "{|" { mkToken (TokenSymbol . toS) }
+  "|}" { mkToken (TokenSymbol . toS) }
+  "<|" { mkToken (TokenSymbol . toS) }
+  "|>" { mkToken (TokenSymbol . toS) }
 
   -- E notation, size specifiers
+  $whiteOrSym ^ ( @intBin
+                | @intOct
+                | @intHex
+                | @intDec
+                ) { mkToken parseInteger }
+  $whiteOrSym ^ $lower $ident*                 { mkToken lowerIdent }
+  $whiteOrSym ^ $upper $ident*                 { mkToken upperIdent }
 
-  $neg? $digit+                 { mkToken parseInteger }
-  "0b" $binDigit [$binDigit _]+ { mkToken parseInteger }
-  "0o" $octDigit [$octDigit _]+ { mkToken parseInteger }
-  "0x" $hexDigit [$hexDigit _]+ { mkToken parseInteger }
-  $lower $ident*                { mkToken lowerIdent }
-  $upper $ident*                { mkToken upperIdent }
   $invalid+                     { mkToken (TokenInvalid . fromIntegral . BSL.length) }

@@ -1,25 +1,59 @@
-name: jael-types
-version: 0.0.0.0
-build-type: Simple
-cabal-version: >=1.10
+cabal-version: 1.12
+
+-- This file has been generated from package.dhall by hpack version 0.31.2.
+--
+-- see: https://github.com/sol/hpack
+--
+-- hash: 41c3e81c0dd91db195285c9dabca12905c5fa39d36aa954896d8923404d3ede1
+
+name:           jael-types
+version:        0.0.0
+homepage:       https://github.com/woehr/Jael#readme
+bug-reports:    https://github.com/woehr/Jael/issues
+author:         Jordan Woehr
+maintainer:     Jordan Woehr
+copyright:      (c) 2015-2020 Jordan Woehr
+license:        BSD3
+license-file:   ../LICENSE
+build-type:     Simple
+
+source-repository head
+  type: git
+  location: https://github.com/woehr/Jael
 
 library
-  build-depends: base
-               , containers
-               , deepseq
-               , deriving-compat
-               , free
-               , open-adt
-               , recursion-schemes
-               , row-types
-               , text
-               , uniform-pair
-
+  exposed-modules:
+      Jael.Types
+      Jael.Types.Expr
+      Jael.Types.Pattern
+      Jael.Types.QType
+      Jael.Types.Row
+      Jael.Types.Type
+  other-modules:
+      Paths_jael_types
+  hs-source-dirs:
+      lib
+  ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
+  build-depends:
+      array
+    , base
+    , bytestring
+    , comonad
+    , containers
+    , deepseq
+    , deriving-compat
+    , free
+    , hspec
+    , hspec-discover
+    , mtl
+    , open-adt
+    , recursion-schemes
+    , row-types
+    , streaming
+    , streaming-bytestring
+    , text
+    , text-short
+    , transformers
+    , uniform-pair
+    , utf8-string
   default-language: Haskell2010
-  exposed-modules:  Jael.Types
-                    Jael.Types.Expr
-                    Jael.Types.Pattern
-                    Jael.Types.QType
-                    Jael.Types.Row
-                    Jael.Types.Type
-  hs-source-dirs:   lib

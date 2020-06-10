@@ -1,8 +1,8 @@
-- pattern: lib/Jael/Grammar/Lexer\.x
+- pattern: lib/Jael/Grammar/Lexer\.x$
   commands:
   - alex -o lib/Jael/Grammar/Lexer.hs lib/Jael/Grammar/Lexer.x
 #  - sed -i '/{-# LINE.*#-}/d' lib/Jael/Grammar/Lexer.hs
-- pattern: lib/Jael/Grammar/Parser\.y
+- pattern: lib/Jael/Grammar/Parser\.y$
   commands:
   - happy -o lib/Jael/Grammar/Parser.hs lib/Jael/Grammar/Parser.y
 #  - sed -i '/{-# LINE.*#-}/d' lib/Jael/Grammar/Parser.hs

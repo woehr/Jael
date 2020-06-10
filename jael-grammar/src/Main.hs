@@ -16,7 +16,7 @@ import Jael.Grammar.Parser
 import Jael.Grammar.Monad
 import Jael.Grammar.Token
 
-parse :: BSL.ByteString -> [PlainToken] -- [T.Text]
+parse :: BSL.ByteString -> [IntInfo] -- [T.Text]
 parse s = case runParseMonad s pProg of
             Left x -> error $ "\"" <> show x <> "\""
             Right x -> x -- rights $ fmap T.decodeUtf8' x
@@ -58,11 +58,14 @@ intsToRanges xs = go xs [] where
 checkUtf8 :: BSL.ByteString -> [(Int64, Int64)]
 checkUtf8 = intsToRanges . invalidUtf8Indices
 
+main' :: String -> IO ()
+main' s = print (parse (T.encodeUtf8 . T.pack $ s))
+
 main :: IO ()
 main = do
   --utf8TestFile <- BSL.readFile "UTF-8-test.txt"
   --putStrLn $ "Testing invalid utf8:\n" <> show (checkUtf8 utf8TestFile)
-  print (parse (T.encodeUtf8 . T.pack $ ("a 1 朴 滐 z 9"::String)))
+  main' "1 0x1 0o1 0b1"
   --parseAndPrint "x y z \xffff"
   --parseAndPrint "朴滐"
   --parseAndPrint "x 1 y 2"

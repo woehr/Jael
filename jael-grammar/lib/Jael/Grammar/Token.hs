@@ -33,13 +33,14 @@ data IntInfo = IntInfo
   } deriving (Eq, Show)
 
 data PlainToken a
-  = TokenBinInt IntInfo
+  = TokenComment a
+  | TokenSymbol a
+  | TokenBinInt IntInfo
   | TokenOctInt IntInfo
   | TokenDecInt IntInfo
   | TokenHexInt IntInfo
   | TokenLower a
   | TokenUpper a
-  | TokenComment
   | TokenInvalid Int -- Valid utf8 but not "lexable"
   | TokenBadUTF8 Int -- Invalid utf8 encoded bytes
   | TokenEOF
@@ -86,17 +87,17 @@ parseInteger n =
         , intDigits = toInteger $ length s
         }
     '0':'b':s ->
-      TokenDecInt IntInfo
+      TokenBinInt IntInfo
         { intValue  = number 2 s
         , intDigits = toInteger $ length s
         }
     '0':'o':s ->
-      TokenDecInt IntInfo
+      TokenOctInt IntInfo
         { intValue  = number 8 s
         , intDigits = toInteger $ length s
         }
     '0':'x':s ->
-      TokenDecInt IntInfo
+      TokenHexInt IntInfo
         { intValue  = number 16 s
         , intDigits = toInteger $ length s
         }
