@@ -1,0 +1,10 @@
+cradle:
+  cabal:
+    - path: "./jael-types/lib"
+      component: "lib:jael-types"
+    - path: "./jael-grammar/lib"
+      component: "lib:jael-grammar"
+    - path: "./jael-grammar/src"
+      component: "exe:jael-syntax"
+    - path: "./jael-grammar/test"
+      component: "test:test"

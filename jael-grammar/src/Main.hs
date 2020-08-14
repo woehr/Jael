@@ -2,24 +2,24 @@
 
 module Main where
 
-import Data.Either (rights)
-import Data.Int (Int64)
-import Data.List (intercalate, intersperse)
+--import Data.Either (rights)
+import           Data.Int                       ( Int64 )
+--import Data.List (intercalate, intersperse)
 
-import qualified Data.ByteString.Lazy as BSL
-import qualified Data.ByteString.Lazy.UTF8 as UTF8
-import qualified Data.Text.Lazy as T
-import qualified Data.Text.Lazy.Encoding as T
+import qualified Data.ByteString.Lazy          as BSL
+import qualified Data.ByteString.Lazy.UTF8     as UTF8
+import qualified Data.Text.Lazy                as T
+import qualified Data.Text.Lazy.Encoding       as T
 
-import Jael.Grammar.Lexer
-import Jael.Grammar.Parser
-import Jael.Grammar.Monad
-import Jael.Grammar.Token
+--import Jael.Grammar.Lexer
+import           Jael.Grammar.Parser
+import           Jael.Grammar.Monad
+import           Jael.Grammar.Token
 
 parse :: BSL.ByteString -> [IntInfo] -- [T.Text]
 parse s = case runParseMonad s pProg of
-            Left x -> error $ "\"" <> show x <> "\""
-            Right x -> x -- rights $ fmap T.decodeUtf8' x
+  Left  x -> error $ "\"" <> show x <> "\""
+  Right x -> x -- rights $ fmap T.decodeUtf8' x
 
 --parseAndPrint :: BS.ByteString -> IO ()
 --parseAndPrint = putStrLn . T.unpack . T.unwords . parse
@@ -29,15 +29,14 @@ parse s = case runParseMonad s pProg of
 invalidUtf8Indices :: BSL.ByteString -> [Int64]
 invalidUtf8Indices xs = go xs 0 [] where
   go :: BSL.ByteString -> Int64 -> [Int64] -> [Int64]
-  go bs ix acc =
-    case UTF8.decode bs of
-      Just (c, n) ->
-        let bs' = BSL.drop n bs
-            ix' = ix + n
-        in if c == UTF8.replacement_char
-             then go bs' ix' (ix:acc)
-             else go bs' ix' acc
-      Nothing -> acc
+  go bs ix acc = case UTF8.decode bs of
+    Just (c, n) ->
+      let bs' = BSL.drop n bs
+          ix' = ix + n
+      in  if c == UTF8.replacement_char
+            then go bs' ix' (ix : acc)
+            else go bs' ix' acc
+    Nothing -> acc
 
 -- Converts an ordered list to a list of ranges
 -- [8,7,3,2,1] -> [(1,3), (7,2)]
@@ -46,12 +45,10 @@ invalidUtf8Indices xs = go xs 0 [] where
 intsToRanges :: [Int64] -> [(Int64, Int64)]
 intsToRanges xs = go xs [] where
   go :: [Int64] -> [(Int64, Int64)] -> [(Int64, Int64)]
-  go [] acc = acc
-  go (y:ys) [] = go ys [(y,1)]
-  go (y:ys) acc@((a,b):cs) =
-    if y + 1 == a
-      then go ys ((a-1,b+1):cs)
-      else go ys ((y,1):acc)
+  go []       acc = acc
+  go (y : ys) []  = go ys [(y, 1)]
+  go (y : ys) acc@((a, b) : cs) =
+    if y + 1 == a then go ys ((a - 1, b + 1) : cs) else go ys ((y, 1) : acc)
 
 -- Outputs, in ascending order, the indices and number of bytes of invalid
 -- UTF8 encodings

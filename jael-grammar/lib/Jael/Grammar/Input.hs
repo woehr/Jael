@@ -2,9 +2,9 @@
 
 module Jael.Grammar.Input where
 
-import Data.Bifunctor (first)
+--import Data.Bifunctor (first)
 import Data.ByteString.Internal (w2c)
-import Data.ByteString.Lazy.UTF8 (decode, replacement_char)
+import Data.ByteString.Lazy.UTF8 (decode) --, replacement_char)
 import Data.Int (Int64)
 import Data.Word (Word8)
 
@@ -37,7 +37,7 @@ mkToken :: (BSL.ByteString -> PlainToken S)
         -> BSL.ByteString
         -> AlexPosn
         -> DecoratedToken S
-mkToken f i p = decorate (f i) p
+mkToken f i = decorate (f i)
 
 decodeBS :: BSL.ByteString -> DecodedBytes
 decodeBS i = case decode i of
@@ -49,7 +49,7 @@ alexInitialPosition :: AlexPosn
 alexInitialPosition = (0, 1, 1)
 
 advance :: AlexPosn -> Word8 -> AlexPosn
-advance (a, l, c) Newline = (a+1, l+1, 1  )
+advance (a, l, _) Newline = (a+1, l+1, 1  )
 advance (a, l, c) _       = (a+1, l,   c+1)
 
 posnDiff :: AlexInput -> AlexInput -> Int64
@@ -65,12 +65,12 @@ alexInputPrevChar :: AlexInput -> Char
 alexInputPrevChar (_, c, _, _) = w2c c
 
 alexGetByte :: AlexInput -> Maybe (Word8, AlexInput)
-alexGetByte (pos, p, ValidUTF8 (b:[]), i) =
+alexGetByte (pos, _, ValidUTF8 [b], i) =
   let pos' = advance pos b
       i'   = BSL.drop 1 i
       bs   = decodeBS i'
   in  pos' `seq` i' `seq` bs `seq` Just (b, (pos', b, bs, i'))
-alexGetByte (pos, p, ValidUTF8 (b:bs), i) =
+alexGetByte (pos, _, ValidUTF8 (b:bs), i) =
   let pos' = advance pos b
       i'   = BSL.drop 1 i
   in  pos' `seq` i' `seq` Just (b, (pos', b, ValidUTF8 bs, i'))

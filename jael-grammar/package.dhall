@@ -5,7 +5,10 @@ let deps = ./../package-dependencies.dhall
 in      defs
     //  { name = "jael-grammar"
         , extra-source-files =
-          [ "lib/Jael/Grammar/Lexer.x", "lib/Jael/Grammar/Parser.y" ]
+          [ "lib/Jael/Grammar/Lexer.x"
+          , "lib/Jael/Grammar/Parser.y"
+          , "golden/*"
+          ]
         , library =
             { build-tools = [ "alex", "happy" ]
             , dependencies = [ "jael-types" ] # deps

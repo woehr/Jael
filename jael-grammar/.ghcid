@@ -1,1 +1,4 @@
---command ghci -r Main
+-c="cabal new-repl jael-grammar:test"
+-T=main
+--restart=lib/Jael/Grammar/Parser.y
+--restart=lib/Jael/Grammar/Lexer.x

@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ff77d1e842908781c60879a2ecb03ef6e2e0087003d94a9019c1ea80815665de
+-- hash: f0928dd0c94b0c154129ecc8d8fe843a5d21aa138bdb7b25692c6e0c4642c356
 
 name:           jael-grammar
 version:        0.0.0
@@ -19,6 +19,8 @@ build-type:     Simple
 extra-source-files:
     lib/Jael/Grammar/Lexer.x
     lib/Jael/Grammar/Parser.y
+    golden/expr.add.in
+    golden/expr.add.out
 
 source-repository head
   type: git
@@ -27,6 +29,7 @@ source-repository head
 library
   exposed-modules:
       Jael.Grammar
+      Jael.Grammar.AST
       Jael.Grammar.Input
       Jael.Grammar.Lexer
       Jael.Grammar.Monad
@@ -48,6 +51,7 @@ library
     , containers
     , deepseq
     , deriving-compat
+    , filepattern
     , free
     , hspec
     , hspec-discover
@@ -61,6 +65,7 @@ library
     , text
     , text-short
     , transformers
+    , tree-diff
     , uniform-pair
     , utf8-string
   default-language: Haskell2010
@@ -80,6 +85,7 @@ executable jael-syntax
     , containers
     , deepseq
     , deriving-compat
+    , filepattern
     , free
     , hspec
     , hspec-discover
@@ -93,6 +99,7 @@ executable jael-syntax
     , text
     , text-short
     , transformers
+    , tree-diff
     , uniform-pair
     , utf8-string
   default-language: Haskell2010
@@ -102,6 +109,7 @@ test-suite test
   main-is: Main.hs
   other-modules:
       LexerSpec
+      ParserSpec
       Paths_jael_grammar
   hs-source-dirs:
       test
@@ -116,6 +124,7 @@ test-suite test
     , containers
     , deepseq
     , deriving-compat
+    , filepattern
     , free
     , hspec
     , hspec-discover
@@ -129,6 +138,7 @@ test-suite test
     , text
     , text-short
     , transformers
+    , tree-diff
     , uniform-pair
     , utf8-string
   default-language: Haskell2010

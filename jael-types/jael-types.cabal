@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 41c3e81c0dd91db195285c9dabca12905c5fa39d36aa954896d8923404d3ede1
+-- hash: a7480e77d15dfb5fba4676952be5167fb8d7099194df2dc512dd79e1dfaf4a19
 
 name:           jael-types
 version:        0.0.0
@@ -42,6 +42,7 @@ library
     , containers
     , deepseq
     , deriving-compat
+    , filepattern
     , free
     , hspec
     , hspec-discover
@@ -54,6 +55,7 @@ library
     , text
     , text-short
     , transformers
+    , tree-diff
     , uniform-pair
     , utf8-string
   default-language: Haskell2010

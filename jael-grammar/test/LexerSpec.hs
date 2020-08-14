@@ -2,58 +2,56 @@
 
 module LexerSpec where
 
-import Test.Hspec
+import           Test.Hspec
 
-import Control.Monad.Except (runExcept)
-import Data.Bifunctor (second)
+import           Control.Monad.Except           ( runExcept )
+--import Data.Bifunctor (second)
 
-import qualified Data.ByteString.Lazy as BSL
-import qualified Streaming.Prelude as S
+import qualified Data.ByteString.Lazy          as BSL
+import qualified Streaming.Prelude             as S
 
-import Jael.Grammar.Monad
-import Jael.Grammar.Input
-import Jael.Grammar.Token
+import           Jael.Grammar.Monad
+import           Jael.Grammar.Input
+import           Jael.Grammar.Token
 
 parseToken :: BSL.ByteString -> Either ParseError (DecoratedToken S)
-parseToken s =
-  case runExcept . S.next . scan . alexInitialInput $ s of
-    Left err -> Left err
-    Right (Left _) -> error "Parsed EOF instead of a token."
-    Right (Right (t, ts)) ->
-      case runExcept . S.next $ ts of
-        Left err -> Left err
-        Right (Left _) -> Right t -- Token followed by EOF
-        Right (Right (t', ts')) -> error
-          $  "Parsed:\n\t"
-          ++ show t
-          ++ "\n\nfollowed by another token:\n\t"
-          ++ show t'
-          ++ "\n"
+parseToken s = case runExcept . S.next . scan . alexInitialInput $ s of
+  Left  err             -> Left err
+  Right (Left  _      ) -> error "Parsed EOF instead of a token."
+  Right (Right (t, ts)) -> case runExcept . S.next $ ts of
+    Left  err      -> Left err
+    Right (Left _) -> Right t -- Token followed by EOF
+    Right (Right (t', _)) ->
+      error
+        $  "Parsed:\n\t"
+        ++ show t
+        ++ "\n\nfollowed by another token:\n\t"
+        ++ show t'
+        ++ "\n"
 
 isSingleTokenLexerError :: ParseError -> Bool
 isSingleTokenLexerError (LexicalError _) = True
-isSingleTokenLexerError _ = False
+isSingleTokenLexerError _                = False
 
 isInvalidToken :: Int -> PlainToken S -> Bool
 isInvalidToken x (TokenInvalid y) | x == y = True
-isInvalidToken _ _ = False
+isInvalidToken _ _                         = False
 
 singleToken :: BSL.ByteString -> PlainToken S
 singleToken s =
-  let IgnoreDecorations x =
-        either
-          (error . ("should parse but error:\n"++) . show)
-          id
-        . parseToken
-        $ s
-   in x
+  let x =
+          either (error . ("should parse but error:\n" ++) . show) id
+            . parseToken
+            $ s
+  in  case x of
+        IgnoreDecorations y -> y
+        _                   -> error "Expected IgnoreDecorations"
 
 shouldNotParse :: BSL.ByteString -> Expectation
 shouldNotParse =
-  either
-    (`shouldSatisfy` isSingleTokenLexerError)
-    (error . ("should not parse:\n"++) . show)
-  . parseToken
+  either (`shouldSatisfy` isSingleTokenLexerError)
+         (error . ("should not parse:\n" ++) . show)
+    . parseToken
 
 spec :: Spec
 spec = do
@@ -99,12 +97,17 @@ spec = do
           shouldNotParse "0x"
       context "valid" $ do
         it "binary" $ do
-          singleToken "0b0" `shouldBe` TokenBinInt (IntInfo { intValue = 0, intDigits = 1})
+          singleToken "0b0"
+            `shouldBe` TokenBinInt (IntInfo { intValue = 0, intDigits = 1 })
         it "octal" $ do
-          singleToken "0o0" `shouldBe` TokenOctInt (IntInfo { intValue = 0, intDigits = 1})
+          singleToken "0o0"
+            `shouldBe` TokenOctInt (IntInfo { intValue = 0, intDigits = 1 })
         it "hexadecimal" $ do
-          singleToken "0x0" `shouldBe` TokenHexInt (IntInfo { intValue = 0, intDigits = 1})
+          singleToken "0x0"
+            `shouldBe` TokenHexInt (IntInfo { intValue = 0, intDigits = 1 })
         it "zero" $ do
-          singleToken "0" `shouldBe` TokenDecInt (IntInfo { intValue = 0, intDigits = 1})
+          singleToken "0"
+            `shouldBe` TokenDecInt (IntInfo { intValue = 0, intDigits = 1 })
         it "positive" $ do
-          singleToken "1" `shouldBe` TokenDecInt (IntInfo { intValue = 1, intDigits = 1})
+          singleToken "1"
+            `shouldBe` TokenDecInt (IntInfo { intValue = 1, intDigits = 1 })

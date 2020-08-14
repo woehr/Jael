@@ -6,6 +6,7 @@ where
 
 import Jael.Grammar.Monad
 import Jael.Grammar.Token
+import Jael.Grammar.AST
 }
 
 %name pProg expr
@@ -22,6 +23,8 @@ import Jael.Grammar.Token
   intHex  { IgnoreDecorations (TokenHexInt $$) }
   intDec  { IgnoreDecorations (TokenDecInt $$) }
 
+  '+'     { IgnoreDecorations (TokenSymbol $$) }
+
   invalid { IgnoreDecorations (TokenInvalid $$) }
 
 %%
@@ -33,5 +36,5 @@ int
   | intDec { $1 }
 
 expr
-  : expr int { $2 : $1 }
-  | int { [$1] }
+  : expr '+' expr { JEAdd $1 $3 }
+  | int { JEInt $1 }

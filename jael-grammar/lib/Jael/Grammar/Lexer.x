@@ -22,7 +22,7 @@ $alpha = [a-zA-Z]
 $alphanum = [$alpha $digit]
 $ident = [$alphanum _]
 
-$symChar = [\( \) \[ \] \< \> \{ \} \~ \| ]
+$symChar = [\( \) \[ \] \< \> \{ \} \~ \| \+]
 
 @intBin = "0b" $binDigit+ (_ $binDigit)*
 @intOct = "0o" $octDigit+ (_ $octDigit)*
@@ -55,6 +55,7 @@ $invalid = [^ $white $ident $symChar ]
   "|}" { mkToken (TokenSymbol . toS) }
   "<|" { mkToken (TokenSymbol . toS) }
   "|>" { mkToken (TokenSymbol . toS) }
+  "+" { mkToken (TokenSymbol . toS) }
 
   -- E notation, size specifiers
   $whiteOrSym ^ ( @intBin

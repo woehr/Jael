@@ -1,9 +1,9 @@
 {-# Language DataKinds #-}
-{-# Language DeriveFunctor #-}
+{-# Language DeriveGeneric #-}
 {-# Language MultiWayIf #-}
 {-# Language PatternSynonyms #-}
 {-# Language TypeFamilies #-}
-{-# Language TypeOperators #-}
+--{-# Language TypeOperators #-}
 {-# Language UndecidableInstances #-}
 
 module Jael.Grammar.Token where
@@ -12,14 +12,16 @@ import Data.Char (ord)
 import Data.Foldable (foldlM)
 import Data.Maybe (fromMaybe)
 
-import Data.OpenADT (OpenADT)
-import Data.Row (type (.==), type (.+), Row)
+--import Data.OpenADT (OpenADT)
+--import Data.Row (type (.==), type (.+), Row)
 import Data.Text.Short.Unsafe (fromByteStringUnsafe)
 
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.ByteString.Lazy.Char8 as C8
-import qualified Data.Row.Internal as RI
+--import qualified Data.Row.Internal as RI
 import qualified Data.Text.Short as T
+import GHC.Generics (Generic)
+import Data.TreeDiff (ToExpr)
 
 -- S for string type
 type S = T.ShortText
@@ -30,7 +32,8 @@ toS = fromByteStringUnsafe . BSL.toStrict
 data IntInfo = IntInfo
   { intValue :: Integer
   , intDigits :: Integer
-  } deriving (Eq, Show)
+  } deriving (Eq, Generic, Show)
+instance ToExpr IntInfo
 
 data PlainToken a
   = TokenComment a
@@ -41,6 +44,7 @@ data PlainToken a
   | TokenHexInt IntInfo
   | TokenLower a
   | TokenUpper a
+  | TokenPlus
   | TokenInvalid Int -- Valid utf8 but not "lexable"
   | TokenBadUTF8 Int -- Invalid utf8 encoded bytes
   | TokenEOF
@@ -76,7 +80,7 @@ number :: Integer -> String -> Integer
 number base xs =
   fromMaybe
       (error $ "Grammar error: base " <> show base <> " for string " <> show xs)
-    $ foldlM (\x d -> (base * x +) <$> (digitToInt d)) 0 xs
+    $ foldlM (\x d -> (base * x +) <$> digitToInt d) 0 xs
 
 parseInteger :: BSL.ByteString -> PlainToken a
 parseInteger n =

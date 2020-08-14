@@ -5,6 +5,7 @@
 , "containers"
 , "deepseq"
 , "deriving-compat"
+, "filepattern"
 , "free"
 , "hspec"
 , "hspec-discover"
@@ -17,6 +18,7 @@
 , "text"
 , "text-short"
 , "transformers"
+, "tree-diff"
 , "uniform-pair"
 , "utf8-string"
 ]
