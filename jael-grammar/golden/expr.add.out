@@ -1,3 +1,0 @@
-JEAdd
-  (JEInt IntInfo {intDigits = 1, intValue = 1})
-  (JEInt IntInfo {intDigits = 1, intValue = 2})

@@ -1,20 +1,13 @@
-let
-  pkgsTarball = https://nixos.org/channels/nixos-19.09/nixexprs.tar.xz;
-in
-{ pkgs ? import (fetchTarball pkgsTarball) {} }:
-let
-  jael-ghc = "ghc865";
-  hpkgs = pkgs.haskell.packages."${jael-ghc}";
-  f = hpkgs.callCabal2nix;
-  jael-pkgs = rec {
-    #open-adt          = f "open-adt"          ../open-adt/open-adt { };
-    #jael-grammar      = f "jael-grammar"      ./jael-grammar       { inherit jael-types open-adt; };
-    #jael-types        = f "jael-types"        ./jael-types         { inherit open-adt; };
-    jael-grammar      = f "jael-grammar"      ./jael-grammar       { inherit jael-types; };
-    jael-types        = f "jael-types"        ./jael-types         {};
-    jael-pp           = f "jael-pp"           ./jael-pp            { inherit jael-types; };
-    jael              = f "jael"              ./jael               { inherit jael-grammar jael-types; };
-  };
-in {
-  inherit pkgs hpkgs jael-ghc jael-pkgs;
-}
+{ nixpkgs ? import <nixos2009> {} }:
+  let inherit (nixpkgs) pkgs; #pkgs = import <nixpkgs> {}; # { system = "x86_64-linux"; };
+      hpkgs = pkgs.haskell.packages.ghc8104;
+      jael = hpkgs.callCabal2nix "jael" ./. {};
+      ghc = hpkgs.ghcWithPackages ( p: jael.buildInputs );
+      #ghc = hpkgs.ghcWithHoogle ( p: jael.buildInputs );
+  in 
+  [ ghc ] ++ (with hpkgs; [
+    alex 
+    cabal-install
+    ghcid
+    happy
+  ])

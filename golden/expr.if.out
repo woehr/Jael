@@ -1,0 +1,6 @@
+JEIf
+  (JELIdent "x")
+  (JELIdent "y")
+  (JELet
+     [_×_ "z" (JEInt IntInfo {intDigits = 1, intValue = 1})]
+     (JELIdent "z"))

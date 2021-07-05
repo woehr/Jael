@@ -1,0 +1,7 @@
+JEIff
+  (JEImp
+     (JEOr (JEAnd (JELIdent "a") (JELIdent "b")) (JELIdent "c"))
+     (JELIdent "d"))
+  (JEImp
+     (JELIdent "e")
+     (JEOr (JELIdent "f") (JEAnd (JELIdent "g") (JELIdent "h"))))

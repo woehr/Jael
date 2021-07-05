@@ -1,0 +1,4 @@
+JELet
+  [_×_ "x" (JEInt IntInfo {intDigits = 1, intValue = 1}),
+   _×_ "y" (JEInt IntInfo {intDigits = 1, intValue = 2})]
+  (JEAdd (JELIdent "x") (JELIdent "y"))

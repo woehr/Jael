@@ -1,0 +1,56 @@
+name: jael
+version: 0.0.0
+github: woehr/Jael
+
+ghc-options:
+  - -Wall
+  - -Wcompat
+  - -Wincomplete-record-updates
+  - -Wincomplete-uni-patterns
+  - -Wredundant-constraints
+
+dependencies:
+  - array
+  - base
+  - bytestring
+  - comonad
+  - containers
+  - deepseq
+  - deriving-compat
+  - filepattern
+  - free
+  - hspec
+  - hspec-discover
+  - mtl
+  - recursion-schemes
+  - streaming
+  - streaming-bytestring
+  - text
+  - text-short
+  - transformers
+  - tree-diff
+  - uniform-pair
+  - utf8-string
+
+extra-source-files:
+  - lib/Jael/Grammar/Lexer.x
+  - lib/Jael/Grammar/Parser.y
+  - golden/*
+
+library:
+  source-dirs: lib
+  build-tools:
+    - alex
+    - happy
+
+executable:
+  source-dirs: src
+  main: Main.hs
+  dependencies: jael
+
+tests:
+  spec:
+    source-dirs: test
+    main: Main.hs
+    dependencies: jael
+    build-tools: hspec-discover

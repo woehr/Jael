@@ -1,0 +1,6 @@
+-c="cabal new-repl jael-grammar:test"
+-T=main
+--reload=golden
+--reload=lib
+--restart=lib/Jael/Grammar/Parser.y
+--restart=lib/Jael/Grammar/Lexer.x
