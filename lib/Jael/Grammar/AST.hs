@@ -2,11 +2,12 @@
 
 module Jael.Grammar.AST where
 
-import           Jael.Grammar.Token
+import qualified Data.Text                     as T
 import           Data.TreeDiff                  ( ToExpr )
 import           GHC.Generics                   ( Generic )
+import        Jael.Grammar.Token ( IntInfo )
 
-data JaelExpr = JELet [(S, JaelExpr)] JaelExpr
+data JaelExpr = JELet [(T.Text, JaelExpr)] JaelExpr
               | JEIf JaelExpr JaelExpr JaelExpr
 
               | JEAdd JaelExpr JaelExpr
@@ -21,8 +22,8 @@ data JaelExpr = JELet [(S, JaelExpr)] JaelExpr
               | JEIff JaelExpr JaelExpr
 
               | JEInt IntInfo
-              | JELIdent S
-              | JEUIdent S
+              | JELIdent T.Text
+              | JEUIdent T.Text
               deriving (Eq, Show, Generic)
 
 instance ToExpr JaelExpr

@@ -1,4 +1,4 @@
--c="cabal new-repl jael-grammar:test"
+-c="cabal new-repl jael:spec"
 -T=main
 --reload=golden
 --reload=lib

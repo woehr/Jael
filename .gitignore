@@ -1,3 +1,7 @@
+lexer.info
+parser.info
+parser.pretty
+
 *.hi
 *.o
 *.swp

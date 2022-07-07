@@ -7,13 +7,16 @@ module Jael.Grammar.Parser
   )
 where
 
+import qualified Data.Text as T
+import qualified Data.ByteString as BS
+
 import Jael.Grammar.Monad
 import Jael.Grammar.Token
 import Jael.Grammar.AST
 }
 
 %name pProg expr
-%tokentype { MyToken }
+%tokentype { DecoratedToken }
 %error { parserError }
 %errorhandlertype explist
 
@@ -104,10 +107,10 @@ expr
 
 {
 
-pattern Reserved :: S -> DecoratedToken S
+pattern Reserved :: T.Text -> DecoratedToken
 pattern Reserved x <- IgnoreDecorations (TokenReserved x)
 
-pattern Symbol :: S -> DecoratedToken S
+pattern Symbol :: BS.ByteString -> DecoratedToken
 pattern Symbol x <- IgnoreDecorations (TokenSymbol x)
 
 }

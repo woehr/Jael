@@ -22,26 +22,19 @@ dependencies:
   - hspec
   - hspec-discover
   - mtl
+  - pretty-show
   - recursion-schemes
-  - streaming
-  - streaming-bytestring
-  - text
-  - text-short
+  - text >= 2
   - transformers
   - tree-diff
   - uniform-pair
-  - utf8-string
+  - unordered-containers
 
 extra-source-files:
-  - lib/Jael/Grammar/Lexer.x
-  - lib/Jael/Grammar/Parser.y
   - golden/*
 
 library:
   source-dirs: lib
-  build-tools:
-    - alex
-    - happy
 
 executable:
   source-dirs: src

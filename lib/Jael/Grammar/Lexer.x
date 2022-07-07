@@ -26,7 +26,7 @@ $ident = [$alphanum _]
 @intDec = $digit+
 
 @syms =
-  
+
   -- Enclosures
   \( | \) |
   \[ | \] |
@@ -58,15 +58,15 @@ $ident = [$alphanum _]
   $white+         ;
   "//" .*         ;
 
-  @syms           { mkToken (TokenSymbol . toS) }
+  @syms           { TokenSymbol }
 
-  @intBin         { mkToken parseInteger }
-  @intOct         { mkToken parseInteger }
-  @intHex         { mkToken parseInteger }
-  @intDec         { mkToken parseInteger }
+  @intBin         { parseInteger }
+  @intOct         { parseInteger }
+  @intHex         { parseInteger }
+  @intDec         { parseInteger }
 
-  $lower $ident*  { mkToken lowerIdent }
-  $upper $ident*  { mkToken upperIdent }
+  $lower $ident*  { lowerIdent }
+  $upper $ident*  { upperIdent }
 
 {
 

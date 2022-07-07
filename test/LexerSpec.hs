@@ -4,46 +4,33 @@ module LexerSpec where
 
 import           Test.Hspec
 
-import           Control.Monad.Except           ( runExcept )
---import Data.Bifunctor (second)
+import qualified Data.ByteString               as BS
 
-import qualified Data.ByteString.Lazy          as BSL
-import qualified Streaming.Prelude             as S
-
-import           Jael.Grammar.Monad
 import           Jael.Grammar.Input
+import           Jael.Grammar.Monad
 import           Jael.Grammar.Token
 
-parseToken :: BSL.ByteString -> Either ParseError (DecoratedToken S)
-parseToken s = case runExcept . S.next . scan . alexInitialInput $ s of
-  Left  err             -> Left err
-  Right (Left  _      ) -> error "Parsed EOF instead of a token."
-  Right (Right (t, ts)) -> case runExcept . S.next $ ts of
-    Left  err      -> Left err
-    Right (Left _) -> Right t -- Token followed by EOF
-    Right (Right (t', _)) ->
-      error
-        $  "Parsed:\n\t"
-        ++ show t
-        ++ "\n\nfollowed by another token:\n\t"
-        ++ show t'
-        ++ "\n"
+parseToken :: BS.ByteString -> Either ParseError DecoratedToken
+parseToken s = case scan . alexInitialInput $ s of
+  Left err -> Left err
+  Right ((pos, _, rest), t) | BS.null rest -> Right $ decorate t pos
+  _        -> error "remaining input"
 
 isSingleTokenLexerError :: ParseError -> Bool
 isSingleTokenLexerError (LexicalError _) = True
 isSingleTokenLexerError _                = False
 
-singleToken :: BSL.ByteString -> PlainToken S
+singleToken :: BS.ByteString -> PlainToken
 singleToken s =
   let x =
-          either (error . ("should parse but error:\n" ++) . show) id
-            . parseToken
-            $ s
+        either (error . ("should parse but error:\n" ++) . show) id
+          . parseToken
+          $ s
   in  case x of
         IgnoreDecorations y -> y
         _                   -> error "Expected IgnoreDecorations"
 
-shouldNotParse :: BSL.ByteString -> Expectation
+shouldNotParse :: BS.ByteString -> Expectation
 shouldNotParse =
   either (`shouldSatisfy` isSingleTokenLexerError)
          (error . ("should not parse:\n" ++) . show)

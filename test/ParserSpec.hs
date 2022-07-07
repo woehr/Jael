@@ -2,24 +2,23 @@
 
 module ParserSpec where
 
-import           Jael.Grammar.Parser
-import           Jael.Grammar.Monad
 import           Jael.Grammar.AST               ( JaelExpr )
+import           Jael.Grammar.Monad
+import           Jael.Grammar.Parser
 
 import           Test.Hspec
 
+import qualified Data.ByteString               as BS
 import qualified Data.TreeDiff                 as TD
-import qualified Data.ByteString.Lazy          as BSL
 
-import           Control.Monad                  ( forM_ )
-import           System.FilePattern.Directory   ( getDirectoryFiles )
 import           Control.Exception              ( try )
-import           System.IO.Error                ( isDoesNotExistError )
-import           System.FilePattern             ( match )
+import           Control.Monad                  ( forM_ )
 import           Data.TreeDiff.Golden           ( ediffGolden )
+import           System.FilePattern             ( match )
+import           System.FilePattern.Directory   ( getDirectoryFiles )
+import           System.IO.Error                ( isDoesNotExistError )
 
-
-exprParser :: BSL.ByteString -> JaelExpr
+exprParser :: BS.ByteString -> JaelExpr
 exprParser s = case runParseMonad s pProg of
   Left  x -> error $ "\"" <> show x <> "\""
   Right x -> x
@@ -49,7 +48,7 @@ goldenSuite
   :: (Eq a, TD.ToExpr a)
   => String
   -> String
-  -> (BSL.ByteString -> a)
+  -> (BS.ByteString -> a)
   -> SpecWith ()
 goldenSuite ctx prefix parser = context ctx $ do
   exprFixtures <- runIO $ getDirectoryFiles "golden" [prefix <> ".*.in"]
@@ -64,7 +63,7 @@ goldenSuite ctx prefix parser = context ctx $ do
     ediffGolden goldenTest
                 testName
                 goldFile
-                (parser <$> BSL.readFile ("golden/" <> filename))
+                (parser <$> BS.readFile ("golden/" <> filename))
 
 spec :: Spec
 spec = do

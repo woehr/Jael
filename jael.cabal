@@ -1,8 +1,11 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.34.2.
+-- Input-MD5: d3bf28899871bcb68e1e9f69545e8f37  package.yaml
+-- This file has been generated from package.yaml by hpack version 0.34.5.
 --
 -- see: https://github.com/sol/hpack
+--
+-- hash: 54723ecf5c46764ad1af938c9048c1bb6f9573120c5b9d06a576731ea55780e8
 
 name:           jael
 version:        0.0.0
@@ -12,8 +15,6 @@ license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
 extra-source-files:
-    lib/Jael/Grammar/Lexer.x
-    lib/Jael/Grammar/Parser.y
     golden/expr.add.in
     golden/expr.add.out
     golden/expr.if.in
@@ -41,9 +42,6 @@ library
   hs-source-dirs:
       lib
   ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
-  build-tools:
-      alex
-    , happy
   build-depends:
       array
     , base
@@ -57,15 +55,13 @@ library
     , hspec
     , hspec-discover
     , mtl
+    , pretty-show
     , recursion-schemes
-    , streaming
-    , streaming-bytestring
-    , text
-    , text-short
+    , text >=2
     , transformers
     , tree-diff
     , uniform-pair
-    , utf8-string
+    , unordered-containers
   default-language: Haskell2010
 
 executable jael
@@ -89,15 +85,13 @@ executable jael
     , hspec-discover
     , jael
     , mtl
+    , pretty-show
     , recursion-schemes
-    , streaming
-    , streaming-bytestring
-    , text
-    , text-short
+    , text >=2
     , transformers
     , tree-diff
     , uniform-pair
-    , utf8-string
+    , unordered-containers
   default-language: Haskell2010
 
 test-suite spec
@@ -126,13 +120,11 @@ test-suite spec
     , hspec-discover
     , jael
     , mtl
+    , pretty-show
     , recursion-schemes
-    , streaming
-    , streaming-bytestring
-    , text
-    , text-short
+    , text >=2
     , transformers
     , tree-diff
     , uniform-pair
-    , utf8-string
+    , unordered-containers
   default-language: Haskell2010
