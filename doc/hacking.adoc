@@ -1,5 +1,0 @@
-= Understanding Jael
-== A.k.a, how to hack Jael
-
-==== A note for nix users
-Each of the two sub-projects contains a shell.nix file that, in addition to the Jael environment, provide a few commonly used Haskell tools. Furthermore, hoogle is installed locally with haddock documentation for the project and all its dependencies. This means, in the nix-shell, you can `hoogle server -p 8080` and visit localhost:8080 in your favourite browser to search and browse documentation.

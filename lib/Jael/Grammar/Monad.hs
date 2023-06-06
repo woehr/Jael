@@ -19,7 +19,7 @@ import           Jael.Grammar.Lexer
 import           Jael.Grammar.Token
 
 data ParseError = LexicalError AlexPosn
-                | ErrorMessage DecoratedToken [String]
+                | ParserMessage DecoratedToken [String]
                 deriving (Eq, Show)
 
 type ParseMonad a = StateT AlexInput (Except ParseError) a
@@ -37,7 +37,7 @@ getToken = do
   inp <- get
   case scan inp of
     Left  err                     -> throwError err
-    Right (inp'@(pos, _, _), tok) -> put inp' >> return (decorate tok pos)
+    Right (inp'@(pos, _, _), t) -> put inp' >> return (decorate t pos)
 
 lexer :: (DecoratedToken -> ParseMonad a) -> ParseMonad a
 lexer = (getToken >>=)
@@ -46,4 +46,4 @@ runParseMonad :: BS.ByteString -> ParseMonad a -> Either ParseError a
 runParseMonad bs m = runExcept (evalStateT m (alexInitialInput bs))
 
 parserError :: (DecoratedToken, [String]) -> ParseMonad a
-parserError (t, es) = throwError $ ErrorMessage t es
+parserError (t, es) = throwError $ ParserMessage t es

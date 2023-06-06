@@ -18,3 +18,9 @@ cabal.project.local
 dist
 dist-newstyle
 stack.yaml.lock
+
+.devenv*
+.direnv
+.pre-commit-config.yaml
+
+old-old

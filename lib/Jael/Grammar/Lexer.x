@@ -20,53 +20,57 @@ $alpha = [a-zA-Z]
 $alphanum = [$alpha $digit]
 $ident = [$alphanum _]
 
-@intBin = "0b" $binDigit+
-@intOct = "0o" $octDigit+
-@intHex = "0x" $hexDigit+
-@intDec = $digit+
-
-@syms =
-
-  -- Enclosures
-  \( | \) |
-  \[ | \] |
-  \< | \> |
-  \{ | \} |
-  \(\| | \|\) |
-
-  -- Other
-  \= | \; |
-
-  -- Arithmetic (unary)
-  \~ |
-
-  -- Arithmetic (binary)
-  \+ | \- | \* | \/
-
-  -- Comparison
-  \=\= | \!\= |
-  \> | \>\= |
-  \< | \<\= |
-
-  -- Logic (unary)
-  \! |
-
-  -- Logic (binary)
-  \&\& | \|\| |  \=\=\> | \<\=\>
-
 :-
   $white+         ;
   "//" .*         ;
 
-  @syms           { TokenSymbol }
+  -- Enclosures
+  "(" { tok TokenParenL }
+  ")" { tok TokenParenR }
+  "[" { tok TokenBracketL }
+  "]" { tok TokenBracketR }
+  "<" { tok TokenAngleL }
+  ">" { tok TokenAngleR }
+  "{" { tok TokenBraceL }
+  "}" { tok TokenBraceR }
+  -- (|   |)
 
-  @intBin         { parseInteger }
-  @intOct         { parseInteger }
-  @intHex         { parseInteger }
-  @intDec         { parseInteger }
+  -- Symbols
+  "=" { tok TokenAssign }
+  ";" { tok TokenSemi }
 
-  $lower $ident*  { lowerIdent }
-  $upper $ident*  { upperIdent }
+  -- Arithmetic
+  "~" { tok TokenTilde }
+  "+" { tok TokenPlus }
+  "-" { tok TokenMinus }
+  "*" { tok TokenStar }
+  "/" { tok TokenSlash }
+  "%" { tok TokenPercent }
+
+  -- Comparison
+  "==" { tok TokenEq }
+  "!=" { tok TokenNe }
+  ">"  { tok TokenGt }
+  ">=" { tok TokenGe }
+  "<"  { tok TokenLt }
+  "<=" { tok TokenLe }
+
+  -- Logic
+  "!"   { tok TokenNot}
+  "&&"  { tok TokenAnd }
+  "||"  { tok TokenOr }
+  "==>" { tok TokenImp }
+  "<=>" { tok TokenIff }
+
+  -- Integer literals
+  -- "0b" $binDigit+ { tok1 TBinInt }
+  -- "0o" $octDigit+ { tok1 TOctInt }
+  -- "0x" $hexDigit+ { tok1 THexInt }
+   $digit+        { tok1 TokenDecInt }
+
+  -- Identifiers
+  $lower $ident*  { tok1 TokenLower }
+  $upper $ident*  { tok1 TokenUpper }
 
 {
 

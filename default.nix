@@ -1,5 +1,5 @@
 { mkDerivation, array, base, bytestring, comonad, containers
-, deepseq, deriving-compat, filepattern, free, hpack, hspec
+, deepseq, deriving-compat, filepattern, free, hspec
 , hspec-discover, lib, mtl, pretty-show, recursion-schemes, text
 , transformers, tree-diff, uniform-pair, unordered-containers
 }:
@@ -15,7 +15,6 @@ mkDerivation {
     recursion-schemes text transformers tree-diff uniform-pair
     unordered-containers
   ];
-  libraryToolDepends = [ hpack ];
   executableHaskellDepends = [
     array base bytestring comonad containers deepseq deriving-compat
     filepattern free hspec hspec-discover mtl pretty-show
@@ -29,7 +28,7 @@ mkDerivation {
     unordered-containers
   ];
   testToolDepends = [ hspec-discover ];
-  prePatch = "hpack";
   homepage = "https://github.com/woehr/Jael#readme";
   license = lib.licenses.bsd3;
+  mainProgram = "jael";
 }

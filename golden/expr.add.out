@@ -1,5 +1,5 @@
 JESub
   (JEAdd
-    (JEInt IntInfo {intDigits = 1, intValue = 1})
-    (JEInt IntInfo {intDigits = 1, intValue = 2}))
-  (JEInt IntInfo {intDigits = 1, intValue = 3})
+    (JEIntLit "1")
+    (JEIntLit "2"))
+  (JEIntLit "3")

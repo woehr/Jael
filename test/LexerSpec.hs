@@ -41,26 +41,26 @@ spec = do
   describe "tokens" $ do
     context "symbols" $ do
       it "parens" $ do
-        singleToken "(" `shouldBe` TokenSymbol "("
-        singleToken ")" `shouldBe` TokenSymbol ")"
+        singleToken "(" `shouldBe` TokenParenL
+        singleToken ")" `shouldBe` TokenParenR
       it "brackets" $ do
-        singleToken "[" `shouldBe` TokenSymbol "["
-        singleToken "]" `shouldBe` TokenSymbol "]"
+        singleToken "[" `shouldBe` TokenBracketL
+        singleToken "]" `shouldBe` TokenBracketR
       it "angles" $ do
-        singleToken "<" `shouldBe` TokenSymbol "<"
-        singleToken ">" `shouldBe` TokenSymbol ">"
+        singleToken "<" `shouldBe` TokenAngleL
+        singleToken ">" `shouldBe` TokenAngleR
       it "braces" $ do
-        singleToken "{" `shouldBe` TokenSymbol "{"
-        singleToken "}" `shouldBe` TokenSymbol "}"
-      it "bananas" $ do
-        singleToken "(|" `shouldBe` TokenSymbol "(|"
-        singleToken "|)" `shouldBe` TokenSymbol "|)"
+        singleToken "{" `shouldBe` TokenBraceL
+        singleToken "}" `shouldBe` TokenBraceR
+      --it "bananas" $ do
+      --  singleToken "(|" `shouldBe` TokenSymbol "(|"
+      --  singleToken "|)" `shouldBe` TokenSymbol "|)"
       it "tilde" $ do
-        singleToken "~" `shouldBe` TokenSymbol "~"
+        singleToken "~" `shouldBe` TokenTilde
       it "add" $ do
-        singleToken "+" `shouldBe` TokenSymbol "+"
+        singleToken "+" `shouldBe` TokenPlus
       it "sub" $ do
-        singleToken "-" `shouldBe` TokenSymbol "-"
+        singleToken "-" `shouldBe` TokenMinus
     context "identifiers" $ do
       context "invalid" $ do
         it "underscore-upper" $ do
@@ -74,18 +74,18 @@ spec = do
           singleToken "A" `shouldBe` TokenUpper "A"
     context "integers" $ do
       context "valid" $ do
-        it "binary" $ do
-          singleToken "0b0"
-            `shouldBe` TokenBinInt (IntInfo { intValue = 0, intDigits = 1 })
-        it "octal" $ do
-          singleToken "0o0"
-            `shouldBe` TokenOctInt (IntInfo { intValue = 0, intDigits = 1 })
-        it "hexadecimal" $ do
-          singleToken "0x0"
-            `shouldBe` TokenHexInt (IntInfo { intValue = 0, intDigits = 1 })
+        -- it "binary" $ do
+        --   singleToken "0b0"
+        --     `shouldBe` TokenBinInt (IntInfo { intValue = 0, intDigits = 1 })
+        -- it "octal" $ do
+        --   singleToken "0o0"
+        --     `shouldBe` TokenOctInt (IntInfo { intValue = 0, intDigits = 1 })
+        -- it "hexadecimal" $ do
+        --   singleToken "0x0"
+        --     `shouldBe` TokenHexInt (IntInfo { intValue = 0, intDigits = 1 })
         it "zero" $ do
           singleToken "0"
-            `shouldBe` TokenDecInt (IntInfo { intValue = 0, intDigits = 1 })
+            `shouldBe` TokenDecInt "0"
         it "positive" $ do
           singleToken "1"
-            `shouldBe` TokenDecInt (IntInfo { intValue = 1, intDigits = 1 })
+            `shouldBe` TokenDecInt "1"

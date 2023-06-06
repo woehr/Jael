@@ -1,56 +1,37 @@
 {
-  description = "Jael flake";
-
   inputs = {
-    nixpkgs.url = "nixpkgs/release-21.11";
-    utils.url = github:gytis-ivaskevicius/flake-utils-plus/v1.3.1;
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
+    devenv.url = "github:cachix/devenv";
   };
 
-  outputs = inputs@{ self, utils, ... }:
-  let pkgs = self.pkgs.x86_64-linux.nixpkgs;
-      hpkgs = pkgs.haskell.packages.ghc8107;
-      jael = hpkgs.callCabal2nix "jael" ./. {};
-      ghc = hpkgs.ghcWithPackages ( p: jael.buildInputs );
+  outputs = inputs@{ flake-parts, ... }:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [ inputs.devenv.flakeModule ];
+      systems = [ "x86_64-linux" ];
 
-  in utils.lib.mkFlake {
-    inherit self inputs;
+      perSystem = { config, self', inputs', pkgs, system, ... }:
+        let haskellPkgs = pkgs.haskell.packages.ghc943;
+        in {
+          packages.default = haskellPkgs.callPackage ./default.nix { };
 
-    supportedSystems = [ "x86_64-linux" ];
-    #channelsConfig.allowUnfree = true;
+          devShells.default = pkgs.mkShell {
+            inputsFrom =
+              [ self'.packages.default.env self'.devShells.devenv-shell ];
+          };
 
-    defaultPackage = jael;
+          devenv.shells.devenv-shell = {
+            packages = with haskellPkgs; [
+              alex
+              cabal-install
+              happy
+              haskell-language-server
+            ];
 
-    devShell.x86_64-linux = pkgs.mkShell {
-      inputsFrom = [ jael ];
-      shellHook = ''
-        export NIX_GHC_LIBDIR=$(ghc --print-libdir)
-      '';
+            pre-commit.hooks = { cabal2nix.enable = true; };
+            enterShell = ''
+              echo hello devenv shell
+            '';
+          };
+        };
     };
-
-    apps = {
-      install-git-hooks = utils.lib.mkApp {
-        drv = pkgs.writeScriptBin "jael-install-git-hooks" ''
-          ln -s git-hooks/10-pre-commit.sh .git/hooks/pre-commit
-        '';
-      };
-
-      gen-files = utils.lib.mkApp {
-        drv = pkgs.writeScriptBin "jael-gen-files" ''
-          ${hpkgs.hpack}/bin/hpack --hash || exit 1
-          ${hpkgs.hpack}/bin/hpack --hash -f
-
-          CABAL_MD5=$(${pkgs.coreutils}/bin/md5sum package.yaml)
-          ${pkgs.gnused}/bin/sed -i "0,/^--.*/s;^--.*;-- Input-MD5: $CABAL_MD5\n&;" jael.cabal
-        '';
-      };
-    };
-  };
 }
-
-          #LEXER_MD5=$(${pkgs.coreutils}/bin/md5sum lib/Jael/Grammar/Lexer.x)
-          #${hpkgs.alex}/bin/alex -o lib/Jael/Grammar/Lexer.hs -ilexer.info -g -s 2 lib/Jael/Grammar/Lexer.x
-          #${pkgs.gnused}/bin/sed -i "1s;^;-- Input-MD5: $LEXER_MD5\n;" lib/Jael/Grammar/Lexer.hs
-
-          #PARSER_MD5=$(${pkgs.coreutils}/bin/md5sum lib/Jael/Grammar/Parser.y)
-          #${hpkgs.happy}/bin/happy -o lib/Jael/Grammar/Parser.hs -iparser.info -pparser.pretty -g lib/Jael/Grammar/Parser.y
-          #${pkgs.gnused}/bin/sed -i "1s;^;-- Input-MD5: $PARSER_MD5\n;" lib/Jael/Grammar/Parser.hs

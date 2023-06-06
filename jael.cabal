@@ -1,12 +1,5 @@
 cabal-version: 1.12
 
--- Input-MD5: d3bf28899871bcb68e1e9f69545e8f37  package.yaml
--- This file has been generated from package.yaml by hpack version 0.34.5.
---
--- see: https://github.com/sol/hpack
---
--- hash: 54723ecf5c46764ad1af938c9048c1bb6f9573120c5b9d06a576731ea55780e8
-
 name:           jael
 version:        0.0.0
 homepage:       https://github.com/woehr/Jael#readme
@@ -14,15 +7,6 @@ bug-reports:    https://github.com/woehr/Jael/issues
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
-extra-source-files:
-    golden/expr.add.in
-    golden/expr.add.out
-    golden/expr.if.in
-    golden/expr.if.out
-    golden/expr.let.in
-    golden/expr.let.out
-    golden/expr.logic-prec.in
-    golden/expr.logic-prec.out
 
 source-repository head
   type: git
@@ -37,8 +21,6 @@ library
       Jael.Grammar.Monad
       Jael.Grammar.Parser
       Jael.Grammar.Token
-  other-modules:
-      Paths_jael
   hs-source-dirs:
       lib
   ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
@@ -66,8 +48,6 @@ library
 
 executable jael
   main-is: Main.hs
-  other-modules:
-      Paths_jael
   hs-source-dirs:
       src
   ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints
@@ -100,7 +80,6 @@ test-suite spec
   other-modules:
       LexerSpec
       ParserSpec
-      Paths_jael
   hs-source-dirs:
       test
   ghc-options: -Wall -Wcompat -Wincomplete-record-updates -Wincomplete-uni-patterns -Wredundant-constraints

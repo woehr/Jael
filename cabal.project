@@ -1,4 +1,0 @@
-packages: jael.cabal
-
-package jael
-  tests: True

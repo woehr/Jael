@@ -15,4 +15,4 @@ parse s = case runParseMonad s pProg of
   Right x -> x
 
 main :: IO ()
-main = putStrLn . ppShow . parse $ "1 + 0x1 - 0o1 * 0b1"
+main = putStrLn . ppShow . parse $ "1 + 2 - 3 * 4"

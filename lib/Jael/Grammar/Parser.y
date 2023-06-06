@@ -24,40 +24,38 @@ import Jael.Grammar.AST
 %lexer { lexer } { IgnoreDecorations TokenEOF }
 
 %token
-  lident  { IgnoreDecorations (TokenLower $$) }
-  uident  { IgnoreDecorations (TokenUpper $$) }
 
-  intBin  { IgnoreDecorations (TokenBinInt $$) }
-  intOct  { IgnoreDecorations (TokenOctInt $$) }
-  intHex  { IgnoreDecorations (TokenHexInt $$) }
+  --intBin  { IgnoreDecorations (TokenBinInt $$) }
+  --intOct  { IgnoreDecorations (TokenOctInt $$) }
+  --intHex  { IgnoreDecorations (TokenHexInt $$) }
   intDec  { IgnoreDecorations (TokenDecInt $$) }
 
   -- Reserved words
-  'if'   { Reserved "if" }
-  'then' { Reserved "then" }
-  'else' { Reserved "else" }
+  'if'   { IgnoreDecorations (TokenLower "if") }
+  'then' { IgnoreDecorations (TokenLower "then") }
+  'else' { IgnoreDecorations (TokenLower "else") }
+
+  lident  { IgnoreDecorations (TokenLower $$) }
+  uident  { IgnoreDecorations (TokenUpper $$) }
 
   -- Enclosures
-  '{' { Symbol "{" }
-  '}' { Symbol "}" }
+  '{' { IgnoreDecorations TokenBraceL }
+  '}' { IgnoreDecorations TokenBraceR }
 
   -- Other symbols
-  '=' { Symbol "=" }
-  ';' { Symbol ";" }
+  '=' { IgnoreDecorations TokenAssign }
+  ';' { IgnoreDecorations TokenSemi }
 
   -- Operators
-  '==>'   { Symbol "==>" }
-  '<=>'   { Symbol "<=>" }
-
-  '&&'    { Symbol "&&" }
-  '||'    { Symbol "||" }
-
-  '*'     { Symbol "*" }
-  '/'     { Symbol "/" }
-  '%'     { Symbol "%" }
-
-  '+'     { Symbol "+" }
-  '-'     { Symbol "-" }
+  '==>'   { IgnoreDecorations TokenImp }
+  '<=>'   { IgnoreDecorations TokenIff }
+  '&&'    { IgnoreDecorations TokenAnd }
+  '||'    { IgnoreDecorations TokenOr }
+  '*'     { IgnoreDecorations TokenStar }
+  '/'     { IgnoreDecorations TokenSlash }
+  '%'     { IgnoreDecorations TokenPercent }
+  '+'     { IgnoreDecorations TokenPlus }
+  '-'     { IgnoreDecorations TokenMinus }
 
 %right '<=>'
 %right '==>'
@@ -73,10 +71,10 @@ import Jael.Grammar.AST
 %%
 
 int
-  : intBin { $1 }
-  | intOct { $1 }
-  | intHex { $1 }
-  | intDec { $1 }
+  : intDec { $1 }
+  -- | intBin { $1 }
+  -- | intOct { $1 }
+  -- | intHex { $1 }
 
 letBind : lident '=' expr ';' { ($1, $3) }
 letBinds
@@ -100,17 +98,17 @@ expr
   | expr '==>' expr { JEImp $1 $3 }
   | expr '<=>' expr { JEIff $1 $3 }
 
-  | int { JEInt $1 }
+  | int { JEIntLit $1 }
 
   | lident { JELIdent $1 }
   | uident { JEUIdent $1 }
 
 {
 
-pattern Reserved :: T.Text -> DecoratedToken
-pattern Reserved x <- IgnoreDecorations (TokenReserved x)
-
-pattern Symbol :: BS.ByteString -> DecoratedToken
-pattern Symbol x <- IgnoreDecorations (TokenSymbol x)
+--pattern Reserved :: T.Text -> DecoratedToken
+--pattern Reserved x <- IgnoreDecorations (TokenReserved x)
+--
+--pattern Symbol :: BS.ByteString -> DecoratedToken
+--pattern Symbol x <- IgnoreDecorations (TokenSymbol x)
 
 }
